@@ -6,6 +6,7 @@ import { VoterImportForm } from "./voter-import-form";
 import { CommitImportForm } from "./commit-import-form";
 import { DispatchInvitationsForm } from "./dispatch-invitations-form";
 import { ElectionLifecycleControls } from "./lifecycle-controls";
+import { ElectionAuditTimeline } from "./audit-timeline";
 
 export default async function ElectionPage({ params, searchParams }: {
   params: Promise<{ organizationId: string; electionId: string }>;
@@ -60,6 +61,12 @@ export default async function ElectionPage({ params, searchParams }: {
     else importQuery = importQuery.order("created_at", { ascending: false }).limit(1);
     const { data } = await importQuery.maybeSingle();
     importBatch = data;
+  }
+
+  let auditTrail = null;
+  if (canViewRegister) {
+    const { data } = await supabase.rpc("get_election_audit_trail", { p_election_id: electionId, p_limit: 50 });
+    auditTrail = data;
   }
 
   let tallySummary = null;
@@ -132,6 +139,7 @@ export default async function ElectionPage({ params, searchParams }: {
           )}
         </section>
       )}
+      {auditTrail?.events && <ElectionAuditTimeline events={auditTrail.events} />}
       <ElectionLifecycleControls
         organizationId={organizationId}
         electionId={electionId}
