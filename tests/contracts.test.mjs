@@ -188,3 +188,33 @@ test("invitation authentication redirects are restricted to the signed invitatio
   assert.match(auth, /safeInternalPath/);
   assert.match(callback, /safeInternalPath/);
 });
+
+
+test("M2 election setup drafts are resumable and authority confirmation is enforced in the database", async () => {
+  const drafts = await read("../supabase/migrations/20261126204535_m2_election_draft_editor.sql");
+  const listing = await read("../supabase/migrations/20261126204653_m2_election_draft_listing.sql");
+  const wizard = await read("../app/organizations/[organizationId]/create-election-form.tsx");
+  const actions = await read("../app/actions/elections.ts");
+  const organization = await read("../app/organizations/[organizationId]/page.tsx");
+  const smoke = await read("../supabase/tests/election_setup_draft_smoke.sql");
+  const audit = await read("../supabase/migrations/20261126205024_m2_election_setup_audit_event.sql");
+  assert.match(drafts, /create table public\.election_setup_drafts/);
+  assert.match(drafts, /enable row level security/);
+  assert.match(drafts, /save_election_setup_draft/);
+  assert.match(drafts, /finalize_election_setup_draft/);
+  assert.match(drafts, /confirm_election_setup/);
+  assert.match(drafts, /setup_confirmation_hash/);
+  assert.match(drafts, /ELECTION_SETUP_NOT_CONFIRMED/);
+  assert.match(drafts, /ELECTION_SETUP_CHANGED_RECONFIRM/);
+  assert.match(listing, /list_election_setup_drafts/);
+  assert.match(wizard, /Step \{step\} of 6/);
+  assert.match(wizard, /I confirm that I am authorized/);
+  assert.match(actions, /authorityConfirmed: z\.literal\(true\)/);
+  assert.match(organization, /list_election_setup_drafts/);
+  assert.match(smoke, /DRAFT_NOT_RESUMABLE/);
+  assert.match(smoke, /UNAUTHORIZED_DRAFT_EDIT_SHOULD_FAIL/);
+  assert.match(smoke, /UNCONFIRMED_SETUP_MUST_NOT_OPEN/);
+  assert.match(smoke, /AUTHORITY_CONFIRMATION_NOT_RECORDED/);
+  assert.match(audit, /election\.setup_confirmed/);
+  assert.match(audit, /action=any\(array\[/);
+});
