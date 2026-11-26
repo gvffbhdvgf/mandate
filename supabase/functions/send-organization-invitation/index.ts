@@ -70,7 +70,9 @@ Deno.serve(async (request: Request) => {
 
   const { data: organization } = await caller.from("organizations").select("name").eq("id", body.organizationId).maybeSingle();
   const orgName = organization?.name ?? "your organization";
-  invitationUrl.searchParams.set("token", token);
+  // Keep the bearer token in the URL fragment: browsers do not send fragments
+  // in HTTP requests, so it is not exposed to server/proxy logs or referrers.
+  invitationUrl.hash = new URLSearchParams({ token }).toString();
   const safeOrgName = escapeHtml(orgName);
   const safeRole = escapeHtml(body.role.replaceAll("_", " "));
   let delivery: Response;
