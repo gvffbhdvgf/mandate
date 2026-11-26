@@ -114,12 +114,145 @@ returns jsonb language plpgsql security definer set search_path=pg_catalog
 as $$
 declare
   v_actor uuid := auth.uid();
-  v_email text := lower(coalesce(auth.jwt()->>'email',''));
+  v_email text;
+  v_email_confirmed_at timestamptz;
   v_inv public.organization_invitations%rowtype;
   v_member_id uuid;
 begin
   if v_actor is null then raise exception 'AUTHENTICATION_REQUIRED' using errcode='28000'; end if;
-  if p_token_hash is null or p_token_hash !~ '^[0-9a-f]{64}$' then raise exception 'INVALID_INVITATION' using errcode='22023'; end if;
+  select lower(u.email),u.email_confirmed_at
+    into v_email,v_email_confirmed_at
+    from auth.users u where u.id=v_actor;
+  if not found or v_email_confirmed_at is null then
+    raise exception 'INVITATION_EMAIL_NOT_VERIFIED' using errcode='42501';
+  end if;
+  if p_token_hash is null or p_token_hash !~ '^[0-9a-f]{64}
+  where i.token_hash=p_token_hash for update;
+  if not found or v_inv.status <> 'pending' then raise exception 'INVITATION_NOT_AVAILABLE' using errcode='55000'; end if;
+  if v_inv.expires_at <= now() then raise exception 'INVITATION_EXPIRED' using errcode='55000'; end if;
+  if v_email = '' or v_email <> lower(v_inv.email::text) then raise exception 'INVITATION_EMAIL_MISMATCH' using errcode='42501'; end if;
+  if exists(select 1 from public.organization_members m where m.organization_id=v_inv.organization_id and m.user_id=v_actor and m.status='active') then
+    raise exception 'MEMBER_ALREADY_ACTIVE' using errcode='23505';
+  end if;
+
+  insert into public.organization_members as current_members(
+    organization_id,user_id,role,status,invited_by,invitation_expires_at,accepted_at
+  ) values (
+    v_inv.organization_id,v_actor,v_inv.role,'active',v_inv.invited_by,v_inv.expires_at,now()
+  )
+  on conflict (organization_id,user_id) do update
+    set role=excluded.role,status='active',invited_by=excluded.invited_by,
+        invitation_expires_at=excluded.invitation_expires_at,accepted_at=excluded.accepted_at
+    where current_members.status in ('revoked','suspended')
+  returning id into v_member_id;
+  if v_member_id is null then raise exception 'MEMBERSHIP_ALREADY_EXISTS' using errcode='23505'; end if;
+
+  update public.organization_invitations
+    set status='accepted',accepted_by=v_actor,accepted_at=now()
+    where id=v_inv.id and status='pending';
+  if not found then raise exception 'INVITATION_ALREADY_USED' using errcode='55000'; end if;
+
+  insert into public.audit_events(
+    organization_id,actor_id,actor_type,action,entity_type,entity_id,redacted_metadata
+  ) values (
+    v_inv.organization_id,v_actor,'user','organization.member.joined','organization_member',
+    v_member_id,jsonb_build_object('role',v_inv.role)
+  );
+  return jsonb_build_object('organizationId',v_inv.organization_id,'memberId',v_member_id,'role',v_inv.role);
+end;
+$$;
+
+create or replace function public.accept_organization_invitation(p_token_hash text)
+returns jsonb language sql security invoker set search_path=pg_catalog
+as $$ select mandate_private.accept_organization_invitation($1); $$;
+revoke all on function public.accept_organization_invitation(text) from public,anon;
+grant execute on function public.accept_organization_invitation(text) to authenticated;
+revoke all on function mandate_private.accept_organization_invitation(text) from public,anon;
+grant execute on function mandate_private.accept_organization_invitation(text) to authenticated;
+
+create or replace function public.get_organization_members(p_organization_id uuid)
+returns table(member_id uuid,user_id uuid,display_name text,email text,role public.organization_role,status public.membership_status,created_at timestamptz,accepted_at timestamptz)
+language plpgsql security definer set search_path=pg_catalog
+as $$
+declare v_actor uuid := auth.uid();
+begin
+  if v_actor is null then raise exception 'AUTHENTICATION_REQUIRED' using errcode='28000'; end if;
+  if not mandate_private.has_org_role(p_organization_id,array['owner','admin']::public.organization_role[]) then
+    raise exception 'FORBIDDEN' using errcode='42501';
+  end if;
+  return query
+    select m.id,m.user_id,p.display_name,u.email::text,m.role,m.status,m.created_at,m.accepted_at
+    from public.organization_members m
+    join auth.users u on u.id=m.user_id
+    left join public.profiles p on p.id=m.user_id
+    where m.organization_id=p_organization_id
+    order by case when m.role='owner' then 0 else 1 end,m.created_at;
+end;
+$$;
+revoke all on function public.get_organization_members(uuid) from public,anon;
+grant execute on function public.get_organization_members(uuid) to authenticated;
+
+create or replace function public.revoke_organization_invitation(p_invitation_id uuid)
+returns void language plpgsql security definer set search_path=pg_catalog
+as $$
+declare v_org uuid; v_actor uuid:=auth.uid();
+begin
+  select organization_id into v_org from public.organization_invitations where id=p_invitation_id and status='pending' for update;
+  if not found then raise exception 'INVITATION_NOT_AVAILABLE' using errcode='55000'; end if;
+  if not mandate_private.has_org_role(v_org,array['owner','admin']::public.organization_role[]) then raise exception 'FORBIDDEN' using errcode='42501'; end if;
+  update public.organization_invitations set status='revoked',revoked_at=now() where id=p_invitation_id and status='pending';
+  insert into public.audit_events(organization_id,actor_id,actor_type,action,entity_type,entity_id)
+  values(v_org,v_actor,'user','organization.invitation.revoked','organization_invitation',p_invitation_id);
+end;
+$$;
+revoke all on function public.revoke_organization_invitation(uuid) from public,anon;
+grant execute on function public.revoke_organization_invitation(uuid) to authenticated;
+
+create or replace function public.change_organization_member_role(p_member_id uuid,p_role public.organization_role)
+returns void language plpgsql security definer set search_path=pg_catalog
+as $$
+declare v_member public.organization_members%rowtype; v_actor uuid:=auth.uid(); v_actor_role public.organization_role;
+begin
+  if v_actor is null then raise exception 'AUTHENTICATION_REQUIRED' using errcode='28000'; end if;
+  if p_role is null or p_role='owner' then raise exception 'INVALID_MEMBER_ROLE' using errcode='22023'; end if;
+  select * into v_member from public.organization_members where id=p_member_id for update;
+  if not found then raise exception 'MEMBER_NOT_FOUND' using errcode='P0002'; end if;
+  select role into v_actor_role from public.organization_members where organization_id=v_member.organization_id and user_id=v_actor and status='active';
+  if v_actor_role is null or v_actor_role not in ('owner','admin') then raise exception 'FORBIDDEN' using errcode='42501'; end if;
+  if v_member.status<>'active' then raise exception 'MEMBER_NOT_ACTIVE' using errcode='55000'; end if;
+  if v_member.role='owner' then raise exception 'OWNER_TRANSFER_REQUIRED' using errcode='55000'; end if;
+  if v_actor_role<>'owner' and (v_member.role in ('admin','finance_manager') or p_role in ('admin','finance_manager')) then
+    raise exception 'ROLE_ASSIGNMENT_REQUIRES_OWNER' using errcode='42501';
+  end if;
+  update public.organization_members set role=p_role where id=p_member_id;
+  insert into public.audit_events(organization_id,actor_id,actor_type,action,entity_type,entity_id,redacted_metadata)
+  values(v_member.organization_id,v_actor,'user','organization.member.role_changed','organization_member',p_member_id,jsonb_build_object('from',v_member.role,'to',p_role));
+end;
+$$;
+revoke all on function public.change_organization_member_role(uuid,public.organization_role) from public,anon;
+grant execute on function public.change_organization_member_role(uuid,public.organization_role) to authenticated;
+
+create or replace function public.revoke_organization_member(p_member_id uuid)
+returns void language plpgsql security definer set search_path=pg_catalog
+as $$
+declare v_member public.organization_members%rowtype; v_actor uuid:=auth.uid(); v_actor_role public.organization_role;
+begin
+  if v_actor is null then raise exception 'AUTHENTICATION_REQUIRED' using errcode='28000'; end if;
+  select * into v_member from public.organization_members where id=p_member_id for update;
+  if not found then raise exception 'MEMBER_NOT_FOUND' using errcode='P0002'; end if;
+  select role into v_actor_role from public.organization_members where organization_id=v_member.organization_id and user_id=v_actor and status='active';
+  if v_actor_role is null or v_actor_role not in ('owner','admin') then raise exception 'FORBIDDEN' using errcode='42501'; end if;
+  if v_member.status<>'active' then raise exception 'MEMBER_NOT_ACTIVE' using errcode='55000'; end if;
+  if v_member.role='owner' then raise exception 'OWNER_TRANSFER_REQUIRED' using errcode='55000'; end if;
+  if v_actor_role<>'owner' and v_member.role in ('admin','finance_manager') then raise exception 'ROLE_ASSIGNMENT_REQUIRES_OWNER' using errcode='42501'; end if;
+  update public.organization_members set status='revoked' where id=p_member_id and status<>'revoked';
+  insert into public.audit_events(organization_id,actor_id,actor_type,action,entity_type,entity_id,redacted_metadata)
+  values(v_member.organization_id,v_actor,'user','organization.member.revoked','organization_member',p_member_id,jsonb_build_object('role',v_member.role));
+end;
+$$;
+revoke all on function public.revoke_organization_member(uuid) from public,anon;
+grant execute on function public.revoke_organization_member(uuid) to authenticated;
+ then raise exception 'INVALID_INVITATION' using errcode='22023'; end if;
   select * into v_inv from public.organization_invitations i
   where i.token_hash=p_token_hash for update;
   if not found or v_inv.status <> 'pending' then raise exception 'INVITATION_NOT_AVAILABLE' using errcode='55000'; end if;
