@@ -55,3 +55,14 @@ test("voter imports use private storage and election opening requires issued acc
   assert.match(opening, /VOTER_ACCESS_NOT_ISSUED/);
   assert.match(opening, /access_token_hash is null or v\.invited_at is null/);
 });
+
+test("voter register import is private, bounded and requires access issuance before opening", async () => {
+  const imports = await read("../supabase/migrations/20261126092010_0019_private_voter_import_storage_and_transactions.sql");
+  const opening = await read("../supabase/migrations/20261126092140_0020_require_voter_access_before_election_open.sql");
+  assert.match(imports, /file_size_limit=10485760/);
+  assert.match(imports, /v_count>25000/);
+  assert.match(imports, /mandate-voter-imports/);
+  assert.match(imports, /stage_voter_import/);
+  assert.match(imports, /commit_voter_import/);
+  assert.match(opening, /VOTER_ACCESS_NOT_ISSUED/);
+});
