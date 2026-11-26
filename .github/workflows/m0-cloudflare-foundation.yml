@@ -162,7 +162,7 @@ jobs:
 
       - name: Install pinned application and type-check dependencies
         run: |
-          npm install --save-exact react@^19.3.1 react-dom@^19.3.1
+          npm install --save-exact react@^19.3.1 react-dom@^19.3.1 @supabase/ssr @supabase/supabase-js zod
           npm install --save-dev --save-exact typescript @types/react @types/node
           node --input-type=module <<'EOF'
           import fs from "node:fs";
