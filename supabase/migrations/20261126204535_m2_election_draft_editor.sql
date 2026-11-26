@@ -64,7 +64,7 @@ as $$ select mandate_private.save_election_setup_draft($1,$2,$3,$4); $$;
 revoke all on function public.save_election_setup_draft(uuid,uuid,jsonb,integer) from public,anon;
 grant execute on function public.save_election_setup_draft(uuid,uuid,jsonb,integer) to authenticated;
 
-create or replace function public.get_election_setup_draft(p_draft_id uuid)
+create or replace function mandate_private.get_election_setup_draft(p_draft_id uuid)
 returns jsonb language plpgsql security definer set search_path=pg_catalog
 as $$
 declare v_d public.election_setup_drafts%rowtype;
@@ -79,10 +79,10 @@ begin
    'currentStep',v_d.current_step,'status',v_d.status,'electionId',v_d.election_id,'updatedAt',v_d.updated_at);
 end;
 $$;
-revoke all on function public.get_election_setup_draft(uuid) from public,anon;
-grant execute on function public.get_election_setup_draft(uuid) to authenticated;
+revoke all on function mandate_private.get_election_setup_draft(uuid) from public,anon;
+grant execute on function mandate_private.get_election_setup_draft(uuid) to authenticated;
 
-create or replace function public.finalize_election_setup_draft(p_draft_id uuid)
+create or replace function mandate_private.finalize_election_setup_draft(p_draft_id uuid)
 returns uuid language plpgsql security definer set search_path=pg_catalog
 as $$
 declare v_d public.election_setup_drafts%rowtype; v_election_id uuid;
@@ -102,8 +102,8 @@ begin
  return v_election_id;
 end;
 $$;
-revoke all on function public.finalize_election_setup_draft(uuid) from public,anon;
-grant execute on function public.finalize_election_setup_draft(uuid) to authenticated;
+revoke all on function mandate_private.finalize_election_setup_draft(uuid) from public,anon;
+grant execute on function mandate_private.finalize_election_setup_draft(uuid) to authenticated;
 
 create or replace function mandate_private.compute_election_setup_hash(p_election_id uuid)
 returns text language plpgsql security definer set search_path=pg_catalog
@@ -123,7 +123,7 @@ end;
 $$;
 revoke all on function mandate_private.compute_election_setup_hash(uuid) from public,anon,authenticated;
 
-create or replace function public.confirm_election_setup(p_election_id uuid)
+create or replace function mandate_private.confirm_election_setup(p_election_id uuid)
 returns jsonb language plpgsql security definer set search_path=pg_catalog
 as $$
 declare v_e public.elections%rowtype; v_actor uuid:=auth.uid(); v_hash text;
@@ -148,8 +148,8 @@ begin
  return jsonb_build_object('electionId',v_e.id,'confirmedAt',now(),'configurationHash',v_hash);
 end;
 $$;
-revoke all on function public.confirm_election_setup(uuid) from public,anon;
-grant execute on function public.confirm_election_setup(uuid) to authenticated;
+revoke all on function mandate_private.confirm_election_setup(uuid) from public,anon;
+grant execute on function mandate_private.confirm_election_setup(uuid) to authenticated;
 
 -- Enforce authority confirmation and invalidate it whenever the frozen configuration drifts.
 create or replace function mandate_private.open_election(p_election_id uuid,p_confirm_rules_snapshot boolean)
@@ -215,8 +215,10 @@ begin
  if jsonb_typeof(p_election) is distinct from 'object' then
    raise exception 'INVALID_ELECTION_PAYLOAD' using errcode='22023';
  end if;
- if jsonb_typeof(p_contests) is distinct from 'array'
-   or jsonb_array_length(p_contests)<1 or jsonb_array_length(p_contests)>10 then
+ if jsonb_typeof(p_contests) is distinct from 'array' then
+   raise exception 'INVALID_CONTESTS_PAYLOAD' using errcode='22023';
+ end if;
+ if jsonb_array_length(p_contests)<1 or jsonb_array_length(p_contests)>10 then
    raise exception 'INVALID_CONTESTS_PAYLOAD' using errcode='22023';
  end if;
  v_election_id:=mandate_private.create_election(
@@ -228,10 +230,13 @@ begin
  );
  for v_contest in select value from jsonb_array_elements(p_contests)
  loop
-   if jsonb_typeof(v_contest) is distinct from 'object'
-     or jsonb_typeof(v_contest->'options') is distinct from 'array'
-     or jsonb_array_length(v_contest->'options')<2
-     or jsonb_array_length(v_contest->'options')>50 then
+   if jsonb_typeof(v_contest) is distinct from 'object' then
+     raise exception 'INVALID_CONTEST_OPTIONS' using errcode='22023';
+   end if;
+   if jsonb_typeof(v_contest->'options') is distinct from 'array' then
+     raise exception 'INVALID_CONTEST_OPTIONS' using errcode='22023';
+   end if;
+   if jsonb_array_length(v_contest->'options')<2 or jsonb_array_length(v_contest->'options')>50 then
      raise exception 'INVALID_CONTEST_OPTIONS' using errcode='22023';
    end if;
    if exists (
@@ -264,3 +269,23 @@ end;
 $$;
 revoke all on function mandate_private.create_election_setup(uuid,jsonb,jsonb) from public,anon;
 grant execute on function mandate_private.create_election_setup(uuid,jsonb,jsonb) to authenticated;
+
+
+-- PostgREST exposes only SECURITY INVOKER wrappers; privileged bodies stay private.
+create or replace function public.get_election_setup_draft(p_draft_id uuid)
+returns jsonb language sql security invoker set search_path=pg_catalog
+as $$ select mandate_private.get_election_setup_draft($1); $$;
+revoke all on function public.get_election_setup_draft(uuid) from public,anon;
+grant execute on function public.get_election_setup_draft(uuid) to authenticated;
+
+create or replace function public.finalize_election_setup_draft(p_draft_id uuid)
+returns uuid language sql security invoker set search_path=pg_catalog
+as $$ select mandate_private.finalize_election_setup_draft($1); $$;
+revoke all on function public.finalize_election_setup_draft(uuid) from public,anon;
+grant execute on function public.finalize_election_setup_draft(uuid) to authenticated;
+
+create or replace function public.confirm_election_setup(p_election_id uuid)
+returns jsonb language sql security invoker set search_path=pg_catalog
+as $$ select mandate_private.confirm_election_setup($1); $$;
+revoke all on function public.confirm_election_setup(uuid) from public,anon;
+grant execute on function public.confirm_election_setup(uuid) to authenticated;
