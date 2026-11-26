@@ -20,6 +20,7 @@ declare
   v_option uuid;
   v_token constant text := 'lifecycle-test-token-1234567890-abcdefghijklmnopqrstuvwxyz';
   v_open jsonb;
+  v_confirmed jsonb;
   v_paused jsonb;
   v_resumed jsonb;
   v_closed jsonb;
@@ -63,6 +64,10 @@ begin
   );
 
   set local role authenticated;
+  v_confirmed := public.confirm_election_setup(v_election);
+  if v_confirmed->>'electionId' <> v_election::text then
+    raise exception 'SETUP_AUTHORITY_CONFIRMATION_FAILED: %', v_confirmed;
+  end if;
   v_open := public.open_election(v_election,true);
   if v_open->>'status' <> 'open' then raise exception 'OPEN_TRANSITION_FAILED'; end if;
 
