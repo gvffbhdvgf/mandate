@@ -18,5 +18,16 @@ begin
  if (select count(*) from public.contests where election_id=v_election)<>1 then raise exception 'ATOMIC_CONTEST_CREATE_FAILED'; end if;
  if (select count(*) from public.options where election_id=v_election)<>2 then raise exception 'ATOMIC_OPTION_CREATE_FAILED'; end if;
  if (select count(*) from public.audit_events where election_id=v_election and action in ('election.created','contest.created','option.created'))<>4 then raise exception 'ATOMIC_AUDIT_FAILED'; end if;
+ begin
+  perform public.create_election_setup(v_org,jsonb_build_object('title','Invalid Atomic Setup','voting_mode','registered_single','starts_at',now()+interval '1 hour','ends_at',now()+interval '2 hours','timezone','Africa/Nairobi','result_visibility','private'),jsonb_build_array(jsonb_build_object('title','Empty Contest','options','[]'::jsonb)));
+  raise exception 'EMPTY_CONTEST_OPTIONS_SHOULD_FAIL';
+ exception when SQLSTATE '22023' then null;
+ end;
+ if exists(select 1 from public.elections where title='Invalid Atomic Setup') then raise exception 'FAILED_ATOMIC_ROLLBACK_FOR_INVALID_SETUP'; end if;
+ begin
+  perform public.create_election_setup(v_org,jsonb_build_object('title','Invalid Empty Contests','voting_mode','registered_single','starts_at',now()+interval '1 hour','ends_at',now()+interval '2 hours','timezone','Africa/Nairobi','result_visibility','private'),'null'::jsonb);
+  raise exception 'NULL_CONTESTS_SHOULD_FAIL';
+ exception when SQLSTATE '22023' then null;
+ end;
 end $$;
 rollback;
