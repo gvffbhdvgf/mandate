@@ -120,3 +120,18 @@ footer { padding: 24px 0; border-top: 1px solid var(--border); color: var(--mute
 .ballot-privacy { margin: 18px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .ballot-footer { margin-top: auto; padding: 24px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
 @media (max-width: 520px) { .ballot-panel, .ballot-contest { padding: 20px; } .ballot-panel { margin-top: 24px; } }
+
+.lifecycle-panel { margin-bottom: 20px; }
+.lifecycle-form { margin-top: 16px; }
+.lifecycle-form textarea { min-height: 94px; resize: vertical; }
+.danger-button { width: fit-content; padding: 12px 18px; border: 1px solid #B42318; border-radius: 10px; background: #B42318; color: white; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.danger-button:disabled { opacity: .6; cursor: wait; }
+.tally-summary { margin-top: 18px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--ivory); }
+.result-contest { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.result-contest h3 { margin: 0 0 16px; color: var(--forest); font-family: Georgia, serif; font-size: 21px; font-weight: 500; }
+.result-option { margin: 14px 0; }
+.result-option-label { display: flex; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 13px; }
+.result-option-label strong { color: var(--forest); font-size: 12px; }
+.result-bar { height: 8px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: var(--border); }
+.result-bar span { display: block; height: 100%; border-radius: inherit; background: var(--jade); }
+.winner-label { display: inline-block; margin-top: 7px; color: var(--jade); font-size: 11px; font-weight: 750; }
