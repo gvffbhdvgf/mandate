@@ -24,11 +24,11 @@ vinext is actively developed and is not a drop-in replacement for every Next.js 
 ## Repository status
 
 - Working branch: [`feat/m0-vinext-foundation`](https://github.com/gvffbhdvgf/mandate/tree/feat/m0-vinext-foundation).
-- The first application slices include the public landing page, Supabase email/password sign-up/sign-in, auth callback, protected organization dashboard, organization creation, election draft creation, and an election detail view.
+- The first application slices include the public landing page, Supabase email/password sign-up/sign-in, auth callback, protected organization dashboard, organization creation, election draft creation, election detail view, and private CSV voter-register import/commit.
 - Supabase migrations `0001`–`0014` are applied to the dedicated Mandate project and mirrored in `supabase/migrations`.
 - CI runs contract tests, TypeScript checks, vinext compatibility scanning, production build, and a preview smoke test.
-- GitHub Actions [run #41](https://github.com/gvffbhdvgf/mandate/actions/runs/45790733683) passed: 5 contract tests, TypeScript, vinext compatibility (100%; 9 supported, zero partial/issues), Worker bundle build, Cloudflare Workers runtime smoke test, and production preview HTTP smoke test. The repeatable Supabase transaction tests also passed against the remote project and were rolled back.
-- No production Worker has been deployed. Cloudflare Images account authorization is still unresolved.
+- GitHub Actions [run #62](https://github.com/gvffbhdvgf/mandate/actions/runs/45791839767) passed: 8 contract tests, TypeScript, vinext compatibility (100%; 9 supported, zero partial/issues), Worker bundle build, Cloudflare Workers runtime smoke test, and production preview HTTP smoke test. The repeatable Supabase transaction tests for tenant isolation, election setup and voter import also passed against the remote project and were rolled back.
+- No production Worker has been deployed. Cloudflare Images account authorization is still unresolved. Voter invitations/token delivery are not yet implemented; the election-open transaction blocks until access is issued.
 
 ## Local development
 
