@@ -1,0 +1,53 @@
+{
+  "name": "mandate",
+  "version": "1.0.0",
+  "description": "**Organizational elections, made clear.**",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit",
+    "check:compat": "vinext check",
+    "check": "npm run test && npm run typecheck && npm run check:compat",
+    "dev:vinext": "vite dev --port 3001",
+    "build:vinext": "vite build",
+    "start:vinext": "vite preview",
+    "deploy:vinext": "vinext-cloudflare deploy --warm-cache"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gvffbhdvgf/mandate.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/gvffbhdvgf/mandate/issues"
+  },
+  "homepage": "https://github.com/gvffbhdvgf/mandate#readme",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.119.2",
+    "@vinext/cloudflare": "^1.4.0",
+    "csv-parse": "7.0.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-server-dom-webpack": "^19.3.1",
+    "vinext": "^1.4.6",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^2.0.0-rc.5",
+    "@types/node": "26.6.11",
+    "@types/react": "19.3.3",
+    "@vitejs/plugin-react": "^6.3.0",
+    "@vitejs/plugin-rsc": "^0.5.39",
+    "cf": "^1.0.0-rc.6",
+    "typescript": "7.0.2",
+    "vite": "^8.3.0"
+  },
+  "overrides": {
+    "fflate": "0.7.5"
+  }
+}

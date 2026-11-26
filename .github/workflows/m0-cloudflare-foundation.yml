@@ -1,0 +1,95 @@
+name: M0 Cloudflare foundation
+
+on:
+  push:
+    branches: [feat/m0-vinext-foundation]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: m0-cloudflare-foundation
+  cancel-in-progress: true
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out M0 branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/m0-vinext-foundation
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify edge-ready runtime bindings
+        run: |
+          grep -q "workersCacheCdnAdapter" vite.config.ts
+          grep -q "kvDataAdapter" vite.config.ts
+          grep -q "imagesOptimizer" vite.config.ts
+          grep -q "8df55d8d27e74f058c2ae3013ae71ded" cloudflare.config.ts
+          grep -q "bindings.images()" cloudflare.config.ts
+          grep -q "SUPABASE_PUBLISHABLE_KEY" cloudflare.config.ts
+
+      - name: Add CSV parser and update lockfile
+        run: npm install --save-exact csv-parse
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Apply non-breaking security fixes
+        run: npm audit fix
+
+      - name: Run contract, type and compatibility checks
+        run: npm run check
+
+      - name: Build the Workers application
+        run: npm run build:vinext
+
+      - name: Smoke-test Cloudflare Workers runtime and Supabase bindings
+        shell: bash
+        run: |
+          npm run dev:vinext -- --host 127.0.0.1 --port 4174 > /tmp/mandate-worker-dev.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          STATUS=""
+          for attempt in $(seq 1 40); do
+            STATUS=$(curl --silent --output /tmp/mandate-dashboard.html --dump-header /tmp/mandate-dashboard.headers --write-out "%{http_code}" http://127.0.0.1:4174/dashboard || true)
+            if [ "$STATUS" = "307" ] || [ "$STATUS" = "302" ]; then break; fi
+            sleep 2
+          done
+          test "$STATUS" = "307" -o "$STATUS" = "302"
+          grep -qi "location: /login" /tmp/mandate-dashboard.headers
+          curl --fail --silent http://127.0.0.1:4174/login > /tmp/mandate-worker-login.html
+          grep -q "Sign in to Mandate" /tmp/mandate-worker-login.html
+
+      - name: Smoke-test the production preview
+        shell: bash
+        run: |
+          npm run start:vinext -- --host 127.0.0.1 --port 4173 > /tmp/mandate-preview.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /tmp/mandate-home.html; then break; fi
+            sleep 2
+          done
+          grep -q "Organizational elections" /tmp/mandate-home.html
+          grep -q "made clear" /tmp/mandate-home.html
+
+      - name: Commit generated foundation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+          else
+            git commit -m "feat: validate vinext Cloudflare foundation"
+            git push origin feat/m0-vinext-foundation
+          fi

@@ -1,0 +1,5 @@
+[functions.send-voter-invitations]
+verify_jwt = true
+
+[functions.send-organization-invitation]
+verify_jwt = true
