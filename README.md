@@ -24,11 +24,11 @@ vinext is actively developed and is not a drop-in replacement for every Next.js 
 ## Repository status
 
 - Working branch: [`feat/m0-vinext-foundation`](https://github.com/gvffbhdvgf/mandate/tree/feat/m0-vinext-foundation).
-- The first application slices include the public landing page, Supabase email/password sign-up/sign-in, auth callback, protected organization dashboard, organization creation, election draft creation, election detail view, and private CSV voter-register import/commit.
-- Supabase migrations `0001`–`0014` are applied to the dedicated Mandate project and mirrored in `supabase/migrations`.
+- The first application slices include the public landing page, Supabase email/password sign-up/sign-in, auth callback, protected organization dashboard, organization creation, election draft creation, election detail view, private CSV voter-register import/commit, secure registered-voter ballot page, election close/tally/publish controls, and visibility-aware results pages.
+- Supabase migrations `0001`–`0025` are applied to the dedicated Mandate project and mirrored in `supabase/migrations`. A JWT-protected `send-voter-invitations` Edge Function is deployed (version 4).
 - CI runs contract tests, TypeScript checks, vinext compatibility scanning, production build, and a preview smoke test.
-- GitHub Actions [run #62](https://github.com/gvffbhdvgf/mandate/actions/runs/45791839767) passed: 8 contract tests, TypeScript, vinext compatibility (100%; 9 supported, zero partial/issues), Worker bundle build, Cloudflare Workers runtime smoke test, and production preview HTTP smoke test. The repeatable Supabase transaction tests for tenant isolation, election setup and voter import also passed against the remote project and were rolled back.
-- No production Worker has been deployed. Cloudflare Images account authorization is still unresolved. Voter invitations/token delivery are not yet implemented; the election-open transaction blocks until access is issued.
+- GitHub Actions [run #99](https://github.com/gvffbhdvgf/mandate/actions/runs/45794101017) passed the contract tests, TypeScript, vinext compatibility scan, Worker bundle build, Cloudflare Workers runtime smoke test, and production preview HTTP smoke test. Remote Supabase transaction tests for tenant isolation, election setup, voter import and secret ballot context also passed and were rolled back. No actual election ballot has been cast; tally logic is not yet verified against live election data.
+- No production Worker has been deployed. Cloudflare Images account authorization is still unresolved. The invitation Edge Function is deployed but cannot issue tokens or send emails until a verified Resend sender, API key and HTTPS site URL are configured. The connected Resend account has no sending domain. Election opening remains blocked until each eligible voter has an invitation issued.
 
 ## Local development
 
