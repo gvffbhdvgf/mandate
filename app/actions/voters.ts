@@ -1,6 +1,6 @@
 "use server";
 
-import { parse } from "csv-parse/sync";
+import { parse } from "csv-parse/browser/esm/sync";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
