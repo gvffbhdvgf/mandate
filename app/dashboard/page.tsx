@@ -9,12 +9,13 @@ export default async function DashboardPage() {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) redirect("/login");
 
-  const { data: organizations, error } = await supabase
+  const { data: organizationRows, error } = await supabase
     .from("organizations")
     .select("id,name,slug,status,created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw new Error("Could not load your organizations.");
+  const organizations = organizationRows ?? [];
 
   return (
     <main className="dashboard-shell">
