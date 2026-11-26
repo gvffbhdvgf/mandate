@@ -92,13 +92,16 @@ Deno.serve(async (request: Request) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const pendingClaimFilter = `access_token_hash.is.null,invitation_attempted_at.lt.${staleBefore}`;
+
   const { count: skippedNoEmail } = await admin
     .from("election_voters")
     .select("id", { count: "exact", head: true })
     .eq("election_id", election.id)
     .eq("eligibility_status", "eligible")
     .is("invited_at", null)
-    .is("access_token_hash", null)
+    .or(pendingClaimFilter)
     .is("normalized_email", null);
 
   const { data: voters, error: voterError } = await admin
@@ -107,7 +110,7 @@ Deno.serve(async (request: Request) => {
     .eq("election_id", election.id)
     .eq("eligibility_status", "eligible")
     .is("invited_at", null)
-    .is("access_token_hash", null)
+    .or(pendingClaimFilter)
     .not("normalized_email", "is", null)
     .order("created_at", { ascending: true })
     .limit(50);
@@ -123,10 +126,10 @@ Deno.serve(async (request: Request) => {
 
     const { data: claim, error: tokenError } = await admin
       .from("election_voters")
-      .update({ access_token_hash: tokenHash, invited_at: null })
+      .update({ access_token_hash: tokenHash, invitation_attempted_at: new Date().toISOString(), invited_at: null })
       .eq("id", voter.id)
       .is("invited_at", null)
-      .is("access_token_hash", null)
+      .or(pendingClaimFilter)
       .select("id")
       .maybeSingle();
     if (tokenError) {
@@ -157,7 +160,7 @@ Deno.serve(async (request: Request) => {
         }),
       });
     } catch {
-      await admin.from("election_voters").update({ access_token_hash: null }).eq("id", voter.id).is("invited_at", null);
+      await admin.from("election_voters").update({ access_token_hash: null, invitation_attempted_at: null }).eq("id", voter.id).is("invited_at", null);
       failed += 1;
       continue;
     }
@@ -175,7 +178,7 @@ Deno.serve(async (request: Request) => {
       .eq("access_token_hash", tokenHash)
       .is("invited_at", null);
     if (markInvitedError) {
-      await admin.from("election_voters").update({ access_token_hash: null })
+      await admin.from("election_voters").update({ access_token_hash: null, invitation_attempted_at: null })
         .eq("id", voter.id).eq("access_token_hash", tokenHash).is("invited_at", null);
       failed += 1;
       continue;
