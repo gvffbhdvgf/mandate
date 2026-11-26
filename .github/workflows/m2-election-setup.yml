@@ -22,8 +22,6 @@ jobs:
   election-setup:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      # Database acceptance is centralized in the M1+M2 workflow to avoid duplicate Supabase stacks.
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -35,6 +33,3 @@ jobs:
         run: npm run check
       - name: Build production Worker
         run: npm run build:vinext
-      - name: Stop disposable local stack
-        if: always()
-        run: npx --yes supabase@2.100.0 stop --no-backup
