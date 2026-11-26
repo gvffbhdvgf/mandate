@@ -1,0 +1,76 @@
+name: Database acceptance (schema, security and concurrency)
+
+on:
+  pull_request:
+    branches: [main, feat/m0-vinext-foundation]
+    paths:
+      - 'app/actions/**'
+      - 'app/auth/**'
+      - 'app/invitations/**'
+      - 'app/login/**'
+      - 'app/signup/**'
+      - 'app/organizations/**'
+      - 'lib/navigation.ts'
+      - 'supabase/**'
+      - 'scripts/concurrency.acceptance.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tests/contracts.test.mjs'
+      - '.github/workflows/database-acceptance.yml'
+      - '.github/workflows/m1-organization-members.yml'
+      - '.github/workflows/m2-election-setup.yml'
+      - '.github/workflows/database-concurrency.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mandate-database-acceptance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database:
+    name: Disposable Supabase migration, invariant and race tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out the exact commit under test
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Start one disposable local Supabase stack
+        run: npx --yes supabase@2.114.0 start -x edge-runtime,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,studio,supavisor,vector
+
+      - name: Apply all repository migrations
+        run: npx --yes supabase@2.114.0 db reset --local --no-seed
+
+      - name: Export local database connection
+        run: npx --yes supabase@2.114.0 status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run every rollback-only SQL acceptance test
+        run: |
+          set -euo pipefail
+          for test_file in supabase/tests/*.sql; do
+            echo "Running ${test_file}"
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "${test_file}"
+          done
+
+      - name: Run independent-session concurrency tests
+        run: npm run test:concurrency
+        env:
+          SUPABASE_DB_URL: ${{ env.DB_URL }}
+
+      - name: Stop disposable local Supabase
+        if: always()
+        run: npx --yes supabase@2.114.0 stop --no-backup
