@@ -19,6 +19,8 @@ export default defineConfig({
       ASSETS: bindings.assets(),
       IMAGES: bindings.images(),
       VINEXT_KV_CACHE: bindings.kv({ id: "8df55d8d27e74f058c2ae3013ae71ded" }),
+      SUPABASE_URL: bindings.text("https://yhdosrhtzcsfqfuuqhsk.supabase.co"),
+      SUPABASE_PUBLISHABLE_KEY: bindings.text("sb_publishable_Bjx7bNlSk8quCD6BxYeChg_teyfkUn9"),
     },
   }),
 });
