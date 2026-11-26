@@ -46,8 +46,11 @@ export async function dispatchVoterInvitationsAction(
     return { error: "The invitation batch could not be sent. No ballot choices or voter tokens were exposed." };
   }
 
+  const sent = Number(responseData?.sent ?? 0);
+  const skippedNoEmail = Number(responseData?.skippedNoEmail ?? 0);
+  const failed = Number(responseData?.failed ?? 0);
   return {
-    message: `${responseData?.sent ?? 0} invitations sent. ${responseData?.skippedNoEmail ?? 0} eligible voters have no email address and need another delivery channel. ${responseData?.failed ?? 0} sends failed.`,
+    message: `${sent} invitations sent. ${skippedNoEmail} eligible voters have no email address and need another delivery channel. ${failed} sends failed.`,
     hasMore: Boolean(responseData?.hasMore),
   };
 }
