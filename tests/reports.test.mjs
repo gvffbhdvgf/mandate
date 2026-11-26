@@ -19,6 +19,7 @@ test("published result exports are role-gated, aggregate-only, formula-safe and 
   assert.match(electionPage, /report\?format=csv/);
   assert.match(electionPage, /report\?format=pdf/);
   assert.match(migration, /election\.results\.exported/);
+  assert.match(migration, /election\.setup_confirmed/);
   assert.match(migration, /p_format not in \('csv','pdf'\)/);
   assert.match(lifecycle, /public\.record_results_export/);
   assert.match(lifecycle, /election\.results\.exported/);
