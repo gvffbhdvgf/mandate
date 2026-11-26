@@ -3,7 +3,7 @@
 -- triggers still execute their functions under an ordinary application role.
 begin;
 
-do $$
+do $acl$$
 declare
   v_function regprocedure;
   v_functions regprocedure[] := array[
@@ -40,7 +40,7 @@ begin
   end if;
   execute format('grant usage on schema %I to authenticated', v_temp_schema);
 end;
-$;
+$acl$;
 grant select, update on trigger_acl_updated_at_probe to authenticated;
 
 create temporary table trigger_acl_append_only_probe(id integer);
