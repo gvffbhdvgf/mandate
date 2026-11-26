@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { AcceptInvitationForm } from "./accept-form";
+import { InvitationTokenCapture } from "./invitation-token-capture";
 
 const errors: Record<string, string> = {
   "email-mismatch": "Sign in using the exact email address this invitation was sent to.",
@@ -10,11 +11,10 @@ const errors: Record<string, string> = {
   failed: "We could not accept this invitation. Please try again or contact the organization administrator.",
 };
 
-export default async function AcceptInvitationPage({ searchParams }: { searchParams: Promise<{ token?: string; error?: string }> }) {
+export default async function AcceptInvitationPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const params = await searchParams;
-  const token = params.token ?? "";
-  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) redirect("/login");
-  const next = `/invitations/accept?token=${encodeURIComponent(token)}`;
+  const cookieStore = await cookies();
+  const token = cookieStore.get("mandate_invitation_token")?.value ?? "";
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -26,15 +26,17 @@ export default async function AcceptInvitationPage({ searchParams }: { searchPar
         <h1>Join your organization</h1>
         <p className="muted">You’ve been invited to join an organization on Mandate. Sign in with the invited email address to accept.</p>
         {params.error && <p className="form-error" role="alert">{errors[params.error] ?? errors.failed}</p>}
-        {user ? (
+        {!token ? (
+          <InvitationTokenCapture />
+        ) : user ? (
           <>
             <p className="form-hint">Signed in as <strong>{user.email}</strong>. Accepting will add this account to the organization with the assigned role.</p>
-            <AcceptInvitationForm token={token} />
+            <AcceptInvitationForm />
           </>
         ) : (
           <div className="form-stack">
-            <Link className="primary-button link-button" href={`/login?next=${encodeURIComponent(next)}`}>Sign in to accept</Link>
-            <Link className="secondary-button" href={`/signup?next=${encodeURIComponent(next)}`}>Create an account</Link>
+            <Link className="primary-button link-button" href="/login?next=%2Finvitations%2Faccept">Sign in to accept</Link>
+            <Link className="secondary-button" href="/signup?next=%2Finvitations%2Faccept">Create an account</Link>
           </div>
         )}
       </section>
