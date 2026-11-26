@@ -42,6 +42,14 @@ Deno.serve(async (request: Request) => {
     return json(503, { error: "INVITATION_DELIVERY_NOT_CONFIGURED", message: "Configure a verified Resend sender and Mandate site URL before issuing voter access." });
   }
 
+  let voteUrl: URL;
+  try {
+    voteUrl = new URL("/vote/", siteUrl);
+    if (voteUrl.protocol !== "https:") return json(503, { error: "MANDATE_SITE_URL_MUST_USE_HTTPS" });
+  } catch {
+    return json(503, { error: "MANDATE_SITE_URL_INVALID" });
+  }
+
   const authorization = request.headers.get("Authorization");
   if (!authorization?.startsWith("Bearer ")) return json(401, { error: "AUTHENTICATION_REQUIRED" });
 
@@ -108,8 +116,6 @@ Deno.serve(async (request: Request) => {
 
   let sent = 0;
   let failed = 0;
-  const voteUrl = new URL("/vote/", siteUrl);
-
   for (const voter of voters as Voter[]) {
     const bytes = crypto.getRandomValues(new Uint8Array(32));
     const token = tokenString(bytes);
