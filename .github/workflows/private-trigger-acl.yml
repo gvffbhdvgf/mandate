@@ -1,0 +1,39 @@
+name: Private trigger function ACL acceptance
+
+on:
+  pull_request:
+    branches: [feat/m0-vinext-foundation]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/private_trigger_function_acl_smoke.sql'
+      - '.github/workflows/private-trigger-acl.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-trigger-acl-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trigger-acl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Start disposable local PostgreSQL
+        run: npx --yes supabase@2.100.0 start -x analytics,edge-runtime,functions,imgproxy,inbucket,kong,meta,realtime,rest,storage,studio,vector
+      - name: Apply repository migrations to disposable database
+        run: npx --yes supabase@2.100.0 db reset --local --no-seed
+      - name: Export local database connection
+        run: npx --yes supabase@2.100.0 status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Verify trigger ACLs and trigger execution
+        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/private_trigger_function_acl_smoke.sql
+      - name: Stop disposable local stack
+        if: always()
+        run: npx --yes supabase@2.100.0 stop --no-backup
