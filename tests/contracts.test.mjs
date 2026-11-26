@@ -278,6 +278,6 @@ test("Paystack initialization, verification and webhooks all fail closed outside
 
 test("concurrency fixtures record authority confirmation before opening", async () => {
   const concurrency = await read("../scripts/concurrency.acceptance.mjs");
-  assert.match(concurrency, /public\\.confirm_election_setup/);
-  assert.match(concurrency, /public\\.open_election/);
+  assert.match(concurrency, /public[.]confirm_election_setup/);
+  assert.match(concurrency, /public[.]open_election/);
 });
