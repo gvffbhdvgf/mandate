@@ -138,3 +138,14 @@ footer { padding: 24px 0; border-top: 1px solid var(--border); color: var(--mute
 
 .secondary-button { width: fit-content; padding: 12px 18px; border: 1px solid var(--forest); border-radius: 10px; background: white; color: var(--forest); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .secondary-button:disabled { opacity: .6; cursor: wait; }
+
+.audit-panel { margin-bottom: 20px; }
+.audit-list { list-style: none; padding: 0; margin: 18px 0 0; }
+.audit-item { display: flex; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+.audit-dot { flex: 0 0 9px; width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--jade); }
+.audit-content { min-width: 0; }
+.audit-content strong { color: var(--forest); font-size: 13px; text-transform: capitalize; }
+.audit-content p { margin: 5px 0; color: var(--muted); font-size: 11px; }
+.audit-content details { margin-top: 7px; color: var(--muted); font-size: 11px; }
+.audit-content summary { cursor: pointer; }
+.audit-content pre { max-width: 100%; overflow: auto; padding: 10px; border-radius: 8px; background: var(--ivory); color: var(--ink); font-size: 10px; }
