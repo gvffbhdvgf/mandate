@@ -4,6 +4,7 @@ import { signOutAction } from "../../../../actions/auth";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 import { VoterImportForm } from "./voter-import-form";
 import { CommitImportForm } from "./commit-import-form";
+import { DispatchInvitationsForm } from "./dispatch-invitations-form";
 
 export default async function ElectionPage({ params, searchParams }: {
   params: Promise<{ organizationId: string; electionId: string }>;
@@ -92,6 +93,13 @@ export default async function ElectionPage({ params, searchParams }: {
           <>
             <p className="template-link"><Link href="/voter-register-template.csv" download>Download CSV template</Link></p>
             <VoterImportForm organizationId={organizationId} electionId={electionId} />
+            {(voterCount ?? 0) > 0 && (
+              <div className="invitation-section">
+                <div className="form-section-title">Voter invitations</div>
+                <p className="form-hint">Invitations are sent privately to registered email addresses. Phone-only voters need a separate delivery channel. The raw access token is never shown in this workspace.</p>
+                <DispatchInvitationsForm organizationId={organizationId} electionId={electionId} />
+              </div>
+            )}
           </>
         )}
       </section>
