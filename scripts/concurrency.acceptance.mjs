@@ -128,8 +128,32 @@ async function main() {
     const finalCount = await admin.query('select count(*)::int as count from public.ballots where election_id=$1', [electionId]);
     assert.equal(finalCount.rows[0].count, 1, 'a cast queued behind pause must not commit');
 
+    await withAuthenticated(admin, async () => admin.query(
+      "select public.close_election($1,'Concurrency acceptance close reason')", [electionId],
+    ));
+    const runTally = async (name) => {
+      const c = await client(name);
+      try {
+        return await withAuthenticated(c, async () => c.query(
+          'select public.tally_and_reconcile($1) as result', [electionId],
+        ));
+      } finally {
+        await c.end();
+      }
+    };
+    const tallies = await Promise.allSettled([
+      runTally('mandate-race-tally-a'),
+      runTally('mandate-race-tally-b'),
+    ]);
+    assert.equal(tallies.filter((x) => x.status === 'fulfilled').length, 2, 'both concurrent tally requests should resolve');
+    const tallyIds = tallies.map((x) => x.value.rows[0].result.tallyId);
+    assert.equal(tallyIds[0], tallyIds[1], 'concurrent tally requests must return the same idempotent tally');
+    const tallyCount = await admin.query('select count(*)::int as count from public.election_tallies where election_id=$1', [electionId]);
+    assert.equal(tallyCount.rows[0].count, 1, 'only one tally row may be created');
+
     console.log('PASS: independent-session duplicate ballot race (one accepted, one rejected)');
     console.log('PASS: pause wins election-row lock; queued ballot observes paused state');
+    console.log('PASS: concurrent tally requests return one consistent tally');
   } finally {
     await admin.end();
   }
