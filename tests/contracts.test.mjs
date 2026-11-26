@@ -77,3 +77,16 @@ V-1,"Voter, One",one@example.org
   assert.equal(rows.length, 1);
   assert.equal(rows[0].name, "Voter, One");
 });
+
+test("registered ballot access does not expose voter identity", async () => {
+  const migration = await read("../supabase/migrations/20261126092410_0021_registered_voter_ballot_context_and_public_cast.sql");
+  const ballotPage = await read("../app/vote/page.tsx");
+  const invitation = await read("../supabase/functions/send-voter-invitations/index.ts");
+  assert.match(migration, /get_registered_ballot_context/);
+  assert.match(migration, /alreadyVoted/);
+  assert.match(migration, /grant execute on function public\.cast_registered_ballot.*to anon/);
+  assert.match(ballotPage, /window\.location\.hash/);
+  assert.match(ballotPage, /history\.replaceState/);
+  assert.match(invitation, /#\$\{token\}/);
+  assert.doesNotMatch(invitation, /receiptCode.*token/i);
+});
