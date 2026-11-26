@@ -130,8 +130,43 @@ async function main() {
     assert.equal(finalCount.rows[0].count, 1, 'a cast queued behind pause must not commit');
 
     await withAuthenticated(admin, async () => admin.query(
-      "select public.close_election($1,'Concurrency acceptance close reason')", [electionId],
+      "select public.resume_election($1,'Concurrency acceptance resume reason')", [electionId],
     ));
+
+    // Repeat the controlled lock race with close rather than pause. The cast must
+    // wait for the close transaction, then re-check status and reject.
+    const closeBlocker = await client('mandate-race-close-owner');
+    const closeCastClient = await client('mandate-race-close-cast');
+    try {
+      await closeBlocker.query('begin');
+      await closeBlocker.query('select id from public.elections where id=$1 for update', [electionId]);
+      await closeCastClient.query('set role anon');
+      const waitingCloseCast = closeCastClient.query(
+        'select public.cast_registered_ballot($1,$2,$3,true)', [tokens[1], contestId, optionId],
+      );
+      let waiting = false;
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const state = await admin.query("select wait_event_type from pg_stat_activity where application_name='mandate-race-close-cast'");
+        if (state.rows[0]?.wait_event_type === 'Lock') { waiting = true; break; }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.ok(waiting, 'cast session should be blocked on the election row lock before close');
+      await closeBlocker.query("select set_config('request.jwt.claim.sub',$1,true)", [userId]);
+      await closeBlocker.query("select set_config('request.jwt.claim.role','authenticated',true)");
+      await closeBlocker.query('set local role authenticated');
+      await closeBlocker.query("select public.close_election($1,'Concurrency acceptance close reason')", [electionId]);
+      await closeBlocker.query('commit');
+      await assert.rejects(waitingCloseCast, /ELECTION_NOT_OPEN/);
+    } finally {
+      await closeBlocker.query('rollback').catch(() => {});
+      await closeBlocker.end();
+      await closeCastClient.end();
+    }
+    const closedState = await admin.query('select status from public.elections where id=$1', [electionId]);
+    assert.equal(closedState.rows[0].status, 'closed', 'close must be committed');
+    const closedCount = await admin.query('select count(*)::int as count from public.ballots where election_id=$1', [electionId]);
+    assert.equal(closedCount.rows[0].count, 1, 'a cast queued behind close must not commit');
+
     const runTally = async (name) => {
       const c = await client(name);
       try {
@@ -154,6 +189,7 @@ async function main() {
 
     console.log('PASS: independent-session duplicate ballot race (one accepted, one rejected)');
     console.log('PASS: pause wins election-row lock; queued ballot observes paused state');
+    console.log('PASS: close wins election-row lock; queued ballot observes closed state');
     console.log('PASS: concurrent tally requests return one consistent tally');
   } finally {
     await admin.end();
