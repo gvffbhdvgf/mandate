@@ -32,6 +32,9 @@ begin
   if not exists (select 1 from pg_indexes where schemaname='public' and indexname='organization_invitations_invited_by_idx') then
     raise exception 'INVITATION_INVITED_BY_FK_INDEX_MISSING';
   end if;
+  if not exists (select 1 from pg_indexes where schemaname='public' and indexname='elections_setup_confirmed_by_idx') then
+    raise exception 'ELECTION_SETUP_CONFIRMATION_FK_INDEX_MISSING';
+  end if;
   if exists (select 1 from pg_policies where schemaname='public' and tablename='organization_members'
       and policyname='members_select_self_or_admin') then
     raise exception 'DUPLICATE_MEMBERSHIP_READ_POLICY_REMAINS';
