@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
@@ -48,8 +49,28 @@ export async function createOrganizationInvitationAction(
   return { message: `Invitation sent to ${email}. It expires in seven days.` };
 }
 
-export async function acceptOrganizationInvitationAction(formData: FormData): Promise<void> {
+const invitationCookie = "mandate_invitation_token";
+
+export async function stageOrganizationInvitationAction(formData: FormData): Promise<void> {
   const token = String(formData.get("token") ?? "");
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) redirect("/login");
+  const cookieStore = await cookies();
+  cookieStore.set(invitationCookie, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 10 * 60,
+  });
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) redirect("/invitations/accept");
+  redirect("/login?next=%2Finvitations%2Faccept");
+}
+
+export async function acceptOrganizationInvitationAction(_formData: FormData): Promise<void> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(invitationCookie)?.value ?? "";
   if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) redirect("/login");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   const tokenHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -61,8 +82,10 @@ export async function acceptOrganizationInvitationAction(formData: FormData): Pr
       : message.includes("EXPIRED") ? "expired"
       : message.includes("NOT_AVAILABLE") || message.includes("ALREADY_USED") ? "unavailable"
       : "failed";
-    redirect(`/invitations/accept?token=${encodeURIComponent(token)}&error=${code}`);
+    if (code !== "email-mismatch") cookieStore.delete(invitationCookie);
+    redirect(`/invitations/accept?error=${code}`);
   }
+  cookieStore.delete(invitationCookie);
   redirect(`/organizations/${data.organizationId}`);
 }
 
