@@ -245,3 +245,32 @@ test("signup failures return safe guidance and log provider diagnostics", async 
   assert.match(auth, /\[auth\.signup\] Supabase rejected sign-up/);
   assert.doesNotMatch(auth, /return \{ error: error\.message/);
 });
+
+test("Paystack webhook application is atomic, idempotent and retryable", async () => {
+  const migration = await read("../supabase/migrations/20261126121209_0030_atomic_paystack_webhook_processing.sql");
+  const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
+  assert.match(migration, /apply_verified_paystack_webhook_event/);
+  assert.match(migration, /for update/);
+  assert.match(migration, /v_event\.processing_status = 'processed'/);
+  assert.match(migration, /p_amount_minor = v_intent\.amount_minor/);
+  assert.match(migration, /p_currency = v_intent\.currency/);
+  assert.match(migration, /grant execute[\s\S]*to service_role/);
+  assert.match(webhook, /processing_status: "received"/);
+  assert.match(webhook, /existing\.processing_status === "processed"/);
+  assert.match(webhook, /PAYSTACK_VERIFICATION_UNAVAILABLE/);
+  assert.match(webhook, /apply_verified_paystack_webhook_event/);
+  assert.doesNotMatch(webhook, /vote_credit_lots|ledger_entries/);
+});
+
+test("Paystack initialization, verification and webhooks all fail closed outside test mode", async () => {
+  const shared = await read("../supabase/functions/_shared/paystack.ts");
+  const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
+  assert.match(shared, /PAYSTACK_MODE.*=== "test"/);
+  assert.match(shared, /PAYSTACK_SECRET_KEY.*startsWith\("sk_test_"\)/);
+  assert.match(initialize, /if \(!paymentsModeEnabled\(\)\)/);
+  assert.match(verify, /if \(!paymentsModeEnabled\(\)\)/);
+  assert.match(webhook, /if \(!paymentsModeEnabled\(\)\)/);
+});
+
