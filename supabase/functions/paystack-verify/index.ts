@@ -1,4 +1,4 @@
-import { adminClient, assertOrganizationManager, authenticate, corsHeaders, json, paystackRequest } from "../_shared/paystack.ts";
+import { adminClient, assertOrganizationManager, authenticate, corsHeaders, json, paystackRequest, paymentsModeEnabled } from "../_shared/paystack.ts";
 
 type PaystackVerifyResponse = {
   status: boolean;
@@ -17,6 +17,10 @@ Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return json(405, { error: "METHOD_NOT_ALLOWED" }, cors);
 
   try {
+    if (!paymentsModeEnabled()) {
+      return json(503, { error: "PAYMENTS_DISABLED", message: "Payment verification is restricted to configured Paystack test credentials. Live transactions remain disabled." }, cors);
+    }
+
     const { user, caller } = await authenticate(request);
     const body = await request.json().catch(() => null) as { reference?: string } | null;
     if (!body?.reference || !/^[A-Za-z0-9.=-]{8,100}$/.test(body.reference)) {
