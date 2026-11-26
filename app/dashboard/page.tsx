@@ -36,10 +36,10 @@ export default async function DashboardPage() {
           ) : (
             <div className="organization-list">
               {organizations.map((organization) => (
-                <article className="organization-item" key={organization.id}>
+                <Link className="organization-item" href={`/organizations/${organization.id}`} key={organization.id}>
                   <div><h3>{organization.name}</h3><p className="muted">/{organization.slug}</p></div>
                   <span className="status-pill">{organization.status}</span>
-                </article>
+                </Link>
               ))}
             </div>
           )}
