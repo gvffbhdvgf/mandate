@@ -1,0 +1,2 @@
+voter_ref,name,email,phone_e164,weight
+SAMPLE-001,Sample Voter,sample@example.org,+254700000001,1
