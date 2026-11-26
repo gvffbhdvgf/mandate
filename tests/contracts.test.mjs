@@ -94,11 +94,12 @@ test("registered ballot access does not expose voter identity", async () => {
 test("invitation dispatcher uses recoverable claims and never returns raw tokens", async () => {
   const migration = await read("../supabase/migrations/20261126092940_0023_voter_invitation_claim_recovery.sql");
   const functionSource = await read("../supabase/functions/send-voter-invitations/index.ts");
+  const functionConfig = await read("../supabase/config.toml");
   assert.match(migration, /invitation_attempted_at/);
   assert.match(functionSource, /pendingClaimFilter/);
   assert.match(functionSource, /15 \* 60 \* 1000/);
   assert.match(functionSource, /access_token_hash: tokenHash/);
   assert.match(functionSource, /sha256Hex/);
-  assert.match(functionSource, /verify_jwt/);
+  assert.match(functionConfig, /verify_jwt = true/);
   assert.doesNotMatch(functionSource, /return json\(200,\s*\{[^}]*token\s*:/i);
 });
