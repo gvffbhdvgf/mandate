@@ -30,8 +30,6 @@ jobs:
   database-acceptance:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -42,11 +40,11 @@ jobs:
       - name: Run application contract, type and compatibility checks
         run: npm run check
       - name: Start disposable local Supabase
-        run: npx --yes supabase@2.100.0 start -x edge-runtime,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,studio,supavisor,vector
+        run: npx --yes supabase@2.114.0 start -x edge-runtime,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,studio,supavisor,vector
       - name: Apply repository migrations to disposable database
-        run: npx --yes supabase@2.100.0 db reset --local --no-seed
+        run: npx --yes supabase@2.114.0 db reset --local --no-seed
       - name: Export local database connection
-        run: npx --yes supabase@2.100.0 status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
+        run: npx --yes supabase@2.114.0 status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Verify all database transaction and security invariants
@@ -57,4 +55,4 @@ jobs:
           done
       - name: Stop disposable local stack
         if: always()
-        run: npx --yes supabase@2.100.0 stop --no-backup
+        run: npx --yes supabase@2.114.0 stop --no-backup
