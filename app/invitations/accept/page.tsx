@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { AcceptInvitationForm } from "./accept-form";
+import { switchInvitationAccountAction } from "../../actions/organization-members";
 import { InvitationTokenCapture } from "./invitation-token-capture";
 
 const errors: Record<string, string> = {
@@ -32,6 +33,11 @@ export default async function AcceptInvitationPage({ searchParams }: { searchPar
           <>
             <p className="form-hint">Signed in as <strong>{user.email}</strong>. Accepting will add this account to the organization with the assigned role.</p>
             <AcceptInvitationForm />
+            {params.error === "email-mismatch" && (
+              <form action={switchInvitationAccountAction}>
+                <button className="secondary-button">Sign out and use the invited email</button>
+              </form>
+            )}
           </>
         ) : (
           <div className="form-stack">
