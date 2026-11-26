@@ -178,6 +178,12 @@ export default async function ElectionPage({ params, searchParams }: {
             </article>
           ))}
           {election.result_visibility === "public" && <p className="template-link"><Link href={`/results/${electionId}`}>Open public results page</Link></p>}
+          {canPublish && election.status === "results_published" && (
+            <p className="template-link">
+              Download report: <Link href={"/organizations/" + organizationId + "/elections/" + electionId + "/report?format=csv"}>CSV</Link>
+              {" · "}<Link href={"/organizations/" + organizationId + "/elections/" + electionId + "/report?format=pdf"}>PDF</Link>
+            </p>
+          )}
         </section>
       )}
       <section className="panel contest-panel">
