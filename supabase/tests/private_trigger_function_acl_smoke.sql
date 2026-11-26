@@ -28,7 +28,19 @@ create trigger trigger_acl_updated_at_probe_before_update
 before update on trigger_acl_updated_at_probe
 for each row execute function mandate_private.set_updated_at();
 insert into trigger_acl_updated_at_probe values ('2000-01-01T00:00:00Z');
-grant usage on schema pg_temp to authenticated;
+do $
+declare
+  v_temp_schema text;
+begin
+  select nspname into v_temp_schema
+  from pg_namespace
+  where oid = pg_my_temp_schema();
+  if v_temp_schema is null then
+    raise exception 'TEMP_SCHEMA_NOT_INITIALIZED';
+  end if;
+  execute format('grant usage on schema %I to authenticated', v_temp_schema);
+end;
+$;
 grant select, update on trigger_acl_updated_at_probe to authenticated;
 
 create temporary table trigger_acl_append_only_probe(id integer);
