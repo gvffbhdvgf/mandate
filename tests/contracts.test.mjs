@@ -103,3 +103,16 @@ test("invitation dispatcher uses recoverable claims and never returns raw tokens
   assert.match(functionConfig, /verify_jwt = true/);
   assert.doesNotMatch(functionSource, /return json\(200,\s*\{[^}]*token\s*:/i);
 });
+
+test("election tally reconciles ballots before publishing aggregate results", async () => {
+  const migration = await read("../supabase/migrations/20261126093220_0024_election_tally_reconciliation_and_results.sql");
+  const summary = await read("../supabase/migrations/20261126093540_0025_read_only_election_tally_summary.sql");
+  const resultsPage = await read("../app/results/[electionId]/page.tsx");
+  assert.match(migration, /BALLOT_CONTROL_RECONCILIATION_FAILED/);
+  assert.match(migration, /ELECTION_SNAPSHOT_HASH_MISMATCH/);
+  assert.match(migration, /RESULT_RESOLUTION_REQUIRED/);
+  assert.match(migration, /enable row level security/);
+  assert.match(migration, /public\.get_published_results/);
+  assert.match(summary, /get_tally_summary/);
+  assert.match(resultsPage, /get_published_results/);
+});
