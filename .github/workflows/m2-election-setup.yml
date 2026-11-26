@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      SUPABASE_INTERNAL_IMAGE_REGISTRY: docker.io
+      # Database acceptance is centralized in the M1+M2 workflow to avoid duplicate Supabase stacks.
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -33,20 +33,6 @@ jobs:
         run: npm ci
       - name: Run application contract, type and compatibility checks
         run: npm run check
-      - name: Start disposable local Supabase
-        run: npx --yes supabase@2.100.0 start -x edge-runtime,gotrue,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,storage-api,studio,supavisor,vector
-      - name: Apply repository migrations to disposable database
-        run: npx --yes supabase@2.100.0 db reset --local --no-seed
-      - name: Export local database connection
-        run: npx --yes supabase@2.100.0 status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: Verify database transaction and security invariants
-        run: |
-          for test_file in supabase/tests/*.sql; do
-            echo "Running $test_file"
-            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$test_file"
-          done
       - name: Build production Worker
         run: npm run build:vinext
       - name: Stop disposable local stack
