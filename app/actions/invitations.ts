@@ -34,15 +34,20 @@ export async function dispatchVoterInvitationsAction(
     body: { electionId },
   });
 
-  if (error || data?.error) {
-    if (data?.error === "INVITATION_DELIVERY_NOT_CONFIGURED") {
+  let responseData: Record<string, unknown> | null = data;
+  if (error && "context" in error && error.context instanceof Response) {
+    try { responseData = await error.context.clone().json(); } catch { responseData = null; }
+  }
+
+  if (error || responseData?.error) {
+    if (responseData?.error === "INVITATION_DELIVERY_NOT_CONFIGURED") {
       return { error: "Invitation delivery is not configured yet. A verified sender domain and site URL are required; no invitations or tokens were issued." };
     }
     return { error: "The invitation batch could not be sent. No ballot choices or voter tokens were exposed." };
   }
 
   return {
-    message: `${data.sent} invitations sent. ${data.skippedNoEmail} eligible voters have no email address and need another delivery channel. ${data.failed} sends failed.`,
-    hasMore: Boolean(data.hasMore),
+    message: `${responseData?.sent ?? 0} invitations sent. ${responseData?.skippedNoEmail ?? 0} eligible voters have no email address and need another delivery channel. ${responseData?.failed ?? 0} sends failed.`,
+    hasMore: Boolean(responseData?.hasMore),
   };
 }
