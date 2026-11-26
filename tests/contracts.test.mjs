@@ -147,3 +147,20 @@ test("audit timeline uses a strict action allowlist and removes free-text metada
   assert.match(migration, /- 'reason'|- 'reason'|-'reason'/);
   assert.match(migration, /'privateObjectPath'/);
 });
+
+
+test("Paystack webhook application is atomic, idempotent and retryable", async () => {
+  const migration = await read("../supabase/migrations/20261126110000_0030_atomic_paystack_webhook_processing.sql");
+  const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
+  assert.match(migration, /apply_verified_paystack_webhook_event/);
+  assert.match(migration, /for update/);
+  assert.match(migration, /v_event\.processing_status = 'processed'/);
+  assert.match(migration, /p_amount_minor = v_intent\.amount_minor/);
+  assert.match(migration, /p_currency = v_intent\.currency/);
+  assert.match(migration, /grant execute[\s\S]*to service_role/);
+  assert.match(webhook, /processing_status: "received"/);
+  assert.match(webhook, /existing\.processing_status === "processed"/);
+  assert.match(webhook, /PAYSTACK_VERIFICATION_UNAVAILABLE/);
+  assert.match(webhook, /apply_verified_paystack_webhook_event/);
+  assert.doesNotMatch(webhook, /vote_credit_lots|ledger_entries/);
+});

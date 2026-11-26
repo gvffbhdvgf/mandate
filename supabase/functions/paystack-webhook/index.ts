@@ -52,55 +52,63 @@ Deno.serve(async (request: Request) => {
         currency: event.data?.currency ?? null,
         transaction_id: transactionId,
       },
-      processing_status: "processing",
+      processing_status: "received",
     }, { onConflict: "provider_event_key", ignoreDuplicates: true })
     .select("id")
     .maybeSingle();
 
   if (insertError) return json(500, { error: "WEBHOOK_EVENT_PERSIST_FAILED" });
-  if (!inserted) return json(200, { received: true, duplicate: true });
+
+  let eventId = inserted?.id as string | undefined;
+  if (!eventId) {
+    const { data: existing, error: existingError } = await admin
+      .from("payment_events")
+      .select("id,processing_status")
+      .eq("provider_event_key", eventKey)
+      .maybeSingle();
+    if (existingError || !existing) return json(500, { error: "WEBHOOK_EVENT_LOOKUP_FAILED" });
+    if (existing.processing_status === "processed") {
+      return json(200, { received: true, duplicate: true });
+    }
+    eventId = existing.id;
+  }
 
   if (eventType !== "charge.success" || !reference) {
-    await admin.from("payment_events").update({
+    const { error } = await admin.from("payment_events").update({
       processing_status: "processed",
       processed_at: new Date().toISOString(),
-    }).eq("id", inserted.id);
+    }).eq("id", eventId);
+    if (error) return json(500, { error: "WEBHOOK_EVENT_FINALIZE_FAILED" });
     return json(200, { received: true, processed: false });
   }
 
+  let verified: PaystackVerifyResponse;
   try {
-    const verified = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(reference)}`);
-    const payment = verified.data;
-    const { data: intent, error: intentError } = await admin
-      .from("payment_intents")
-      .select("id,provider_reference,amount_minor,currency,status")
-      .eq("provider_reference", reference)
-      .maybeSingle();
-
-    if (intentError || !intent) {
-      await admin.from("payment_events").update({ processing_status: "failed", processed_at: new Date().toISOString() }).eq("id", inserted.id);
-      return json(200, { received: true, processed: false });
-    }
-
-    const matches = payment.status === "success"
-      && payment.reference === intent.provider_reference
-      && Number(payment.amount) === Number(intent.amount_minor)
-      && payment.currency === intent.currency;
-
-    await admin.from("payment_intents").update({
-      status: matches ? "success" : "exception",
-      provider_transaction_id: String(payment.id),
-      verified_at: new Date().toISOString(),
-    }).eq("id", intent.id);
-
-    await admin.from("payment_events").update({
-      processing_status: matches ? "processed" : "failed",
-      processed_at: new Date().toISOString(),
-    }).eq("id", inserted.id);
-
-    return json(200, { received: true, processed: matches });
+    verified = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(reference)}`);
   } catch {
-    await admin.from("payment_events").update({ processing_status: "failed", processed_at: new Date().toISOString() }).eq("id", inserted.id);
-    return json(200, { received: true, processed: false });
+    const { error } = await admin.from("payment_events").update({
+      processing_status: "failed",
+      processed_at: null,
+    }).eq("id", eventId);
+    if (error) return json(500, { error: "WEBHOOK_RETRY_STATE_PERSIST_FAILED" });
+    return json(503, { error: "PAYSTACK_VERIFICATION_UNAVAILABLE" });
   }
+
+  const { data: result, error: applyError } = await admin.rpc("apply_verified_paystack_webhook_event", {
+    p_event_id: eventId,
+    p_provider_reference: reference,
+    p_provider_transaction_id: String(verified.data.id),
+    p_provider_status: verified.data.status,
+    p_amount_minor: Number(verified.data.amount),
+    p_currency: verified.data.currency,
+  });
+
+  if (applyError || !result) return json(500, { error: "WEBHOOK_PROCESSING_FAILED" });
+  return json(200, {
+    received: true,
+    processed: result.processed === true,
+    duplicate: result.duplicate === true,
+    matched: result.matched === true,
+    status: typeof result.status === "string" ? result.status : undefined,
+  });
 });

@@ -16,6 +16,17 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Set up Node.js and run repository contract tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install application dependencies
+        run: npm ci
+
+      - name: Run repository contract tests
+        run: node --test tests/contracts.test.mjs
+
       - name: Set up Deno
         uses: denoland/setup-deno@v2
         with:

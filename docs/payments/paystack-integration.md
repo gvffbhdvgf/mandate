@@ -37,7 +37,7 @@ The initialization function fails closed unless `PAYSTACK_MODE=test` and the sec
 1. Create a Paystack test restricted key and set it as `PAYSTACK_SECRET_KEY`.
 2. Set `PAYSTACK_MODE=test`.
 3. Generate the matching test webhook signing secret and set `PAYSTACK_WEBHOOK_SECRET`.
-4. Deploy the Edge Functions and register the public webhook URL in Paystack.
-5. Test initialization, callback verification, webhook signature, duplicate delivery and amount/currency mismatch.
+4. Apply migration 0030, deploy the Edge Functions and register the public webhook URL in Paystack.
+5. Test initialization, callback verification, webhook signature, duplicate delivery, provider retry after temporary verification failure, and amount/currency mismatch. The webhook application RPC locks the event and payment intent and commits both state changes atomically.
 6. Complete ledger settlement and reconciliation before granting any paid value.
 7. Only after security, legal and operational review should a separate live configuration be considered.
