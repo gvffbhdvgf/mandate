@@ -176,14 +176,7 @@ begin
  select count(*) into v_bad_contests from public.contests c where c.election_id=v_e.id
    and (select count(*) from public.options o where o.contest_id=c.id and o.status='active')<2;
  if v_bad_contests>0 then raise exception 'EACH_CONTEST_REQUIRES_TWO_ACTIVE_OPTIONS' using errcode='23514'; end if;
- if v_e.voting_mode in ('registered_single','registered_weighted') then
-   select count(*) into v_voter_count from public.election_voters v where v.election_id=v_e.id and v.eligibility_status='eligible';
-   if v_voter_count=0 then raise exception 'ELIGIBLE_VOTERS_REQUIRED' using errcode='23514'; end if;
-   if exists(select 1 from public.election_voters v where v.election_id=v_e.id and v.eligibility_status='eligible'
-     and (v.access_token_hash is null or v.invited_at is null)) then raise exception 'VOTER_ACCESS_NOT_ISSUED' using errcode='55000'; end if;
- end if;
- if v_e.voting_mode='registered_single' and exists(select 1 from public.election_voters v
-   where v.election_id=v_e.id and v.weight_units<>1) then raise exception 'SINGLE_VOTE_WEIGHT_MUST_BE_ONE' using errcode='23514'; end if;
+ -- Check the confirmed configuration before voter-access readiness so drift is surfaced first.
  select jsonb_build_object('votingMode',v_e.voting_mode,'startsAt',v_e.starts_at,'endsAt',v_e.ends_at,
    'timezone',v_e.timezone,'resultVisibility',v_e.result_visibility,'rulesVersion',v_e.rules_version) into v_rules;
  select jsonb_agg(jsonb_build_object('contestId',c.id,'title',c.title,'required',c.is_required,'tiePolicy',c.tie_policy,
@@ -192,6 +185,14 @@ begin
  into v_candidates from public.contests c where c.election_id=v_e.id;
  v_hash:=encode(extensions.digest(convert_to(v_rules::text||coalesce(v_candidates::text,''),'UTF8'),'sha256'),'hex');
  if v_hash is distinct from v_e.setup_confirmation_hash then raise exception 'ELECTION_SETUP_CHANGED_RECONFIRM' using errcode='55000'; end if;
+ if v_e.voting_mode in ('registered_single','registered_weighted') then
+   select count(*) into v_voter_count from public.election_voters v where v.election_id=v_e.id and v.eligibility_status='eligible';
+   if v_voter_count=0 then raise exception 'ELIGIBLE_VOTERS_REQUIRED' using errcode='23514'; end if;
+   if exists(select 1 from public.election_voters v where v.election_id=v_e.id and v.eligibility_status='eligible'
+     and (v.access_token_hash is null or v.invited_at is null)) then raise exception 'VOTER_ACCESS_NOT_ISSUED' using errcode='55000'; end if;
+ end if;
+ if v_e.voting_mode='registered_single' and exists(select 1 from public.election_voters v
+   where v.election_id=v_e.id and v.weight_units<>1) then raise exception 'SINGLE_VOTE_WEIGHT_MUST_BE_ONE' using errcode='23514'; end if;
  update public.elections set status='open',rules_snapshot=v_rules,candidate_snapshot=v_candidates,rules_hash=v_hash,opened_at=now()
  where id=v_e.id;
  insert into public.audit_events(organization_id,election_id,actor_id,actor_type,action,entity_type,entity_id,redacted_metadata)
