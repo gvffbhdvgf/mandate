@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { signOutAction } from "../../actions/auth";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { CreateElectionForm } from "./create-election-form";
+import { OrganizationMembersPanel } from "./members-panel";
 
 export default async function OrganizationPage({ params }: { params: Promise<{ organizationId: string }> }) {
   const { organizationId } = await params;
@@ -17,6 +18,29 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
     .maybeSingle();
 
   if (organizationError || !organization) notFound();
+
+  const { data: membership } = await supabase
+    .from("organization_members")
+    .select("role,status")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const canManageMembers = membership?.status === "active" && ["owner", "admin"].includes(membership.role);
+  let members: any[] = [];
+  let pendingInvitations: any[] = [];
+  if (canManageMembers) {
+    const [memberResult, invitationResult] = await Promise.all([
+      supabase.rpc("get_organization_members", { p_organization_id: organizationId }),
+      supabase.from("organization_invitations")
+        .select("id,email,role,expires_at,created_at")
+        .eq("organization_id", organizationId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
+    ]);
+    if (memberResult.error || invitationResult.error) throw new Error("Could not load organization membership.");
+    members = memberResult.data ?? [];
+    pendingInvitations = invitationResult.data ?? [];
+  }
 
   const { data: electionRows, error: electionsError } = await supabase
     .from("elections")
@@ -38,6 +62,14 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
         <h1>{organization.name}</h1>
         <p className="muted">/{organization.slug} · {organization.status}</p>
       </section>
+      {canManageMembers && (
+        <OrganizationMembersPanel
+          organizationId={organizationId}
+          members={members}
+          invitations={pendingInvitations}
+          actorRole={membership.role}
+        />
+      )}
       <section className="dashboard-grid organization-workspace-grid">
         <div className="panel">
           <div className="panel-heading"><div><p className="kicker">ELECTIONS</p><h2>Election workspace</h2></div><span className="count">{elections.length}</span></div>

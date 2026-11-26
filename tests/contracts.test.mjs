@@ -147,3 +147,44 @@ test("audit timeline uses a strict action allowlist and removes free-text metada
   assert.match(migration, /- 'reason'|- 'reason'|-'reason'/);
   assert.match(migration, /'privateObjectPath'/);
 });
+
+
+test("organization invitations are single-use, role-scoped and email-bound", async () => {
+  const migration = await read("../supabase/migrations/20261126150000_0031_organization_membership_invitations.sql");
+  const dispatcher = await read("../supabase/functions/send-organization-invitation/index.ts");
+  const actions = await read("../app/actions/organization-members.ts");
+  const acceptance = await read("../app/invitations/accept/page.tsx");
+  assert.match(migration, /token_hash text not null unique/);
+  assert.match(migration, /expires_at timestamptz not null/);
+  assert.match(migration, /INVITATION_EMAIL_MISMATCH/);
+  assert.match(migration, /INVITATION_EMAIL_NOT_VERIFIED/);
+  assert.match(migration, /email_confirmed_at/);
+  assert.match(migration, /INVITATION_NOT_AVAILABLE/);
+  assert.match(migration, /ROLE_ASSIGNMENT_REQUIRES_OWNER/);
+  assert.match(migration, /OWNER_TRANSFER_REQUIRED/);
+  assert.match(migration, /organization\.member\.joined/);
+  assert.match(dispatcher, /RESEND_API_KEY/);
+  assert.match(dispatcher, /sha256Hex/);
+  assert.match(dispatcher, /INVITATION_DELIVERY_NOT_CONFIGURED/);
+  assert.match(dispatcher, /invitationUrl\.hash/);
+  assert.doesNotMatch(dispatcher, /searchParams\.set\(["']token/);
+  assert.doesNotMatch(dispatcher, /return json\(200,[\s\S]*?token\s*:/i);
+  assert.match(actions, /accept_organization_invitation/);
+  assert.match(actions, /httpOnly:\s*true/);
+  assert.match(acceptance, /Sign in to accept/);
+  const tokenCapture = await read("../app/invitations/accept/invitation-token-capture.tsx");
+  assert.match(tokenCapture, /window\.location\.hash/);
+  assert.match(tokenCapture, /history\.replaceState/);
+});
+
+test("invitation authentication redirects are restricted to the signed invitation path", async () => {
+  const navigation = await read("../lib/navigation.ts");
+  const auth = await read("../app/actions/auth.ts");
+  const callback = await read("../app/auth/callback/route.ts");
+  assert.match(navigation, /startsWith\("\/\/"\)/);
+  assert.match(navigation, /resolved\.pathname !== "\/invitations\/accept"/);
+  assert.match(navigation, /resolved\.search !== ""/);
+  assert.match(navigation, /resolved\.hash !== ""/);
+  assert.match(auth, /safeInternalPath/);
+  assert.match(callback, /safeInternalPath/);
+});
