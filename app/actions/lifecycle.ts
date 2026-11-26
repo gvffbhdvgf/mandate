@@ -45,6 +45,26 @@ export async function openElectionAction(_previous: LifecycleActionState, formDa
   return { success: true, message: "Election opened. The frozen ballot snapshot is now active." };
 }
 
+export async function pauseElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (reason.length < 10 || reason.length > 1000) return { error: "Enter a pause reason between 10 and 1,000 characters." };
+  const auth = await authorizedElection(formData);
+  if ("error" in auth) return { error: auth.error };
+  const { error } = await auth.supabase.rpc("pause_election", { p_election_id: auth.electionId, p_reason: reason });
+  if (error) return { error: "The election could not be paused. It may no longer be open." };
+  return { success: true, message: "Election paused. Ballot submissions are temporarily disabled." };
+}
+
+export async function resumeElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (reason.length < 10 || reason.length > 1000) return { error: "Enter a resumption reason between 10 and 1,000 characters." };
+  const auth = await authorizedElection(formData);
+  if ("error" in auth) return { error: auth.error };
+  const { error } = await auth.supabase.rpc("resume_election", { p_election_id: auth.electionId, p_reason: reason });
+  if (error) return { error: "The election could not be resumed. It may have reached its scheduled end." };
+  return { success: true, message: "Election resumed. Ballot submissions are active again." };
+}
+
 export async function closeElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
   const reason = String(formData.get("reason") ?? "").trim();
   if (reason.length < 10 || reason.length > 1000) return { error: "Enter a closure reason between 10 and 1,000 characters." };
