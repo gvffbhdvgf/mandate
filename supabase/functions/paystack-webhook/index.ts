@@ -94,12 +94,17 @@ Deno.serve(async (request: Request) => {
     return json(503, { error: "PAYSTACK_VERIFICATION_UNAVAILABLE" });
   }
 
+  const amountMinor = Number(verified.data.amount);
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+    return json(409, { error: "PAYSTACK_AMOUNT_INVALID" });
+  }
+
   const { data: result, error: applyError } = await admin.rpc("apply_verified_paystack_webhook_event", {
     p_event_id: eventId,
     p_provider_reference: reference,
     p_provider_transaction_id: String(verified.data.id),
     p_provider_status: verified.data.status,
-    p_amount_minor: Number(verified.data.amount),
+    p_amount_minor: amountMinor,
     p_currency: verified.data.currency,
   });
 

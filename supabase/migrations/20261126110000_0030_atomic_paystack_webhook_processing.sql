@@ -90,3 +90,28 @@ grant execute on function mandate_private.apply_verified_paystack_webhook_event(
 
 comment on function mandate_private.apply_verified_paystack_webhook_event(uuid,text,text,text,bigint,text)
   is 'Atomically applies a server-verified Paystack charge.success event to one payment intent and marks the event processed. Does not issue vote credits or post ledger entries.';
+
+
+-- PostgREST exposes the public schema; this invoker wrapper is service-role-only.
+create or replace function public.apply_verified_paystack_webhook_event(
+  p_event_id uuid,
+  p_provider_reference text,
+  p_provider_transaction_id text,
+  p_provider_status text,
+  p_amount_minor bigint,
+  p_currency text
+)
+returns jsonb
+language sql
+security invoker
+set search_path = pg_catalog
+as $$
+  select mandate_private.apply_verified_paystack_webhook_event(
+    p_event_id, p_provider_reference, p_provider_transaction_id, p_provider_status, p_amount_minor, p_currency
+  );
+$$;
+
+revoke all on function public.apply_verified_paystack_webhook_event(uuid,text,text,text,bigint,text)
+  from public, anon, authenticated;
+grant execute on function public.apply_verified_paystack_webhook_event(uuid,text,text,text,bigint,text)
+  to service_role;
