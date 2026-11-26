@@ -321,7 +321,7 @@ export function CreateElectionForm({
           <p className="muted">{election.voting_mode.replaceAll("_", " ")} · {election.result_visibility} results · {election.timezone}</p>
           <p>{election.description || "No description supplied."}</p>
           <p>Starts: {election.starts_at ? new Date(election.starts_at).toLocaleString("en-KE", { timeZone: election.timezone }) : "Not set"}</p>
-          <p>Ends: {election.ends_at ? new Date(election.ends_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" }) : "Not set"}</p>
+          <p>Ends: {election.ends_at ? new Date(election.ends_at).toLocaleString("en-KE", { timeZone: election.timezone }) : "Not set"}</p>
           {payload.contests.map((contest, index) => (
             <div key={index}><strong>{index + 1}. {contest.title || "Untitled contest"}</strong>
               <p className="muted">{contest.is_required ? "Required" : "Optional"} · {contest.tie_policy.replaceAll("_", " ")}</p>
