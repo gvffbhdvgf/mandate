@@ -14,6 +14,8 @@ begin
  v_election:=public.create_election_setup(v_org,
   jsonb_build_object('title','Import Test Election','voting_mode','registered_single','starts_at',now()-interval '1 minute','ends_at',now()+interval '2 hours','timezone','Africa/Nairobi','result_visibility','private'),
   jsonb_build_array(jsonb_build_object('title','Chairperson','options',jsonb_build_array(jsonb_build_object('display_name','A'),jsonb_build_object('display_name','B')))));
+ -- Confirm setup first so this test reaches the voter-access readiness gate.
+ perform public.confirm_election_setup(v_election);
  v_batch:=gen_random_uuid();
  v_path:=v_org::text||'/'||v_election::text||'/'||v_batch::text||'.csv';
  insert into storage.objects(bucket_id,name,metadata) values('mandate-voter-imports',v_path,'{"mimetype":"text/csv","size":200}') returning id into v_file;
