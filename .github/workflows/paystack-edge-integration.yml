@@ -23,10 +23,10 @@ jobs:
 
       - name: Type-check Edge Functions
         run: |
-          deno check supabase/functions/_shared/paystack.ts
-          deno check supabase/functions/paystack-initialize/index.ts
-          deno check supabase/functions/paystack-verify/index.ts
-          deno check supabase/functions/paystack-webhook/index.ts
+          deno check --node-modules-dir=none supabase/functions/_shared/paystack.ts
+          deno check --node-modules-dir=none supabase/functions/paystack-initialize/index.ts
+          deno check --node-modules-dir=none supabase/functions/paystack-verify/index.ts
+          deno check --node-modules-dir=none supabase/functions/paystack-webhook/index.ts
 
       - name: Test Paystack webhook signature verification
-        run: deno test --allow-env=PAYSTACK_WEBHOOK_SECRET supabase/functions/_shared/paystack.test.ts
+        run: deno test --node-modules-dir=none --allow-env=PAYSTACK_WEBHOOK_SECRET supabase/functions/_shared/paystack.test.ts
