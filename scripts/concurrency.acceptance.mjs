@@ -67,6 +67,11 @@ async function createFixture() {
       values ($1,$2,$3,$4,$5,$6,now()) returning id`, [organizationId, electionId, `RACE-${i}`, `Race Voter ${i}`, `race-${i}-${suffix}@example.invalid`, digest(tokens[i])]);
     voterIds.push(voter.rows[0].id);
   }
+  const confirmation = await withAuthenticated(admin, async () => admin.query(
+    'select public.confirm_election_setup($1) as result', [electionId],
+  ));
+  assert.equal(confirmation.rows[0].result.electionId, electionId, 'authority confirmation should be recorded before opening');
+
   const opened = await withAuthenticated(admin, async () => admin.query('select public.open_election($1,true)', [electionId]));
   assert.ok(opened.rows[0].open_election, 'election should open');
 }
