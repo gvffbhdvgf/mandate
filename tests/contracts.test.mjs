@@ -198,6 +198,7 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
   const organization = await read("../app/organizations/[organizationId]/page.tsx");
   const smoke = await read("../supabase/tests/election_setup_draft_smoke.sql");
   const audit = await read("../supabase/migrations/20261126205024_m2_election_setup_audit_event.sql");
+  const electionPage = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
   assert.match(drafts, /create table public\.election_setup_drafts/);
   assert.match(drafts, /enable row level security/);
   assert.match(drafts, /save_election_setup_draft/);
@@ -209,6 +210,9 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
   assert.match(listing, /list_election_setup_drafts/);
   assert.match(wizard, /Step \{step\} of 6/);
   assert.match(wizard, /I confirm that I am authorized/);
+  assert.match(wizard, /Election timezone/);
+  assert.match(wizard, /isoFromLocalDateTime/);
+  assert.match(electionPage, /option\.profile/);
   assert.match(actions, /authorityConfirmed: z\.literal\(true\)/);
   assert.match(organization, /list_election_setup_drafts/);
   assert.match(smoke, /DRAFT_NOT_RESUMABLE/);
