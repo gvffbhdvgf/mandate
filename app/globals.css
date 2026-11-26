@@ -96,3 +96,27 @@ footer { padding: 24px 0; border-top: 1px solid var(--border); color: var(--mute
 .template-link { margin: 22px 0 0; font-size: 13px; font-weight: 650; }
 .import-form { margin-top: 16px; }
 .commit-import-form { margin-top: 12px; }
+
+.invitation-section { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); }
+.invitation-form { margin-top: 12px; }
+.form-success { margin: 0; padding: 12px 14px; border: 1px solid #C9E3D2; border-radius: 10px; color: #1F5D3B; background: #F1F8F3; font-size: 13px; line-height: 1.5; }
+.ballot-shell { width: min(760px, calc(100% - 36px)); margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding-bottom: 28px; }
+.ballot-header { height: 76px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.ballot-panel { margin: 36px 0 20px; padding: 30px; border: 1px solid var(--border); border-radius: 18px; background: white; }
+.ballot-panel h1 { margin: 8px 0 14px; color: var(--forest); font-family: Georgia, serif; font-size: clamp(32px, 6vw, 48px); font-weight: 500; line-height: 1.05; letter-spacing: -.04em; }
+.ballot-panel .muted { max-width: 560px; line-height: 1.7; }
+.ballot-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; color: var(--muted); font-size: 12px; }
+.ballot-meta span { padding: 7px 10px; border-radius: 999px; background: var(--ivory); }
+.ballot-contest { margin: 18px 0; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: white; }
+.ballot-contest-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.ballot-contest-heading h2 { margin: 5px 0 0; color: var(--forest); font-family: Georgia, serif; font-size: 24px; font-weight: 500; }
+.ballot-options { display: grid; gap: 12px; margin-top: 20px; }
+.ballot-option { display: flex; align-items: center; gap: 12px; padding: 15px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; color: var(--ink); font-size: 14px; }
+.ballot-option:has(input:checked) { border-color: var(--jade); background: #F3F7F3; }
+.ballot-option input, .ballot-confirmation input { accent-color: var(--forest); }
+.ballot-confirmation { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+.ballot-success { margin-top: 18px; padding: 15px; border-radius: 12px; background: #F1F8F3; color: #1F5D3B; font-size: 14px; }
+.ballot-success p { margin: 8px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+.ballot-privacy { margin: 18px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.ballot-footer { margin-top: auto; padding: 24px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
+@media (max-width: 520px) { .ballot-panel, .ballot-contest { padding: 20px; } .ballot-panel { margin-top: 24px; } }
