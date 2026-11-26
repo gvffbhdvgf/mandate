@@ -1,4 +1,4 @@
-name: M1 organization membership acceptance
+name: Database acceptance (M1 + M2)
 
 on:
   pull_request:
@@ -14,7 +14,8 @@ on:
       - 'lib/navigation.ts'
       - 'supabase/functions/send-organization-invitation/**'
       - 'supabase/migrations/**'
-      - 'supabase/tests/organization_membership_invitation_smoke.sql'
+      - 'supabase/tests/**'
+      - '.github/workflows/m2-election-setup.yml'
       - 'tests/contracts.test.mjs'
       - '.github/workflows/m1-organization-members.yml'
 
@@ -26,9 +27,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  organization-membership:
+  database-acceptance:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
     env:
       SUPABASE_INTERNAL_IMAGE_REGISTRY: docker.io
     steps:
@@ -48,8 +51,12 @@ jobs:
         run: npx --yes supabase@2.100.0 status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: Verify organization invitation and membership invariants
-        run: psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/organization_membership_invitation_smoke.sql
+      - name: Verify all database transaction and security invariants
+        run: |
+          for test_file in supabase/tests/*.sql; do
+            echo "Running $test_file"
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$test_file"
+          done
       - name: Stop disposable local stack
         if: always()
         run: npx --yes supabase@2.100.0 stop --no-backup
