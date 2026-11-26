@@ -2,7 +2,7 @@ name: M2 election setup acceptance
 
 on:
   pull_request:
-    branches: [feat/m0-vinext-foundation]
+    branches: [main, feat/m0-vinext-foundation]
     paths:
       - 'app/actions/elections.ts'
       - 'app/organizations/**'
