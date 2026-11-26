@@ -166,7 +166,7 @@ Deno.serve(async (request: Request) => {
     }
 
     if (!delivery.ok) {
-      await admin.from("election_voters").update({ access_token_hash: null }).eq("id", voter.id).is("invited_at", null);
+      await admin.from("election_voters").update({ access_token_hash: null, invitation_attempted_at: null }).eq("id", voter.id).is("invited_at", null);
       failed += 1;
       continue;
     }
