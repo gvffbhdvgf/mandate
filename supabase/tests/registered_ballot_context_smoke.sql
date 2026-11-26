@@ -14,6 +14,8 @@ begin
   jsonb_build_array(jsonb_build_object('title','Chairperson','options',jsonb_build_array(jsonb_build_object('display_name','Candidate A'),jsonb_build_object('display_name','Candidate B')))));
  select id into v_contest from public.contests where election_id=v_election;
  select id into v_option from public.options where contest_id=v_contest and display_name='Candidate A';
+ -- Opening now requires explicit authority confirmation bound to the setup hash.
+ perform public.confirm_election_setup(v_election);
  perform set_config('test.org_id',v_org::text,true);
  perform set_config('test.election_id',v_election::text,true);
  perform set_config('test.contest_id',v_contest::text,true);
