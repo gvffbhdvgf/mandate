@@ -155,14 +155,14 @@ select public.create_organization_invitation(
 );
 select set_config('request.jwt.claim.sub','55555555-5555-4555-8555-555555555555',true);
 select set_config('request.jwt.claims','{"sub":"55555555-5555-4555-8555-555555555555","role":"authenticated","email":"org-unverified@example.invalid"}',true);
-do $ begin
+do $$ begin
   begin
     perform public.accept_organization_invitation(repeat('9',64));
     raise exception 'EXPECTED_UNVERIFIED_EMAIL_REJECTION';
   exception when insufficient_privilege then
     if sqlerrm <> 'INVITATION_EMAIL_NOT_VERIFIED' then raise; end if;
   end;
-end $;
+end $$;
 
 -- An invitation can be revoked before acceptance and cannot then be consumed.
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
