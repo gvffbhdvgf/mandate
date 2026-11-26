@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID, createHash } from 'node:crypto';
 import pg from 'pg';
 
+// Each Client below owns a distinct TCP connection to the same ephemeral Postgres instance.
 const { Client } = pg;
 const connectionString = process.env.SUPABASE_DB_URL;
 if (!connectionString) throw new Error('SUPABASE_DB_URL is required; run only against the disposable local Supabase database.');
