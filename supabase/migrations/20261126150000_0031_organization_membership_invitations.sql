@@ -126,7 +126,12 @@ begin
   if not found or v_email_confirmed_at is null then
     raise exception 'INVITATION_EMAIL_NOT_VERIFIED' using errcode='42501';
   end if;
-  if p_token_hash is null or p_token_hash !~ '^[0-9a-f]{64} raise exception 'INVITATION_NOT_AVAILABLE' using errcode='55000'; end if;
+  if p_token_hash is null or p_token_hash !~ '^[0-9a-f]{64}$' then
+    raise exception 'INVALID_INVITATION' using errcode='22023';
+  end if;
+  select * into v_inv from public.organization_invitations i
+    where i.token_hash=p_token_hash for update;
+  if not found or v_inv.status <> 'pending' then raise exception 'INVITATION_NOT_AVAILABLE' using errcode='55000'; end if;
   if v_inv.expires_at <= now() then raise exception 'INVITATION_EXPIRED' using errcode='55000'; end if;
   if v_email = '' or v_email <> lower(v_inv.email::text) then raise exception 'INVITATION_EMAIL_MISMATCH' using errcode='42501'; end if;
   if exists(select 1 from public.organization_members m where m.organization_id=v_inv.organization_id and m.user_id=v_actor and m.status='active') then
