@@ -218,6 +218,7 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
   assert.match(wizard, /I confirm that I am authorized/);
   assert.match(wizard, /Election timezone/);
   assert.match(wizard, /isoFromLocalDateTime/);
+  assert.match(wizard, /new Date\(election\.ends_at\)\.toLocaleString\("en-KE", \{ timeZone: election\.timezone \}\)/);
   assert.match(electionPage, /option\.profile/);
   assert.match(actions, /authorityConfirmed: z\.literal\(true\)/);
   assert.match(organization, /list_election_setup_drafts/);
