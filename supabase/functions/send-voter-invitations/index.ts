@@ -128,6 +128,7 @@ Deno.serve(async (request: Request) => {
       .from("election_voters")
       .update({ access_token_hash: tokenHash, invitation_attempted_at: new Date().toISOString(), invited_at: null })
       .eq("id", voter.id)
+      .eq("eligibility_status", "eligible")
       .is("invited_at", null)
       .or(pendingClaimFilter)
       .select("id")
