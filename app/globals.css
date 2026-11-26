@@ -86,3 +86,13 @@ footer { padding: 24px 0; border-top: 1px solid var(--border); color: var(--mute
 .contest-card li { padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--forest); background: var(--ivory); font-size: 12px; font-weight: 650; }
 @media (max-width: 760px) { .form-two-column, .summary-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 480px) { .form-two-column, .summary-grid { grid-template-columns: 1fr; } }
+
+.voter-register-panel { margin-bottom: 20px; }
+.voter-register-panel > .muted { font-size: 14px; }
+.import-result { margin-top: 22px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--ivory); }
+.import-result strong { color: var(--forest); font-size: 14px; }
+.import-result p { margin: 5px 0 0; font-size: 12px; }
+.import-counts { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; color: var(--forest); font-size: 12px; font-weight: 700; }
+.template-link { margin: 22px 0 0; font-size: 13px; font-weight: 650; }
+.import-form { margin-top: 16px; }
+.commit-import-form { margin-top: 12px; }
