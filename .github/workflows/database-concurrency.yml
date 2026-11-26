@@ -1,0 +1,47 @@
+name: Database concurrency acceptance
+
+on:
+  pull_request:
+    branches: [main, feat/m0-vinext-foundation]
+    paths:
+      - 'supabase/**'
+      - 'scripts/concurrency.acceptance.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/database-concurrency.yml'
+  push:
+    branches: [feat/m0-vinext-foundation, test/**]
+    paths:
+      - 'supabase/**'
+      - 'scripts/concurrency.acceptance.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/database-concurrency.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Start disposable local Supabase stack
+        run: npx supabase start -x studio,imgproxy,edge-runtime,analytics,vector
+      - name: Apply repository migrations to disposable database
+        run: npx supabase db reset --local --no-seed
+      - name: Export local database connection
+        run: npx supabase status -o env | grep '^DB_URL=' >> "$GITHUB_ENV"
+      - name: Run independent-session race tests
+        run: npm run test:concurrency
+        env:
+          SUPABASE_DB_URL: ${{ env.DB_URL }}
+      - name: Stop disposable local stack
+        if: always()
+        run: npx supabase stop --no-backup
