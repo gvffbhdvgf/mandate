@@ -14,7 +14,9 @@ declare
  v_org uuid; v_draft uuid; v_election uuid; v_record jsonb; v_hash text;
  v_payload jsonb;
 begin
- v_org:=public.create_organization('M2 Draft Organization','m2-draft-org',null,'Africa/Nairobi');
+ perform public.create_organization('M2 Draft Organization','m2-draft-org',null,'Africa/Nairobi');
+ select id into v_org from public.organizations where slug='m2-draft-org';
+ if v_org is null then raise exception 'ORGANIZATION_FIXTURE_NOT_CREATED'; end if;
  begin
   perform public.create_election_setup(v_org,jsonb_build_object('title','Bad Window','voting_mode','registered_single',
     'starts_at',now()+interval '2 hours','ends_at',now()+interval '1 hour','timezone','Africa/Nairobi','result_visibility','private'),
