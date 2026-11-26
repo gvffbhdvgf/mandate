@@ -150,7 +150,7 @@ test("audit timeline uses a strict action allowlist and removes free-text metada
 
 
 test("Paystack webhook application is atomic, idempotent and retryable", async () => {
-  const migration = await read("../supabase/migrations/20261126110000_0030_atomic_paystack_webhook_processing.sql");
+  const migration = await read("../supabase/migrations/20261126121209_0030_atomic_paystack_webhook_processing.sql");
   const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
   assert.match(migration, /apply_verified_paystack_webhook_event/);
   assert.match(migration, /for update/);
