@@ -84,6 +84,15 @@ Deno.serve(async (request: Request) => {
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const { count: skippedNoEmail } = await admin
+    .from("election_voters")
+    .select("id", { count: "exact", head: true })
+    .eq("election_id", election.id)
+    .eq("eligibility_status", "eligible")
+    .is("invited_at", null)
+    .is("access_token_hash", null)
+    .is("normalized_email", null);
+
   const { data: voters, error: voterError } = await admin
     .from("election_voters")
     .select("id,display_name,normalized_email")
@@ -91,22 +100,17 @@ Deno.serve(async (request: Request) => {
     .eq("eligibility_status", "eligible")
     .is("invited_at", null)
     .is("access_token_hash", null)
+    .not("normalized_email", "is", null)
     .order("created_at", { ascending: true })
     .limit(50);
   if (voterError) return json(500, { error: "VOTER_REGISTER_LOOKUP_FAILED" });
-  if (!voters?.length) return json(200, { sent: 0, skippedNoEmail: 0, failed: 0, hasMore: false });
+  if (!voters?.length) return json(200, { attempted: 0, sent: 0, skippedNoEmail: skippedNoEmail ?? 0, failed: 0, hasMore: false });
 
   let sent = 0;
-  let skippedNoEmail = 0;
   let failed = 0;
   const voteUrl = new URL("/vote/", siteUrl);
 
   for (const voter of voters as Voter[]) {
-    if (!voter.normalized_email) {
-      skippedNoEmail += 1;
-      continue;
-    }
-
     const bytes = crypto.getRandomValues(new Uint8Array(32));
     const token = tokenString(bytes);
     const tokenHash = await sha256Hex(token);
@@ -187,7 +191,7 @@ Deno.serve(async (request: Request) => {
   return json(200, {
     attempted: voters.length,
     sent,
-    skippedNoEmail,
+    skippedNoEmail: skippedNoEmail ?? 0,
     failed,
     hasMore: voters.length === 50,
   });
