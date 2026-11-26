@@ -74,7 +74,7 @@ function pdfEscape(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
-function pdfReport(report: PublishedReport): Uint8Array {
+function pdfReport(report: PublishedReport): ArrayBuffer {
   const lines = [
     "MANDATE - PUBLISHED ELECTION RESULTS",
     "Election: " + pdfAscii(report.election.title),
@@ -148,7 +148,7 @@ function pdfReport(report: PublishedReport): Uint8Array {
   }
   pdf += "trailer\n<< /Size " + objects.length + " /Root 1 0 R >>\nstartxref\n" +
     xrefOffset + "\n%%EOF\n";
-  return encoder.encode(pdf);
+  return encoder.encode(pdf).buffer as ArrayBuffer;
 }
 
 export async function GET(
@@ -195,7 +195,7 @@ export async function GET(
   if (resultError || !data) return Response.json({ error: "REPORT_UNAVAILABLE" }, { status: 404 });
 
   const report = data as PublishedReport;
-  const body = format === "csv" ? csvReport(report) : pdfReport(report);
+  const body: string | ArrayBuffer = format === "csv" ? csvReport(report) : pdfReport(report);
   const { error: auditError } = await supabase.rpc("record_results_export", {
     p_election_id: electionId,
     p_format: format,
