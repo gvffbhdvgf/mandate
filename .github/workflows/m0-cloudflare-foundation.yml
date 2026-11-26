@@ -3,7 +3,6 @@ name: M0 Cloudflare foundation
 on:
   push:
     branches: [feat/m0-vinext-foundation]
-    paths: [.github/workflows/m0-cloudflare-foundation.yml]
   workflow_dispatch:
 
 permissions:
@@ -29,6 +28,7 @@ jobs:
           node-version: 22
 
       - name: Create minimal App Router application
+        if: ${{ hashFiles('package.json') == '' }}
         shell: bash
         run: |
           npm init -y
@@ -140,6 +140,7 @@ jobs:
           EOF
 
       - name: Initialize vinext for Workers Cache, KV and Images
+        if: ${{ hashFiles('vite.config.ts') == '' }}
         run: npx --yes vinext init --platform=cloudflare --cdn-cache=workers-cache --data-cache=kv --image-optimization=cloudflare-images --no-prerender --warm-cache
 
       - name: Bind the existing EU KV namespace
@@ -159,13 +160,55 @@ jobs:
           grep -q "kvDataAdapter" vite.config.ts
           grep -q "imagesOptimizer" vite.config.ts
 
+      - name: Install pinned application and type-check dependencies
+        run: |
+          npm install --save-exact react@^19.3.1 react-dom@^19.3.1
+          npm install --save-dev --save-exact typescript @types/react @types/node
+          node --input-type=module <<'EOF'
+          import fs from "node:fs";
+          const path = "package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          pkg.scripts = {
+            ...pkg.scripts,
+            test: "node --test",
+            typecheck: "tsc --noEmit",
+            "check:compat": "vinext check",
+            check: "npm run test && npm run typecheck && npm run check:compat"
+          };
+          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\\n");
+          const tsPath = "tsconfig.json";
+          const ts = JSON.parse(fs.readFileSync(tsPath, "utf8"));
+          delete ts.compilerOptions.plugins;
+          fs.writeFileSync(tsPath, JSON.stringify(ts, null, 2) + "\\n");
+          EOF
+
+      - name: Run contract, type and compatibility checks
+        run: npm run check
+
       - name: Build the Workers application
         run: npm run build:vinext
+
+      - name: Smoke-test the production preview
+        shell: bash
+        run: |
+          npm run start:vinext -- --host 127.0.0.1 --port 4173 > /tmp/mandate-preview.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /tmp/mandate-home.html; then break; fi
+            sleep 2
+          done
+          grep -q "Organizational elections" /tmp/mandate-home.html
+          grep -q "made clear" /tmp/mandate-home.html
 
       - name: Commit generated foundation
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "feat: scaffold vinext Cloudflare foundation"
-          git push origin feat/m0-vinext-foundation
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+          else
+            git commit -m "feat: validate vinext Cloudflare foundation"
+            git push origin feat/m0-vinext-foundation
+          fi
