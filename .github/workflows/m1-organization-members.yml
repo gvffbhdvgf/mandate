@@ -2,7 +2,7 @@ name: Database acceptance (M1 + M2)
 
 on:
   pull_request:
-    branches: [feat/m0-vinext-foundation]
+    branches: [main, feat/m0-vinext-foundation]
     paths:
       - 'app/actions/auth.ts'
       - 'app/actions/organization-members.ts'
