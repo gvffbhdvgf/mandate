@@ -60,7 +60,7 @@ export async function stageOrganizationInvitationAction(formData: FormData): Pro
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 10 * 60,
+    maxAge: 24 * 60 * 60,
   });
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -74,7 +74,9 @@ export async function acceptOrganizationInvitationAction(_formData: FormData): P
   if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) redirect("/login");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   const tokenHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const { supabase } = await requireUser();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) redirect("/login?next=%2Finvitations%2Faccept");
   const { data, error } = await supabase.rpc("accept_organization_invitation", { p_token_hash: tokenHash });
   if (error || !data?.organizationId) {
     const message = error?.message ?? "INVITATION_NOT_AVAILABLE";
@@ -87,6 +89,12 @@ export async function acceptOrganizationInvitationAction(_formData: FormData): P
   }
   cookieStore.delete(invitationCookie);
   redirect(`/organizations/${data.organizationId}`);
+}
+
+export async function switchInvitationAccountAction(): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
+  redirect("/login?next=%2Finvitations%2Faccept");
 }
 
 export async function revokeOrganizationInvitationAction(formData: FormData): Promise<void> {
