@@ -24,10 +24,10 @@ vinext is actively developed and is not a drop-in replacement for every Next.js 
 ## Repository status
 
 - Working branch: [`feat/m0-vinext-foundation`](https://github.com/gvffbhdvgf/mandate/tree/feat/m0-vinext-foundation).
-- The first application vertical slice includes the public landing page, Supabase email/password sign-up and sign-in actions, auth callback, organization creation, and a protected organization dashboard.
+- The first application slices include the public landing page, Supabase email/password sign-up/sign-in, auth callback, protected organization dashboard, organization creation, election draft creation, and an election detail view.
 - Supabase migrations `0001`–`0014` are applied to the dedicated Mandate project and mirrored in `supabase/migrations`.
 - CI runs contract tests, TypeScript checks, vinext compatibility scanning, production build, and a preview smoke test.
-- The initial M0 build passed. The expanded validation pipeline is being exercised; check the [GitHub Actions history](https://github.com/gvffbhdvgf/mandate/actions).
+- GitHub Actions [run #41](https://github.com/gvffbhdvgf/mandate/actions/runs/45790733683) passed: 5 contract tests, TypeScript, vinext compatibility (100%; 9 supported, zero partial/issues), Worker bundle build, Cloudflare Workers runtime smoke test, and production preview HTTP smoke test. The repeatable Supabase transaction tests also passed against the remote project and were rolled back.
 - No production Worker has been deployed. Cloudflare Images account authorization is still unresolved.
 
 ## Local development
