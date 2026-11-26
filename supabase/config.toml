@@ -1,0 +1,2 @@
+[functions.send-voter-invitations]
+verify_jwt = true
