@@ -1,6 +1,9 @@
 name: M0 Cloudflare foundation
 
 on:
+  push:
+    branches: [feat/m0-vinext-foundation]
+    paths: [.github/workflows/m0-cloudflare-foundation.yml]
   workflow_dispatch:
 
 permissions:
@@ -24,7 +27,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Create minimal App Router application
         shell: bash
@@ -148,7 +150,7 @@ jobs:
           if (!fs.existsSync(path)) throw new Error("vinext did not generate cloudflare.config.ts");
           let source = fs.readFileSync(path, "utf8");
           if (!source.includes("bindings.kv(")) throw new Error("Expected generated KV binding was not found");
-          source = source.replace(/bindings\\.kv\\(\\)/, 'bindings.kv({ id: "8df55d8d27e74f058c2ae3013ae71ded" })');
+          source = source.replace("bindings.kv()", 'bindings.kv({ id: "8df55d8d27e74f058c2ae3013ae71ded" })');
           if (!source.includes("8df55d8d27e74f058c2ae3013ae71ded")) throw new Error("Could not bind the pre-provisioned EU KV namespace");
           if (!source.includes("bindings.images()")) throw new Error("Expected Cloudflare Images binding was not generated");
           fs.writeFileSync(path, source);
