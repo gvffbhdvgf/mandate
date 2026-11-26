@@ -90,6 +90,7 @@ Deno.serve(async (request: Request) => {
     .eq("election_id", election.id)
     .eq("eligibility_status", "eligible")
     .is("invited_at", null)
+    .is("access_token_hash", null)
     .order("created_at", { ascending: true })
     .limit(50);
   if (voterError) return json(500, { error: "VOTER_REGISTER_LOOKUP_FAILED" });
@@ -110,15 +111,19 @@ Deno.serve(async (request: Request) => {
     const token = tokenString(bytes);
     const tokenHash = await sha256Hex(token);
 
-    const { error: tokenError } = await admin
+    const { data: claim, error: tokenError } = await admin
       .from("election_voters")
       .update({ access_token_hash: tokenHash, invited_at: null })
       .eq("id", voter.id)
-      .is("invited_at", null);
+      .is("invited_at", null)
+      .is("access_token_hash", null)
+      .select("id")
+      .maybeSingle();
     if (tokenError) {
       failed += 1;
       continue;
     }
+    if (!claim) continue;
 
     const invitationUrl = new URL(token, voteUrl).toString();
     const name = escapeHtml(voter.display_name || "Voter");
@@ -160,6 +165,8 @@ Deno.serve(async (request: Request) => {
       .eq("access_token_hash", tokenHash)
       .is("invited_at", null);
     if (markInvitedError) {
+      await admin.from("election_voters").update({ access_token_hash: null })
+        .eq("id", voter.id).eq("access_token_hash", tokenHash).is("invited_at", null);
       failed += 1;
       continue;
     }
