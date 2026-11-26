@@ -37,7 +37,7 @@ jobs:
       - name: Apply repository migrations to disposable database
         run: npx supabase db reset --local --no-seed
       - name: Export local database connection
-        run: npx supabase status -o env | sed -n 's/^DB_URL="\\(.*\\)"$/DB_URL=\\1/p' >> "$GITHUB_ENV"
+        run: npx supabase status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
       - name: Run independent-session race tests
         run: npm run test:concurrency
         env:
