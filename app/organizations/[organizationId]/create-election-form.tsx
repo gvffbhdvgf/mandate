@@ -33,20 +33,38 @@ const emptyPayload = (): WizardPayload => ({
   }],
 });
 
-function localNairobiValue(iso: string): string {
+function localDateTimeValue(iso: string, timezone: string): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   }).formatToParts(date);
   const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
 }
 
-function isoFromNairobiLocal(value: string): string {
-  return value ? new Date(`${value}:00+03:00`).toISOString() : "";
+function isoFromLocalDateTime(value: string, timezone: string): string {
+  if (!value) return "";
+  const desired = new Date(`${value}:00Z`);
+  if (Number.isNaN(desired.getTime())) throw new Error("Invalid local date/time");
+  let candidate = desired.getTime();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = formatter.formatToParts(new Date(candidate));
+    const part = (type: string) => Number(parts.find((item) => item.type === type)?.value ?? 0);
+    const representedAsUtc = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
+    candidate = desired.getTime() - (representedAsUtc - candidate);
+  }
+  const iso = new Date(candidate).toISOString();
+  if (localDateTimeValue(iso, timezone) !== value) {
+    throw new Error("This local time does not exist in the selected timezone");
+  }
+  return iso;
 }
 
 function resumePayload(value: unknown): WizardPayload {
@@ -260,14 +278,31 @@ export function CreateElectionForm({
       </>}
 
       {step === 5 && <>
+        <label>Election timezone
+          <select value={election.timezone} onChange={(event) => updateElection("timezone", event.target.value)}>
+            <option value="Africa/Nairobi">East Africa Time — Nairobi</option>
+            <option value="Africa/Kampala">East Africa Time — Kampala</option>
+            <option value="Africa/Dar_es_Salaam">East Africa Time — Dar es Salaam</option>
+            <option value="Africa/Johannesburg">South Africa Standard Time — Johannesburg</option>
+            <option value="Europe/London">United Kingdom — London</option>
+            <option value="UTC">Coordinated Universal Time — UTC</option>
+            <option value="America/New_York">Eastern Time — New York</option>
+          </select>
+        </label>
         <div className="form-two-column">
-          <label>Voting starts (Africa/Nairobi)
-            <input type="datetime-local" value={localNairobiValue(election.starts_at)}
-              onChange={(event) => updateElection("starts_at", isoFromNairobiLocal(event.target.value))} />
+          <label>Voting starts
+            <input type="datetime-local" value={localDateTimeValue(election.starts_at, election.timezone)}
+              onChange={(event) => {
+                try { updateElection("starts_at", isoFromLocalDateTime(event.target.value, election.timezone)); setError(""); }
+                catch { setError("That start time does not exist in the selected timezone. Choose another time."); }
+              }} />
           </label>
-          <label>Voting ends (Africa/Nairobi)
-            <input type="datetime-local" value={localNairobiValue(election.ends_at)}
-              onChange={(event) => updateElection("ends_at", isoFromNairobiLocal(event.target.value))} />
+          <label>Voting ends
+            <input type="datetime-local" value={localDateTimeValue(election.ends_at, election.timezone)}
+              onChange={(event) => {
+                try { updateElection("ends_at", isoFromLocalDateTime(event.target.value, election.timezone)); setError(""); }
+                catch { setError("That end time does not exist in the selected timezone. Choose another time."); }
+              }} />
           </label>
         </div>
         <label>Results visibility
@@ -277,15 +312,15 @@ export function CreateElectionForm({
             <option value="public">Public aggregate results</option>
           </select>
         </label>
-        <p className="form-hint">The election timezone is Africa/Nairobi. Start and end times are stored as timezone-aware timestamps.</p>
+        <p className="form-hint">Start and end times are interpreted in the selected timezone and stored as timezone-aware timestamps.</p>
       </>}
 
       {step === 6 && <>
         <section className="panel form-stack">
           <h3>{election.title || "Untitled election"}</h3>
-          <p className="muted">{election.voting_mode.replaceAll("_", " ")} · {election.result_visibility} results · Africa/Nairobi</p>
+          <p className="muted">{election.voting_mode.replaceAll("_", " ")} · {election.result_visibility} results · {election.timezone}</p>
           <p>{election.description || "No description supplied."}</p>
-          <p>Starts: {election.starts_at ? new Date(election.starts_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" }) : "Not set"}</p>
+          <p>Starts: {election.starts_at ? new Date(election.starts_at).toLocaleString("en-KE", { timeZone: election.timezone }) : "Not set"}</p>
           <p>Ends: {election.ends_at ? new Date(election.ends_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" }) : "Not set"}</p>
           {payload.contests.map((contest, index) => (
             <div key={index}><strong>{index + 1}. {contest.title || "Untitled contest"}</strong>
