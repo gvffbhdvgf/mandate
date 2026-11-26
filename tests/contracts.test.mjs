@@ -116,3 +116,15 @@ test("election tally reconciles ballots before publishing aggregate results", as
   assert.match(summary, /get_tally_summary/);
   assert.match(resultsPage, /get_published_results/);
 });
+
+test("election pause and resume transitions are reasoned and audited", async () => {
+  const migration = await read("../supabase/migrations/20261126094720_0027_pause_and_resume_election.sql");
+  const actions = await read("../app/actions/lifecycle.ts");
+  assert.match(migration, /ELECTION_NOT_OPEN/);
+  assert.match(migration, /ELECTION_NOT_PAUSED/);
+  assert.match(migration, /ELECTION_WINDOW_ENDED/);
+  assert.match(migration, /election\.paused/);
+  assert.match(migration, /election\.resumed/);
+  assert.match(actions, /rpc\("pause_election"/);
+  assert.match(actions, /rpc\("resume_election"/);
+});
