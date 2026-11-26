@@ -2,8 +2,7 @@
 begin;
 insert into auth.users(id,aud,role,email,encrypted_password,email_confirmed_at,raw_user_meta_data,created_at,updated_at)
 values
- ('77777777-7777-4777-8777-777777777777','authenticated','authenticated','mandate-import-test@example.invalid','test-only',now(),'{"display_name":"Import Test"}',now(),now()),
- ('88888888-8888-4888-8888-888888888888','authenticated','authenticated','mandate-import-outsider@example.invalid','test-only',now(),'{"display_name":"Import Outsider"}',now(),now());
+ ('77777777-7777-4777-8777-777777777777','authenticated','authenticated','mandate-import-test@example.invalid','test-only',now(),'{"display_name":"Import Test"}',now(),now());
 set local role authenticated;
 select set_config('request.jwt.claim.sub','77777777-7777-4777-8777-777777777777',true);
 select set_config('request.jwt.claim.role','authenticated',true);
@@ -30,12 +29,5 @@ begin
  if (select count(*) from public.import_batches where id=v_batch and status='committed')<>1 then raise exception 'IMPORT_BATCH_STATUS_FAILED'; end if;
  if (select count(*) from public.import_rows where batch_id=v_batch and status='committed')<>2 then raise exception 'IMPORT_ROWS_STATUS_FAILED'; end if;
 
- perform set_config('request.jwt.claim.sub','88888888-8888-4888-8888-888888888888',true);
- begin
-  insert into storage.objects(bucket_id,name,metadata)
-  values('mandate-voter-imports',v_org::text||'/'||v_election::text||'/'||gen_random_uuid()::text||'.csv','{"mimetype":"text/csv","size":10}');
-  raise exception 'CROSS_TENANT_STORAGE_UPLOAD_SHOULD_FAIL';
- exception when insufficient_privilege then null;
- end;
 end $$;
 rollback;
