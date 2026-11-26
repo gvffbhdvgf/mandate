@@ -90,7 +90,8 @@ begin
   perform set_config('request.jwt.claim.sub','77777777-7777-4777-8777-777777777777',true);
 
   v_election:=public.finalize_election_setup_draft(v_draft);
-  if (select status from public.election_setup_drafts where id=v_draft)<>'finalized' then
+  v_record:=public.get_election_setup_draft(v_draft);
+  if v_record->>'status'<>'finalized' then
     raise exception 'DRAFT_FINALIZATION_FAILED';
   end if;
   if (select count(*) from public.contests where election_id=v_election)<>1
