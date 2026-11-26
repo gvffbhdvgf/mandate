@@ -1,50 +1,41 @@
-name: M0 Cloudflare foundation
+name: Mandate CI
 
 on:
+  pull_request:
+    branches: [main, feat/m0-vinext-foundation]
   push:
-    branches: [feat/m0-vinext-foundation]
+    branches:
+      - main
+      - feat/m0-vinext-foundation
+      - "feat/**"
+      - "fix/**"
+      - "test/**"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: m0-cloudflare-foundation
+  group: mandate-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  scaffold:
+  validate:
+    name: Contract, type, compatibility and Worker build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Check out M0 branch
-        uses: actions/checkout@v4
-        with:
-          ref: feat/m0-vinext-foundation
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check out the exact commit under test
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
 
-      - name: Verify edge-ready runtime bindings
-        run: |
-          grep -q "workersCacheCdnAdapter" vite.config.ts
-          grep -q "kvDataAdapter" vite.config.ts
-          grep -q "imagesOptimizer" vite.config.ts
-          grep -q "8df55d8d27e74f058c2ae3013ae71ded" cloudflare.config.ts
-          grep -q "bindings.images()" cloudflare.config.ts
-          grep -q "SUPABASE_PUBLISHABLE_KEY" cloudflare.config.ts
-
-      - name: Add CSV parser and update lockfile
-        run: npm install --save-exact csv-parse
-
       - name: Install locked dependencies
         run: npm ci
-
-      - name: Apply non-breaking security fixes
-        run: npm audit fix
 
       - name: Run contract, type and compatibility checks
         run: npm run check
@@ -52,7 +43,7 @@ jobs:
       - name: Build the Workers application
         run: npm run build:vinext
 
-      - name: Smoke-test Cloudflare Workers runtime and Supabase bindings
+      - name: Smoke-test the development runtime and authentication boundary
         shell: bash
         run: |
           npm run dev:vinext -- --host 127.0.0.1 --port 4174 > /tmp/mandate-worker-dev.log 2>&1 &
@@ -69,7 +60,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:4174/login > /tmp/mandate-worker-login.html
           grep -q "Sign in to Mandate" /tmp/mandate-worker-login.html
 
-      - name: Smoke-test the production preview
+      - name: Smoke-test the built application preview
         shell: bash
         run: |
           npm run start:vinext -- --host 127.0.0.1 --port 4173 > /tmp/mandate-preview.log 2>&1 &
@@ -81,15 +72,3 @@ jobs:
           done
           grep -q "Organizational elections" /tmp/mandate-home.html
           grep -q "made clear" /tmp/mandate-home.html
-
-      - name: Commit generated foundation
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No generated changes to commit."
-          else
-            git commit -m "feat: validate vinext Cloudflare foundation"
-            git push origin feat/m0-vinext-foundation
-          fi
