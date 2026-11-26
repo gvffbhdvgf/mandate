@@ -7,6 +7,7 @@ import { CommitImportForm } from "./commit-import-form";
 import { DispatchInvitationsForm } from "./dispatch-invitations-form";
 import { ElectionLifecycleControls } from "./lifecycle-controls";
 import { ElectionAuditTimeline } from "./audit-timeline";
+import { SetupConfirmation } from "./setup-confirmation";
 
 export default async function ElectionPage({ params, searchParams }: {
   params: Promise<{ organizationId: string; electionId: string }>;
@@ -34,7 +35,7 @@ export default async function ElectionPage({ params, searchParams }: {
 
   const { data: election, error } = await supabase
     .from("elections")
-    .select("id,organization_id,title,description,status,voting_mode,starts_at,ends_at,timezone,result_visibility")
+    .select("id,organization_id,title,description,status,voting_mode,starts_at,ends_at,timezone,result_visibility,setup_confirmed_at")
     .eq("id", electionId)
     .eq("organization_id", organizationId)
     .maybeSingle();
@@ -109,6 +110,9 @@ export default async function ElectionPage({ params, searchParams }: {
           <div><span>Results</span><strong>{election.result_visibility}</strong></div>
         </div>
       </section>
+      {canOpen && election.status === "draft" && (
+        <SetupConfirmation electionId={electionId} confirmed={Boolean(election.setup_confirmed_at)} />
+      )}
       {canViewRegister && (
         <section className="panel voter-register-panel">
           <div className="panel-heading"><div><p className="kicker">ELIGIBLE VOTERS</p><h2>Voter register</h2></div><span className="count">{voterCount ?? 0}</span></div>
