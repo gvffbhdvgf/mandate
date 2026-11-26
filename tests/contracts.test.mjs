@@ -69,7 +69,9 @@ test("voter register import is private, bounded and requires access issuance bef
 
 test("browser-safe CSV parser handles quoted voter fields", async () => {
   const { parse } = await import("csv-parse/browser/esm/sync");
-  const rows = parse('voter_ref,name,email\\nV-1,"Voter, One",one@example.org\\n', {
+  const rows = parse(`voter_ref,name,email
+V-1,"Voter, One",one@example.org
+`, {
     columns: true, skip_empty_lines: true, bom: true, trim: true,
   });
   assert.equal(rows.length, 1);
