@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { stageVoterImportAction, type VoterImportActionState } from "../../../../../actions/voters";
+import { stageVoterImportAction, type VoterImportActionState } from "../../../../actions/voters";
 
 const initialState: VoterImportActionState = {};
 
