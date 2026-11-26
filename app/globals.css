@@ -149,3 +149,27 @@ footer { padding: 24px 0; border-top: 1px solid var(--border); color: var(--mute
 .audit-content details { margin-top: 7px; color: var(--muted); font-size: 11px; }
 .audit-content summary { cursor: pointer; }
 .audit-content pre { max-width: 100%; overflow: auto; padding: 10px; border-radius: 8px; background: var(--ivory); color: var(--ink); font-size: 10px; }
+
+.members-panel { margin: 0 0 20px; }
+.member-invite-box { margin-top: 22px; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--ivory); }
+.member-invite-box h3, .member-list h3 { margin: 0 0 14px; color: var(--forest); font-family: Georgia, serif; font-size: 20px; font-weight: 500; }
+.member-invite-form { display: grid; grid-template-columns: 1.2fr 1fr auto; align-items: end; gap: 14px; }
+.member-invite-form label { display: grid; gap: 8px; color: var(--ink); font-size: 12px; font-weight: 650; }
+.member-invite-form input, .member-invite-form select, .inline-member-form select { min-width: 0; min-height: 44px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; background: white; color: var(--ink); font: inherit; font-size: 13px; }
+.member-list { margin-top: 26px; }
+.member-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 16px 0; border-top: 1px solid var(--border); }
+.member-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.member-identity strong { color: var(--forest); font-size: 14px; }
+.member-identity .muted { font-size: 12px; overflow-wrap: anywhere; }
+.member-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.inline-member-form { display: flex; align-items: center; gap: 8px; }
+.compact-button { min-height: 40px; padding: 9px 12px; font-size: 11px; }
+.role-label { color: var(--muted); font-size: 11px; text-transform: capitalize; }
+.danger-button { width: fit-content; padding: 9px 12px; border: 1px solid #F2C8C5; border-radius: 9px; background: white; color: #B42318; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.danger-button:hover { background: #FEF3F2; }
+.pending-invitations { padding-top: 4px; }
+@media (max-width: 760px) {
+  .member-invite-form { grid-template-columns: 1fr; }
+  .member-row { align-items: flex-start; flex-direction: column; }
+  .member-controls { justify-content: flex-start; width: 100%; }
+}
