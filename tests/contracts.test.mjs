@@ -4,13 +4,13 @@ import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 
-test("Cloudflare runtime uses the selected edge-ready adapters", async () => {
+test("Cloudflare runtime uses free-tier cache adapters without an Images dependency", async () => {
   const vite = await read("../vite.config.ts");
   const cloudflare = await read("../cloudflare.config.ts");
   assert.match(vite, /workersCacheCdnAdapter/);
   assert.match(vite, /kvDataAdapter/);
-  assert.match(vite, /imagesOptimizer/);
-  assert.match(cloudflare, /bindings\.images\(\)/);
+  assert.doesNotMatch(vite, /imagesOptimizer/);
+  assert.doesNotMatch(cloudflare, /bindings\.images\(\)/);
   assert.match(cloudflare, /bindings\.kv\(\{ id:/);
   assert.match(cloudflare, /8df55d8d27e74f058c2ae3013ae71ded/);
 });
