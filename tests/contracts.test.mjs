@@ -128,3 +128,14 @@ test("election pause and resume transitions are reasoned and audited", async () 
   assert.match(actions, /rpc\("pause_election"/);
   assert.match(actions, /rpc\("resume_election"/);
 });
+
+test("election audit timeline exposes only redacted non-ballot activity", async () => {
+  const migration = await read("../supabase/migrations/20261126094950_0028_redacted_election_audit_timeline_rpc.sql");
+  const component = await read("../app/organizations/[organizationId]/elections/[electionId]/audit-timeline.tsx");
+  assert.match(migration, /action not like 'ballot\.%'/);
+  assert.match(migration, /action not like 'payment\.%'/);
+  assert.match(migration, /action not like 'wallet\.%'/);
+  assert.match(migration, /redacted_metadata/);
+  assert.match(migration, /grant execute on function public\.get_election_audit_trail.*to authenticated/);
+  assert.match(component, /Event details/);
+});
