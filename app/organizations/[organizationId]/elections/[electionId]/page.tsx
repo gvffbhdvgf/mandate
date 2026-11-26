@@ -77,7 +77,7 @@ export default async function ElectionPage({ params, searchParams }: {
       </section>
       <section className="panel voter-register-panel">
         <div className="panel-heading"><div><p className="kicker">ELIGIBLE VOTERS</p><h2>Voter register</h2></div><span className="count">{voterCount ?? 0}</span></div>
-        <p className="muted">Upload a private CSV register, validate every row, then commit the eligible voters to this draft election.</p>
+        <p className="muted">Upload a private CSV register, validate every row, then commit the eligible voters to this draft election.</p><p className="form-hint">Imported voters are not yet invited. Election opening remains blocked until each eligible voter has a secure access token and invitation record.</p>
         {importBatch && (
           <div className="import-result">
             <div><strong>{importBatch.original_filename}</strong><p className="muted">{importBatch.total_rows} rows · {importBatch.status}</p></div>
