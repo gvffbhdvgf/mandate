@@ -164,6 +164,8 @@ jobs:
         run: |
           npm install --save-exact react@^19.3.1 react-dom@^19.3.1 @supabase/ssr @supabase/supabase-js zod
           npm install --save-dev --save-exact typescript @types/react @types/node
+          npm pkg set 'overrides.fflate=0.7.5'
+          npm install
           node --input-type=module <<'EOF'
           import fs from "node:fs";
           const path = "package.json";
