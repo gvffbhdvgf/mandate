@@ -1,4 +1,4 @@
-import { adminClient, env, json, paystackRequest, verifyPaystackWebhookSignature } from "../_shared/paystack.ts";
+import { adminClient, env, json, paystackRequest, paymentsModeEnabled, verifyPaystackWebhookSignature } from "../_shared/paystack.ts";
 
 type PaystackEvent = {
   event?: string;
@@ -17,6 +17,9 @@ type PaystackVerifyResponse = {
 
 Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return json(405, { error: "METHOD_NOT_ALLOWED" });
+  if (!paymentsModeEnabled()) {
+    return json(503, { error: "PAYMENTS_DISABLED", message: "Webhook processing is restricted to configured Paystack test credentials. Live transactions remain disabled." });
+  }
   if (!env("PAYSTACK_WEBHOOK_SECRET")) return json(503, { error: "PAYSTACK_WEBHOOK_SECRET_MISSING" });
 
   const rawBody = await request.text();
