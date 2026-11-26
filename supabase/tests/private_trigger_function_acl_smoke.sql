@@ -28,6 +28,7 @@ create trigger trigger_acl_updated_at_probe_before_update
 before update on trigger_acl_updated_at_probe
 for each row execute function mandate_private.set_updated_at();
 insert into trigger_acl_updated_at_probe values ('2000-01-01T00:00:00Z');
+grant usage on schema pg_temp to authenticated;
 grant select, update on trigger_acl_updated_at_probe to authenticated;
 
 create temporary table trigger_acl_append_only_probe(id integer);
