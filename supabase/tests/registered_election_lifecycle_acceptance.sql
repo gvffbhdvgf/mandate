@@ -26,6 +26,7 @@ declare
   v_closed jsonb;
   v_tally jsonb;
   v_published jsonb;
+  v_report_audit jsonb;
   v_duplicate_rejected boolean := false;
   v_paused_context_rejected boolean := false;
 begin
@@ -129,11 +130,20 @@ begin
   end if;
 
   reset role;
+  set local role authenticated;
+  perform public.record_results_export(v_election,'csv');
+  perform public.record_results_export(v_election,'pdf');
+  v_report_audit := public.get_election_audit_trail(v_election,50);
+  if not (v_report_audit->'events' @> '[{"action":"election.results.exported","metadata":{"format":"pdf"}}]'::jsonb) then
+    raise exception 'RESULTS_EXPORT_AUDIT_NOT_VISIBLE: %',v_report_audit;
+  end if;
+
+  reset role;
   if (select count(*) from public.audit_events
       where election_id=v_election
         and action in ('election.opened','ballot.accepted','election.paused',
                        'election.resumed','election.closed','election.tallied',
-                       'election.results_published')) <> 7 then
+                       'election.results_published','election.results.exported')) <> 9 then
     raise exception 'LIFECYCLE_AUDIT_TRAIL_INCOMPLETE';
   end if;
 end $$;
