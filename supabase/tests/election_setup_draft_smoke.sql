@@ -23,7 +23,9 @@ declare
   v_audit jsonb;
   v_payload jsonb;
 begin
-  v_org:=public.create_organization('M2 Draft Organization','m2-draft-org',null,'Africa/Nairobi');
+  perform public.create_organization('M2 Draft Organization','m2-draft-org',null,'Africa/Nairobi');
+  select id into v_org from public.organizations where slug='m2-draft-org';
+  if v_org is null then raise exception 'ORGANIZATION_FIXTURE_NOT_CREATED'; end if;
 
   -- Duplicate option names are rejected by the atomic setup function.
   begin
@@ -119,9 +121,9 @@ begin
 end $$;
 
 reset role;
--- A rules change after confirmation invalidates the stored hash and requires a fresh authority check.
-update public.elections set starts_at=starts_at+interval '10 seconds'
-where id=(select election_id from m2_test_ids);
+-- A candidate-profile change after confirmation invalidates the stored hash and requires a fresh authority check.
+update public.options set profile='Profile A revised'
+where election_id=(select election_id from m2_test_ids) and display_name='Candidate A';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','77777777-7777-4777-8777-777777777777',true);
 do $$
