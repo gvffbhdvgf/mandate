@@ -26,6 +26,15 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
     .eq("user_id", user.id)
     .maybeSingle();
   const canManageMembers = membership?.status === "active" && ["owner", "admin"].includes(membership.role);
+  const canManageElections = membership?.status === "active" && ["owner", "admin", "election_manager"].includes(membership.role);
+  let setupDrafts: any[] = [];
+  if (canManageElections) {
+    const { data: draftRows, error: draftsError } = await supabase.rpc("list_election_setup_drafts", {
+      p_organization_id: organizationId,
+    });
+    if (draftsError) throw new Error("Could not load saved election setup drafts.");
+    setupDrafts = draftRows ?? [];
+  }
   let members: any[] = [];
   let pendingInvitations: any[] = [];
   if (canManageMembers) {
@@ -86,11 +95,11 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
             </div>
           )}
         </div>
-        <div className="panel create-panel">
+        {canManageElections && <div className="panel create-panel">
           <p className="kicker">GUIDED SETUP</p><h2>Create an election</h2>
-          <p className="muted">Start with the voting method, dates and first contest. The draft stays closed until the voter register and rules are ready.</p>
-          <CreateElectionForm organizationId={organizationId} />
-        </div>
+          <p className="muted">A six-step, resumable setup. Drafts are saved to the server; the election stays closed until its rules are reviewed and the voter register is ready.</p>
+          <CreateElectionForm organizationId={organizationId} drafts={setupDrafts} />
+        </div>}
       </section>
     </main>
   );
