@@ -2,9 +2,15 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { signOutAction } from "../../../../actions/auth";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
+import { VoterImportForm } from "./voter-import-form";
+import { CommitImportForm } from "./commit-import-form";
 
-export default async function ElectionPage({ params }: { params: Promise<{ organizationId: string; electionId: string }> }) {
+export default async function ElectionPage({ params, searchParams }: {
+  params: Promise<{ organizationId: string; electionId: string }>;
+  searchParams: Promise<{ batchId?: string }>;
+}) {
   const { organizationId, electionId } = await params;
+  const { batchId } = await searchParams;
   const supabase = await createSupabaseServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) redirect("/login");
@@ -23,6 +29,22 @@ export default async function ElectionPage({ params }: { params: Promise<{ organ
     .select("id,title,description,is_required,display_order,tie_policy")
     .eq("election_id", electionId)
     .order("display_order");
+
+  const { count: voterCount, error: voterCountError } = await supabase
+    .from("election_voters")
+    .select("id", { count: "exact", head: true })
+    .eq("election_id", electionId);
+  if (voterCountError) throw new Error("Could not load the voter register count.");
+
+  let importQuery = supabase.from("import_batches")
+    .select("id,status,total_rows,accepted_rows,rejected_rows,created_at,original_filename")
+    .eq("election_id", electionId);
+  if (batchId && /^[0-9a-f-]{36}$/i.test(batchId)) {
+    importQuery = importQuery.eq("id", batchId);
+  } else {
+    importQuery = importQuery.order("created_at", { ascending: false }).limit(1);
+  }
+  const { data: importBatch } = await importQuery.maybeSingle();
 
   const contestRows = contests ?? [];
   const optionResults = await Promise.all(contestRows.map(async (contest) => {
@@ -52,6 +74,26 @@ export default async function ElectionPage({ params }: { params: Promise<{ organ
           <div><span>Timezone</span><strong>{election.timezone}</strong></div>
           <div><span>Results</span><strong>{election.result_visibility}</strong></div>
         </div>
+      </section>
+      <section className="panel voter-register-panel">
+        <div className="panel-heading"><div><p className="kicker">ELIGIBLE VOTERS</p><h2>Voter register</h2></div><span className="count">{voterCount ?? 0}</span></div>
+        <p className="muted">Upload a private CSV register, validate every row, then commit the eligible voters to this draft election.</p>
+        {importBatch && (
+          <div className="import-result">
+            <div><strong>{importBatch.original_filename}</strong><p className="muted">{importBatch.total_rows} rows · {importBatch.status}</p></div>
+            <div className="import-counts"><span>{importBatch.accepted_rows} accepted</span><span>{importBatch.rejected_rows} rejected</span></div>
+            {importBatch.status === "validated" && (
+              <CommitImportForm organizationId={organizationId} electionId={electionId} batchId={importBatch.id} />
+            )}
+            {importBatch.status === "committed" && <p className="form-hint">This import has been committed to the voter register.</p>}
+          </div>
+        )}
+        {election.status === "draft" && (
+          <>
+            <p className="template-link"><Link href="/voter-register-template.csv" download>Download CSV template</Link></p>
+            <VoterImportForm organizationId={organizationId} electionId={electionId} />
+          </>
+        )}
       </section>
       <section className="panel contest-panel">
         <div className="panel-heading"><div><p className="kicker">BALLOT STRUCTURE</p><h2>Contests and options</h2></div><span className="count">{optionResults.length}</span></div>
