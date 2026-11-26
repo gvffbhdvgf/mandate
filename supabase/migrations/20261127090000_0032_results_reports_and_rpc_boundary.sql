@@ -128,7 +128,7 @@ begin
   select action,actor_type,entity_type,created_at,redacted_metadata
   from public.audit_events where election_id=v_e.id
    and action=any(array['election.created','election.opened','election.paused','election.resumed','election.closed',
-    'election.tallied','election.results_published','election.results.exported','voter_import.staged',
+    'election.tallied','election.results_published','election.results.exported','election.setup_confirmed','voter_import.staged',
     'voter_import.committed','voter_invitation.batch_dispatched'])
   order by created_at desc limit greatest(1,least(coalesce(p_limit,50),100))
  ) x;
