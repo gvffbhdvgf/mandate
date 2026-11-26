@@ -28,15 +28,15 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Start disposable local Supabase stack
-        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,mailpit,vector,supavisor
+        run: npx --yes supabase@2.114.0 start -x studio,imgproxy,edge-runtime,logflare,mailpit,vector,supavisor
       - name: Apply repository migrations to disposable database
-        run: npx supabase db reset --local --no-seed
+        run: npx --yes supabase@2.114.0 db reset --local --no-seed
       - name: Export local database connection
-        run: npx supabase status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
+        run: npx --yes supabase@2.114.0 status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
       - name: Run independent-session race tests
         run: npm run test:concurrency
         env:
           SUPABASE_DB_URL: ${{ env.DB_URL }}
       - name: Stop disposable local stack
         if: always()
-        run: npx supabase stop --no-backup
+        run: npx --yes supabase@2.114.0 stop --no-backup
