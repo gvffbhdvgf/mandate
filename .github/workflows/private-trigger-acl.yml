@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 24
       - name: Start disposable local PostgreSQL
-        run: npx --yes supabase@2.100.0 start -x analytics,edge-runtime,functions,imgproxy,inbucket,kong,meta,realtime,rest,storage,studio,vector
+        run: npx --yes supabase@2.100.0 start -x analytics,edge-runtime,functions,imgproxy,inbucket,meta,realtime,storage,studio,vector
       - name: Apply repository migrations to disposable database
         run: npx --yes supabase@2.100.0 db reset --local --no-seed
       - name: Export local database connection
