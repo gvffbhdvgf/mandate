@@ -37,6 +37,9 @@ jobs:
           grep -q "bindings.images()" cloudflare.config.ts
           grep -q "SUPABASE_PUBLISHABLE_KEY" cloudflare.config.ts
 
+      - name: Add CSV parser and update lockfile
+        run: npm install --save-exact csv-parse
+
       - name: Install locked dependencies
         run: npm ci
 
