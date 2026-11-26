@@ -35,3 +35,12 @@ test("privileged ballot RPC is not granted to browser roles", async () => {
   assert.match(migration, /revoke all on function public\.cast_registered_ballot[\s\S]*?from public,anon,authenticated/);
   assert.match(migration, /grant execute on function public\.cast_registered_ballot[\s\S]*?to service_role/);
 });
+
+test("election setup is atomic and cannot enable paid voting", async () => {
+  const migration = await read("../supabase/migrations/20261126091620_0017_atomic_election_setup_rpc.sql");
+  assert.match(migration, /create function public\.create_election_setup/);
+  assert.match(migration, /mandate_private\.create_election\(/);
+  assert.match(migration, /mandate_private\.create_contest\(/);
+  assert.match(migration, /mandate_private\.create_option\(/);
+  assert.match(migration, /jsonb_array_length\(p_contests\)<1/);
+});
