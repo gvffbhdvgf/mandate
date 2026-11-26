@@ -6,7 +6,8 @@ values
  ('11111111-1111-4111-8111-111111111111','authenticated','authenticated','org-owner@example.invalid','test-only',now(),'{"display_name":"Org Owner"}',now(),now()),
  ('22222222-2222-4222-8222-222222222222','authenticated','authenticated','org-manager@example.invalid','test-only',now(),'{"display_name":"Org Manager"}',now(),now()),
  ('33333333-3333-4333-8333-333333333333','authenticated','authenticated','org-finance@example.invalid','test-only',now(),'{"display_name":"Org Finance"}',now(),now()),
- ('44444444-4444-4444-8444-444444444444','authenticated','authenticated','org-wrong@example.invalid','test-only',now(),'{"display_name":"Wrong Email"}',now(),now());
+ ('44444444-4444-4444-8444-444444444444','authenticated','authenticated','org-wrong@example.invalid','test-only',now(),'{"display_name":"Wrong Email"}',now(),now()),
+ ('55555555-5555-4555-8555-555555555555','authenticated','authenticated','org-unverified@example.invalid','test-only',null,'{"display_name":"Unverified Email"}',now(),now());
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
@@ -144,6 +145,24 @@ do $$ begin
     if sqlerrm <> 'INVITATION_EXPIRED' then raise; end if;
   end;
 end $$;
+
+-- An unverified Auth email must never be allowed to accept an organization invitation.
+select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
+select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","email":"org-owner@example.invalid"}',true);
+select public.create_organization_invitation(
+  (select id from public.organizations where slug='invitation-test-org'),
+  'org-unverified@example.invalid','viewer',repeat('9',64)
+);
+select set_config('request.jwt.claim.sub','55555555-5555-4555-8555-555555555555',true);
+select set_config('request.jwt.claims','{"sub":"55555555-5555-4555-8555-555555555555","role":"authenticated","email":"org-unverified@example.invalid"}',true);
+do $ begin
+  begin
+    perform public.accept_organization_invitation(repeat('9',64));
+    raise exception 'EXPECTED_UNVERIFIED_EMAIL_REJECTION';
+  exception when insufficient_privilege then
+    if sqlerrm <> 'INVITATION_EMAIL_NOT_VERIFIED' then raise; end if;
+  end;
+end $;
 
 -- An invitation can be revoked before acceptance and cannot then be consumed.
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111111',true);
