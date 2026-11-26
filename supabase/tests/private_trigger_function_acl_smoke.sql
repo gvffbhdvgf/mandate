@@ -28,14 +28,14 @@ create trigger trigger_acl_updated_at_probe_before_update
 before update on trigger_acl_updated_at_probe
 for each row execute function mandate_private.set_updated_at();
 insert into trigger_acl_updated_at_probe values ('2000-01-01T00:00:00Z');
-grant update on trigger_acl_updated_at_probe to authenticated;
+grant select, update on trigger_acl_updated_at_probe to authenticated;
 
 create temporary table trigger_acl_append_only_probe(id integer);
 create trigger trigger_acl_append_only_probe_before_update
 before update on trigger_acl_append_only_probe
 for each row execute function mandate_private.prevent_append_only_mutation();
 insert into trigger_acl_append_only_probe values (1);
-grant update on trigger_acl_append_only_probe to authenticated;
+grant select, update on trigger_acl_append_only_probe to authenticated;
 
 create temporary table trigger_acl_election_snapshot_probe(
   status text, rules_snapshot jsonb, candidate_snapshot jsonb, rules_hash text,
@@ -45,14 +45,14 @@ create trigger trigger_acl_election_snapshot_probe_before_update
 before update on trigger_acl_election_snapshot_probe
 for each row execute function mandate_private.guard_election_snapshot();
 insert into trigger_acl_election_snapshot_probe values ('open','{}','{}','old','registered_single',now(),now()+interval '1 hour');
-grant update on trigger_acl_election_snapshot_probe to authenticated;
+grant select, update on trigger_acl_election_snapshot_probe to authenticated;
 
 create temporary table trigger_acl_ledger_probe(id uuid, status text);
 create trigger trigger_acl_ledger_probe_before_update
 before update of status on trigger_acl_ledger_probe
 for each row execute function mandate_private.guard_ledger_posting();
 insert into trigger_acl_ledger_probe values (gen_random_uuid(),'pending');
-grant update on trigger_acl_ledger_probe to authenticated;
+grant select, update on trigger_acl_ledger_probe to authenticated;
 -- The guard queries ledger_entries; grant SELECT only inside this rollback-only test.
 grant select on public.ledger_entries to authenticated;
 
