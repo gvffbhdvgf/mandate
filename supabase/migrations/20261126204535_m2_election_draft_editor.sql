@@ -115,7 +115,7 @@ begin
  select jsonb_build_object('votingMode',v_e.voting_mode,'startsAt',v_e.starts_at,'endsAt',v_e.ends_at,
    'timezone',v_e.timezone,'resultVisibility',v_e.result_visibility,'rulesVersion',v_e.rules_version) into v_rules;
  select jsonb_agg(jsonb_build_object('contestId',c.id,'title',c.title,'required',c.is_required,'tiePolicy',c.tie_policy,
-   'options',(select jsonb_agg(jsonb_build_object('id',o.id,'displayName',o.display_name) order by o.display_order)
+   'options',(select jsonb_agg(jsonb_build_object('id',o.id,'displayName',o.display_name,'profile',o.profile) order by o.display_order)
      from public.options o where o.contest_id=c.id and o.status='active')) order by c.display_order)
  into v_candidates from public.contests c where c.election_id=v_e.id;
  return encode(extensions.digest(convert_to(v_rules::text||coalesce(v_candidates::text,''),'UTF8'),'sha256'),'hex');
@@ -187,7 +187,7 @@ begin
  select jsonb_build_object('votingMode',v_e.voting_mode,'startsAt',v_e.starts_at,'endsAt',v_e.ends_at,
    'timezone',v_e.timezone,'resultVisibility',v_e.result_visibility,'rulesVersion',v_e.rules_version) into v_rules;
  select jsonb_agg(jsonb_build_object('contestId',c.id,'title',c.title,'required',c.is_required,'tiePolicy',c.tie_policy,
-   'options',(select jsonb_agg(jsonb_build_object('id',o.id,'displayName',o.display_name) order by o.display_order)
+   'options',(select jsonb_agg(jsonb_build_object('id',o.id,'displayName',o.display_name,'profile',o.profile) order by o.display_order)
      from public.options o where o.contest_id=c.id and o.status='active')) order by c.display_order)
  into v_candidates from public.contests c where c.election_id=v_e.id;
  v_hash:=encode(extensions.digest(convert_to(v_rules::text||coalesce(v_candidates::text,''),'UTF8'),'sha256'),'hex');
