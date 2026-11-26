@@ -60,7 +60,7 @@ export default function VoterBallotPage() {
             <h1>{context.election.title}</h1>
             <p className="muted">Your access link is valid. Make your selection in each required contest. Your identity is kept separate from your ballot choices.</p>
             <div className="ballot-meta">
-              <span>{context.votingMode.replaceAll("_", " ")}</span>
+              <span>{context.election.votingMode.replaceAll("_", " ")}</span>
               <span>Closes {new Date(context.election.endsAt).toLocaleString("en-KE", { timeZone: context.election.timezone })}</span>
             </div>
           </section>
