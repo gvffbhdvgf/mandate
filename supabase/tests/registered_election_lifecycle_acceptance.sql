@@ -1,6 +1,6 @@
 -- Full registered-election lifecycle acceptance test.
 -- Synthetic auth user and election only; transaction always rolls back.
--- Run against a disposable Supabase branch, never production.
+-- Run in a rollback-only transaction; use only synthetic fixtures.
 begin;
 
 insert into auth.users(id,aud,role,email,encrypted_password,email_confirmed_at,raw_user_meta_data,created_at,updated_at)
@@ -50,6 +50,9 @@ begin
   select id into v_contest from public.contests where election_id=v_election;
   select id into v_option from public.options where contest_id=v_contest and display_name='Candidate A';
 
+  -- Voter-register writes are service-controlled; switch out of the authenticated role
+  -- only for this synthetic fixture, then restore the actor claims for lifecycle RPCs.
+  reset role;
   insert into public.election_voters(
     organization_id,election_id,external_voter_ref,display_name,normalized_email,
     phone_e164,access_token_hash,invited_at
@@ -59,6 +62,7 @@ begin
     encode(extensions.digest(convert_to(v_token,'UTF8'),'sha256'),'hex'),now()
   );
 
+  set local role authenticated;
   v_open := public.open_election(v_election,true);
   if v_open->>'status' <> 'open' then raise exception 'OPEN_TRANSITION_FAILED'; end if;
 
