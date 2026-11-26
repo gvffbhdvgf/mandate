@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   closeElectionAction,
   openElectionAction,
+  pauseElectionAction,
+  resumeElectionAction,
   publishResultsAction,
   tallyElectionAction,
   type LifecycleActionState,
@@ -46,12 +48,14 @@ export function ElectionLifecycleControls({
   const router = useRouter();
   const [openState, openAction, openPending] = useActionState(openElectionAction, initialState);
   const [closeState, closeAction, closePending] = useActionState(closeElectionAction, initialState);
+  const [pauseState, pauseAction, pausePending] = useActionState(pauseElectionAction, initialState);
+  const [resumeState, resumeAction, resumePending] = useActionState(resumeElectionAction, initialState);
   const [tallyState, tallyAction, tallyPending] = useActionState(tallyElectionAction, initialState);
   const [publishState, publishAction, publishPending] = useActionState(publishResultsAction, initialState);
 
   useEffect(() => {
-    if (openState.success || closeState.success || tallyState.success || publishState.success) router.refresh();
-  }, [openState.success, closeState.success, tallyState.success, publishState.success, router]);
+    if (openState.success || closeState.success || pauseState.success || resumeState.success || tallyState.success || publishState.success) router.refresh();
+  }, [openState.success, closeState.success, pauseState.success, resumeState.success, tallyState.success, publishState.success, router]);
 
   const hiddenFields = (
     <>
@@ -77,6 +81,24 @@ export function ElectionLifecycleControls({
           </form>
         ) : <p className="form-hint">An election manager or administrator must open this election.</p>
       ) : null}
+
+      {status === "open" && canClose && (
+        <form action={pauseAction} className="form-stack lifecycle-form">
+          {hiddenFields}
+          <label>Reason for pausing<textarea name="reason" minLength={10} maxLength={1000} required placeholder="Record why voting is being paused." /></label>
+          {pauseState.error && <p className="form-error" role="alert">{pauseState.error}</p>}
+          <button className="secondary-button" disabled={pausePending}>{pausePending ? "Pausing election…" : "Pause voting"}</button>
+        </form>
+      )}
+
+      {status === "paused" && canClose && (
+        <form action={resumeAction} className="form-stack lifecycle-form">
+          {hiddenFields}
+          <label>Reason for resuming<textarea name="reason" minLength={10} maxLength={1000} required placeholder="Record why voting is being resumed." /></label>
+          {resumeState.error && <p className="form-error" role="alert">{resumeState.error}</p>}
+          <button className="primary-button" disabled={resumePending}>{resumePending ? "Resuming election…" : "Resume voting"}</button>
+        </form>
+      )}
 
       {(status === "open" || status === "paused") && (
         canClose ? (
