@@ -193,6 +193,23 @@ jobs:
       - name: Build the Workers application
         run: npm run build:vinext
 
+      - name: Smoke-test Cloudflare Workers runtime and Supabase bindings
+        shell: bash
+        run: |
+          npm run dev:vinext -- --host 127.0.0.1 --port 4174 > /tmp/mandate-worker-dev.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          STATUS=""
+          for attempt in $(seq 1 40); do
+            STATUS=$(curl --silent --output /tmp/mandate-dashboard.html --dump-header /tmp/mandate-dashboard.headers --write-out "%{http_code}" http://127.0.0.1:4174/dashboard || true)
+            if [ "$STATUS" = "307" ] || [ "$STATUS" = "302" ]; then break; fi
+            sleep 2
+          done
+          test "$STATUS" = "307" -o "$STATUS" = "302"
+          grep -qi "location: /login" /tmp/mandate-dashboard.headers
+          curl --fail --silent http://127.0.0.1:4174/login > /tmp/mandate-worker-login.html
+          grep -q "Sign in to Mandate" /tmp/mandate-worker-login.html
+
       - name: Smoke-test the production preview
         shell: bash
         run: |
