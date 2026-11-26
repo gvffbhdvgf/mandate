@@ -1,0 +1,52 @@
+name: M2 election setup acceptance
+
+on:
+  pull_request:
+    branches: [feat/m0-vinext-foundation]
+    paths:
+      - 'app/actions/elections.ts'
+      - 'app/organizations/**'
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - 'tests/contracts.test.mjs'
+      - '.github/workflows/m2-election-setup.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m2-election-setup-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  election-setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm ci
+      - name: Run application contract, type and compatibility checks
+        run: npm run check
+      - name: Start disposable local Supabase
+        run: npx --yes supabase@2.100.0 start -x analytics,edge-runtime,functions,imgproxy,inbucket,meta,realtime,storage,studio,vector
+      - name: Apply repository migrations to disposable database
+        run: npx --yes supabase@2.100.0 db reset --local --no-seed
+      - name: Export local database connection
+        run: npx --yes supabase@2.100.0 status -o env | awk -F '"' '/^DB_URL=/{print "DB_URL=" $2}' >> "$GITHUB_ENV"
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Verify database transaction and security invariants
+        run: |
+          for test_file in supabase/tests/*.sql; do
+            echo "Running $test_file"
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$test_file"
+          done
+      - name: Build production Worker
+        run: npm run build:vinext
+      - name: Stop disposable local stack
+        if: always()
+        run: npx --yes supabase@2.100.0 stop --no-backup
