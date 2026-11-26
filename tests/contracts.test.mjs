@@ -207,7 +207,11 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
   assert.match(drafts, /setup_confirmation_hash/);
   assert.match(drafts, /ELECTION_SETUP_NOT_CONFIRMED/);
   assert.match(drafts, /ELECTION_SETUP_CHANGED_RECONFIRM/);
-  assert.match(listing, /list_election_setup_drafts/);
+  assert.match(drafts, /public\.get_election_setup_draft\(p_draft_id uuid\)[\s\S]*?security invoker/);
+  assert.match(drafts, /public\.finalize_election_setup_draft\(p_draft_id uuid\)[\s\S]*?security invoker/);
+  assert.match(drafts, /public\.confirm_election_setup\(p_election_id uuid\)[\s\S]*?security invoker/);
+  assert.match(listing, /mandate_private\.list_election_setup_drafts/);
+  assert.match(listing, /security invoker/);
   assert.match(wizard, /Step \{step\} of 6/);
   assert.match(wizard, /I confirm that I am authorized/);
   assert.match(wizard, /Election timezone/);
@@ -219,6 +223,9 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
   assert.match(smoke, /UNAUTHORIZED_DRAFT_EDIT_SHOULD_FAIL/);
   assert.match(smoke, /UNCONFIRMED_SETUP_MUST_NOT_OPEN/);
   assert.match(smoke, /AUTHORITY_CONFIRMATION_NOT_RECORDED/);
+  assert.match(smoke, /CONFIGURATION_DRIFT_MUST_REQUIRE_RECONFIRMATION/);
+  assert.match(smoke, /PUBLIC_RPC_WRAPPER_MUST_BE_SECURITY_INVOKER/);
+  assert.match(smoke, /PRIVATE_RPC_IMPLEMENTATION_MUST_BE_SECURITY_DEFINER/);
   assert.match(audit, /election\.setup_confirmed/);
   assert.match(audit, /action=any\(array\[/);
 });
