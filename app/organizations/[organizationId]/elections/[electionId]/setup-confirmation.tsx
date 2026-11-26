@@ -10,19 +10,13 @@ export function SetupConfirmation({
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
-  if (confirmed) return (
-    <section className="panel">
-      <p className="kicker">AUTHORITY REVIEW</p>
-      <h2>Setup confirmed</h2>
-      <p className="form-hint">The reviewed election configuration has been cryptographically bound to the authority confirmation.</p>
-    </section>
-  );
-
   return (
     <section className="panel form-stack">
-      <p className="kicker">AUTHORITY REVIEW REQUIRED</p>
-      <h2>Review and confirm election setup</h2>
-      <p className="muted">Opening this election is blocked until an authorized organization officer confirms the rules and contest configuration. If the configuration changes after confirmation, approval must be repeated.</p>
+      <p className="kicker">{confirmed ? "AUTHORITY REVIEW RECORDED" : "AUTHORITY REVIEW REQUIRED"}</p>
+      <h2>{confirmed ? "Reconfirm election setup if it has changed" : "Review and confirm election setup"}</h2>
+      <p className="muted">{confirmed
+        ? "A confirmation is recorded. If you have changed the draft configuration since that review, confirm again; the database checks the exact configuration hash when opening."
+        : "Opening this election is blocked until an authorized organization officer confirms the rules and contest configuration."}</p>
       {error && <p className="form-error" role="alert">{error}</p>}
       <label className="checkbox-row">
         <input type="checkbox" checked={authorityConfirmed}
@@ -36,7 +30,7 @@ export function SetupConfirmation({
           if (result.error) setError(result.error);
           else window.location.reload();
         })}>
-        {pending ? "Recording confirmation…" : "Confirm election setup"}
+        {pending ? "Recording confirmation…" : confirmed ? "Reconfirm current setup" : "Confirm election setup"}
       </button>
     </section>
   );
