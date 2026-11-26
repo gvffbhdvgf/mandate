@@ -185,7 +185,7 @@ export default async function ElectionPage({ params, searchParams }: {
         {optionResults.map(({ contest, options }) => (
           <article className="contest-card" key={contest.id}>
             <div><h3>{contest.title}</h3><p className="muted">{contest.is_required ? "Required" : "Optional"} · {contest.tie_policy.replaceAll("_", " ")}</p></div>
-            <ul>{options.map((option) => <li key={option.id}>{option.display_name}</li>)}</ul>
+            <ul>{options.map((option) => <li key={option.id}><strong>{option.display_name}</strong>{option.profile && <p className="muted">{option.profile}</p>}</li>)}</ul>
           </article>
         ))}
         <p className="form-hint">Next: complete the voter register, review the election rules, and verify the opening checklist. This draft cannot accept votes yet.</p>
