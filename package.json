@@ -4,7 +4,10 @@
   "description": "**Organizational elections, made clear.**",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
+    "typecheck": "tsc --noEmit",
+    "check:compat": "vinext check",
+    "check": "npm run test && npm run typecheck && npm run check:compat",
     "dev:vinext": "vite dev --port 3001",
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
