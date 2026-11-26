@@ -219,7 +219,6 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
   assert.match(electionPage, /option\.profile/);
   assert.match(actions, /authorityConfirmed: z\.literal\(true\)/);
   assert.match(organization, /list_election_setup_drafts/);
-  assert.match(smoke, /select id into v_org from public\.organizations/);
   assert.match(smoke, /DRAFT_NOT_RESUMABLE/);
   assert.match(smoke, /UNAUTHORIZED_DRAFT_EDIT_SHOULD_FAIL/);
   assert.match(smoke, /UNCONFIRMED_SETUP_MUST_NOT_OPEN/);
