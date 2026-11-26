@@ -175,12 +175,15 @@ jobs:
             "check:compat": "vinext check",
             check: "npm run test && npm run typecheck && npm run check:compat"
           };
-          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\\n");
+          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
           const tsPath = "tsconfig.json";
           const ts = JSON.parse(fs.readFileSync(tsPath, "utf8"));
           delete ts.compilerOptions.plugins;
-          fs.writeFileSync(tsPath, JSON.stringify(ts, null, 2) + "\\n");
+          fs.writeFileSync(tsPath, JSON.stringify(ts, null, 2) + "\n");
           EOF
+
+      - name: Apply non-breaking security fixes
+        run: npm audit fix
 
       - name: Run contract, type and compatibility checks
         run: npm run check
