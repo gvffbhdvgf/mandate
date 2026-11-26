@@ -44,3 +44,14 @@ test("election setup is atomic and cannot enable paid voting", async () => {
   assert.match(migration, /mandate_private\.create_option\(/);
   assert.match(migration, /jsonb_array_length\(p_contests\)<1/);
 });
+
+test("voter imports use private storage and election opening requires issued access", async () => {
+  const imports = await read("../supabase/migrations/20261126092010_0019_private_voter_import_storage_and_transactions.sql");
+  const opening = await read("../supabase/migrations/20261126092140_0020_require_voter_access_before_election_open.sql");
+  assert.match(imports, /public=false/);
+  assert.match(imports, /mandate-voter-imports/);
+  assert.match(imports, /stage_voter_import/);
+  assert.match(imports, /commit_voter_import/);
+  assert.match(opening, /VOTER_ACCESS_NOT_ISSUED/);
+  assert.match(opening, /access_token_hash is null or v\.invited_at is null/);
+});
