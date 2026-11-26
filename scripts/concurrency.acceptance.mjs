@@ -105,7 +105,8 @@ async function main() {
       await blocker.query('begin');
       await blocker.query('select id from public.elections where id=$1 for update', [electionId]);
       await castClient.query('set role anon');
-      const waitingCast = castClient.query('select public.cast_registered_ballot($1,$2,$3,true)', [tokens[1], contestId, optionId]);
+      const waitingCast = castClient.query('select public.cast_registered_ballot($1,$2,$3,true)', [tokens[1], contestId, optionId])
+        .then(() => ({ error: null }), (error) => ({ error }));
       let waiting = false;
       for (let attempt = 0; attempt < 50; attempt++) {
         const state = await admin.query("select wait_event_type from pg_stat_activity where application_name='mandate-race-pause-cast'");
@@ -118,7 +119,8 @@ async function main() {
       await blocker.query('set local role authenticated');
       await blocker.query("select public.pause_election($1,'Concurrency test controlled pause')", [electionId]);
       await blocker.query('commit');
-      await assert.rejects(waitingCast, /ELECTION_NOT_OPEN/);
+      const pauseCastOutcome = await waitingCast;
+      assert.match(pauseCastOutcome.error?.message ?? '', /ELECTION_NOT_OPEN/);
     } finally {
       await blocker.query('rollback').catch(() => {});
       await blocker.end();
@@ -143,7 +145,7 @@ async function main() {
       await closeCastClient.query('set role anon');
       const waitingCloseCast = closeCastClient.query(
         'select public.cast_registered_ballot($1,$2,$3,true)', [tokens[1], contestId, optionId],
-      );
+      ).then(() => ({ error: null }), (error) => ({ error }));
       let waiting = false;
       for (let attempt = 0; attempt < 50; attempt++) {
         const state = await admin.query("select wait_event_type from pg_stat_activity where application_name='mandate-race-close-cast'");
@@ -156,7 +158,8 @@ async function main() {
       await closeBlocker.query('set local role authenticated');
       await closeBlocker.query("select public.close_election($1,'Concurrency acceptance close reason')", [electionId]);
       await closeBlocker.query('commit');
-      await assert.rejects(waitingCloseCast, /ELECTION_NOT_OPEN/);
+      const closeCastOutcome = await waitingCloseCast;
+      assert.match(closeCastOutcome.error?.message ?? '', /ELECTION_NOT_OPEN/);
     } finally {
       await closeBlocker.query('rollback').catch(() => {});
       await closeBlocker.end();
