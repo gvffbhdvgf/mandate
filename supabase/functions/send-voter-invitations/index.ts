@@ -125,7 +125,7 @@ Deno.serve(async (request: Request) => {
     }
     if (!claim) continue;
 
-    const invitationUrl = new URL(token, voteUrl).toString();
+    const invitationUrl = `${voteUrl.toString()}#${token}`;
     const name = escapeHtml(voter.display_name || "Voter");
     const title = escapeHtml(election.title);
 
