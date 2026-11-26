@@ -174,6 +174,9 @@ begin
   if has_function_privilege('anon','public.finalize_election_setup_draft(uuid)','EXECUTE') then
     raise exception 'ANON_MUST_NOT_FINALIZE_ELECTION_DRAFTS';
   end if;
+  if has_function_privilege('authenticated','mandate_private.compute_election_setup_hash(uuid)','EXECUTE') then
+    raise exception 'AUTHENTICATED_MUST_NOT_EXECUTE_PRIVATE_HASH_HELPER';
+  end if;
 end $$;
 
 rollback;
