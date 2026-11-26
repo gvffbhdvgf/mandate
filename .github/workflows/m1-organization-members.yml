@@ -32,8 +32,6 @@ jobs:
     timeout-minutes: 30
     env:
       SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
-    env:
-      SUPABASE_INTERNAL_IMAGE_REGISTRY: docker.io
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -44,7 +42,7 @@ jobs:
       - name: Run application contract, type and compatibility checks
         run: npm run check
       - name: Start disposable local Supabase
-        run: npx --yes supabase@2.100.0 start -x edge-runtime,gotrue,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,storage-api,studio,supavisor,vector
+        run: npx --yes supabase@2.100.0 start -x edge-runtime,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,studio,supavisor,vector
       - name: Apply repository migrations to disposable database
         run: npx --yes supabase@2.100.0 db reset --local --no-seed
       - name: Export local database connection
