@@ -139,3 +139,11 @@ test("election audit timeline exposes only redacted non-ballot activity", async 
   assert.match(migration, /grant execute on function public\.get_election_audit_trail.*to authenticated/);
   assert.match(component, /Event details/);
 });
+
+test("audit timeline uses a strict action allowlist and removes free-text metadata", async () => {
+  const migration = await read("../supabase/migrations/20261126095110_0029_allowlist_audit_timeline_metadata.sql");
+  assert.match(migration, /action=any\(array\[/);
+  assert.match(migration, /'voter_invitation\.batch_dispatched'/);
+  assert.match(migration, /- 'reason'|- 'reason'|-'reason'/);
+  assert.match(migration, /'privateObjectPath'/);
+});
