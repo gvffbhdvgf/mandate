@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { commitVoterImportAction, type VoterImportActionState } from "../../../../../actions/voters";
+import { commitVoterImportAction, type VoterImportActionState } from "../../../../actions/voters";
 
 const initialState: VoterImportActionState = {};
 
