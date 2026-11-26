@@ -207,11 +207,13 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
   assert.match(drafts, /setup_confirmation_hash/);
   assert.match(drafts, /ELECTION_SETUP_NOT_CONFIRMED/);
   assert.match(drafts, /ELECTION_SETUP_CHANGED_RECONFIRM/);
+  assert.equal((drafts.match(/'profile',o\.profile/g) ?? []).length, 2);
   assert.match(drafts, /public\.get_election_setup_draft\(p_draft_id uuid\)[\s\S]*?security invoker/);
   assert.match(drafts, /public\.finalize_election_setup_draft\(p_draft_id uuid\)[\s\S]*?security invoker/);
   assert.match(drafts, /public\.confirm_election_setup\(p_election_id uuid\)[\s\S]*?security invoker/);
   assert.match(listing, /mandate_private\.list_election_setup_drafts/);
   assert.match(listing, /security invoker/);
+  assert.doesNotMatch(listing, /payload jsonb/);
   assert.match(wizard, /Step \{step\} of 6/);
   assert.match(wizard, /I confirm that I am authorized/);
   assert.match(wizard, /Election timezone/);
@@ -219,6 +221,7 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
   assert.match(electionPage, /option\.profile/);
   assert.match(actions, /authorityConfirmed: z\.literal\(true\)/);
   assert.match(organization, /list_election_setup_drafts/);
+  assert.match(smoke, /select id into v_org from public\.organizations/);
   assert.match(smoke, /DRAFT_NOT_RESUMABLE/);
   assert.match(smoke, /UNAUTHORIZED_DRAFT_EDIT_SHOULD_FAIL/);
   assert.match(smoke, /UNCONFIRMED_SETUP_MUST_NOT_OPEN/);
