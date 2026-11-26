@@ -3,7 +3,7 @@
 -- triggers still execute their functions under an ordinary application role.
 begin;
 
-do $acl$$
+do $acl$
 declare
   v_function regprocedure;
   v_functions regprocedure[] := array[
@@ -21,14 +21,14 @@ begin
     end if;
   end loop;
 end;
-$$;
+$acl$;
 
 create temporary table trigger_acl_updated_at_probe(updated_at timestamptz);
 create trigger trigger_acl_updated_at_probe_before_update
 before update on trigger_acl_updated_at_probe
 for each row execute function mandate_private.set_updated_at();
 insert into trigger_acl_updated_at_probe values ('2000-01-01T00:00:00Z');
-do $
+do $temp$
 declare
   v_temp_schema text;
 begin
@@ -40,7 +40,7 @@ begin
   end if;
   execute format('grant usage on schema %I to authenticated', v_temp_schema);
 end;
-$acl$;
+$temp$;
 grant select, update on trigger_acl_updated_at_probe to authenticated;
 
 create temporary table trigger_acl_append_only_probe(id integer);
