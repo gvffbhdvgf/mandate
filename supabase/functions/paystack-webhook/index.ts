@@ -5,7 +5,11 @@ type PaystackEvent = {
   data?: {
     id?: number | string;
     reference?: string;
-    amount?: number;
+    transaction_reference?: string;
+    transaction?: { reference?: string; id?: number | string };
+    refund_reference?: string | null;
+    dispute?: { id?: number | string };
+    amount?: number | string;
     currency?: string;
     status?: string;
   };
@@ -13,6 +17,11 @@ type PaystackEvent = {
 type PaystackVerifyResponse = {
   status: boolean;
   data: { id: number | string; status: string; reference: string; amount: number; currency: string };
+};
+
+const sha256Hex = async (value: string) => {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
 Deno.serve(async (request: Request) => {
@@ -35,9 +44,14 @@ Deno.serve(async (request: Request) => {
   }
 
   const eventType = event.event ?? "unknown";
-  const reference = event.data?.reference ?? null;
-  const transactionId = event.data?.id == null ? null : String(event.data.id);
-  const eventKey = `paystack:${eventType}:${transactionId ?? reference ?? crypto.randomUUID()}`;
+  const data = event.data ?? {};
+  const reference = data.reference ?? data.transaction_reference ?? data.transaction?.reference ?? null;
+  const transactionId = eventType === "charge.success"
+    ? (data.id == null ? null : String(data.id))
+    : (data.transaction?.id == null ? null : String(data.transaction.id));
+  const resourceId = data.id ?? data.refund_reference ?? data.dispute?.id ?? null;
+  const eventIdentity = resourceId == null ? await sha256Hex(rawBody) : String(resourceId);
+  const eventKey = `paystack:${eventType}:${eventIdentity}`;
   const admin = adminClient();
 
   const { data: inserted, error: insertError } = await admin
@@ -49,10 +63,12 @@ Deno.serve(async (request: Request) => {
       event_type: eventType,
       signature_verified: true,
       redacted_payload: {
-        status: event.data?.status ?? null,
-        amount: event.data?.amount ?? null,
-        currency: event.data?.currency ?? null,
+        status: data.status ?? null,
+        amount: data.amount == null ? null : String(data.amount),
+        currency: data.currency ?? null,
         transaction_id: transactionId,
+        resource_id: resourceId == null ? null : String(resourceId),
+        refund_reference: data.refund_reference ?? null,
       },
       processing_status: "received",
     }, { onConflict: "provider_event_key", ignoreDuplicates: true })
@@ -73,6 +89,33 @@ Deno.serve(async (request: Request) => {
       return json(200, { received: true, duplicate: true });
     }
     eventId = existing.id;
+  }
+
+  // Refunds may be partial and disputes may resolve without a refund. A signed
+  // notification therefore freezes the payment for reconciliation; it does not
+  // automatically reverse the receipt or revoke already-consumed entitlements.
+  if (eventType.startsWith("refund.") || eventType.startsWith("charge.dispute.")) {
+    if (!reference) {
+      await admin.from("payment_events").update({
+        processing_status: "failed",
+        processed_at: null,
+      }).eq("id", eventId);
+      return json(503, { error: "PAYSTACK_EXCEPTION_REFERENCE_MISSING" });
+    }
+
+    const { data: result, error } = await admin.rpc("apply_paystack_payment_exception_event", {
+      p_event_id: eventId,
+      p_provider_reference: reference,
+    });
+    if (error || !result) return json(500, { error: "PAYMENT_EXCEPTION_PROCESSING_FAILED" });
+    if (result.processed !== true) return json(503, { error: "PAYMENT_EXCEPTION_RECONCILIATION_REQUIRED" });
+    return json(200, {
+      received: true,
+      processed: true,
+      duplicate: result.duplicate === true,
+      status: typeof result.status === "string" ? result.status : "exception",
+      reconciliationRequired: true,
+    });
   }
 
   if (eventType !== "charge.success" || !reference) {
