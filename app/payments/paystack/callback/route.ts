@@ -4,6 +4,7 @@ const referencePattern = /^[A-Za-z0-9.=-]{8,100}$/;
 
 function statusPage(status: number, title: string, message: string, returnPath = "/dashboard") {
   const safeReturnPath = /^\/public-vote\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(returnPath)
+    || /^\/organizations\/[0-9a-f-]{36}\/elections\/[0-9a-f-]{36}$/i.test(returnPath)
     ? returnPath
     : "/dashboard";
   const returnLabel = safeReturnPath === "/dashboard" ? "Return to Mandate" : "Continue to your election";
