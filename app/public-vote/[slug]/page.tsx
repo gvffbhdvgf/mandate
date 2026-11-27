@@ -18,7 +18,7 @@ export default async function PublicVotePage({ params }: { params: Promise<{ slu
     : null;
 
   return (
-    <main className="auth-shell">
+    <main id="main-content" className="auth-shell">
       <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
       <section className="auth-card">
         <p className="kicker">PUBLIC PARTICIPANT ACCESS</p>
