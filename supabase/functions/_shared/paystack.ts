@@ -88,6 +88,13 @@ function paystackModeConfig(): PaystackModeConfig | null {
 
 export const paymentsModeEnabled = () => paystackModeConfig() !== null;
 
+// Settlement ingestion in live mode is separately gated from checkout. Test-mode
+// reconciliation remains available for controlled verification.
+export const settlementModeEnabled = () => {
+  const config = paystackModeConfig();
+  return config !== null && (config.mode === "test" || config.settlementReady);
+};
+
 export const paymentPurposeEnabled = (purpose: PaymentPurpose) => {
   const config = paystackModeConfig();
   if (!config) return false;
