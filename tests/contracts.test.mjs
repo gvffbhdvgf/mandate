@@ -542,9 +542,9 @@ test("Paystack settlement importer is service-role-only and safely paginated", a
 test("Paystack payment exceptions are exposed through a private read-only evidence queue", async () => {
   const migration = await read("../supabase/migrations/20261127230000_0045_paystack_payment_exception_queue.sql");
   const smoke = await read("../supabase/tests/paystack_payment_exception_queue_smoke.sql");
-  assert.match(migration, /create or replace view public\\.paystack_payment_exception_queue/);
-  assert.match(migration, /refund\\./);
-  assert.match(migration, /charge\\.dispute\\./);
+  assert.match(migration, /create or replace view public\.paystack_payment_exception_queue/);
+  assert.match(migration, /refund\./);
+  assert.match(migration, /charge\.dispute\./);
   assert.match(migration, /settlement_reconciliation_statuses/);
   assert.match(migration, /receipt_posted/);
   assert.match(migration, /security_invoker = true/);
