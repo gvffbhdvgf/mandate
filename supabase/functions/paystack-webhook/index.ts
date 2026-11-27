@@ -85,7 +85,16 @@ Deno.serve(async (request: Request) => {
     return json(200, { received: true, processed: false });
   }
 
-  const { data: intent, error: intentError } = await admin\n    .from("payment_intents")\n    .select("purpose")\n    .eq("provider_reference", reference)\n    .maybeSingle();\n  if (intentError) return json(500, { error: "PAYMENT_INTENT_LOOKUP_FAILED" });\n  if (!intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" });\n  if (!paymentPurposeEnabled(intent.purpose)) return json(503, { error: "PAYMENT_PURPOSE_DISABLED" });\n\n  let verified: PaystackVerifyResponse;
+  const { data: intent, error: intentError } = await admin
+    .from("payment_intents")
+    .select("purpose")
+    .eq("provider_reference", reference)
+    .maybeSingle();
+  if (intentError) return json(500, { error: "PAYMENT_INTENT_LOOKUP_FAILED" });
+  if (!intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" });
+  if (!paymentPurposeEnabled(intent.purpose)) return json(503, { error: "PAYMENT_PURPOSE_DISABLED" });
+
+  let verified: PaystackVerifyResponse;
   try {
     verified = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(reference)}`);
   } catch {
