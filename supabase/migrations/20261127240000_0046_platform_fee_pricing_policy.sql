@@ -226,6 +226,7 @@ begin
     v_amount,v_policy.currency,'initialized',v_idempotency
   ) returning * into v_intent;
 
+  perform set_config('mandate.platform_fee_internal','allowed',true);
   update public.elections
   set platform_fee_policy_version=coalesce(platform_fee_policy_version,v_policy.version),
       platform_fee_eligible_voter_count=coalesce(platform_fee_eligible_voter_count,v_count),
@@ -235,6 +236,7 @@ begin
       platform_fee_payment_attempt=v_attempt,
       platform_fee_status='unpaid'
   where id=v_e.id;
+  perform set_config('mandate.platform_fee_internal','',true);
 
   insert into public.audit_events(
     organization_id,election_id,actor_id,actor_type,action,entity_type,entity_id,redacted_metadata
@@ -279,6 +281,7 @@ as $$
 begin
   if new.purpose='platform_fee' and new.election_id is not null
      and new.status is distinct from old.status then
+    perform set_config('mandate.platform_fee_internal','allowed',true);
     update public.elections
     set platform_fee_status=case
           when new.status='success' then 'paid'
@@ -289,6 +292,7 @@ begin
         end
     where id=new.election_id
       and platform_fee_payment_intent_id=new.id;
+    perform set_config('mandate.platform_fee_internal','',true);
   end if;
   return new;
 end;
@@ -298,6 +302,33 @@ revoke all on function mandate_private.sync_platform_fee_payment_status() from p
 create trigger payment_intents_sync_platform_fee_status
 after update of status on public.payment_intents
 for each row execute function mandate_private.sync_platform_fee_payment_status();
+
+create or replace function mandate_private.guard_platform_fee_election_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path=pg_catalog,pg_temp
+as $
+begin
+  if (
+    new.platform_fee_policy_version is distinct from old.platform_fee_policy_version
+    or new.platform_fee_eligible_voter_count is distinct from old.platform_fee_eligible_voter_count
+    or new.platform_fee_amount_minor is distinct from old.platform_fee_amount_minor
+    or new.platform_fee_quoted_at is distinct from old.platform_fee_quoted_at
+    or new.platform_fee_payment_intent_id is distinct from old.platform_fee_payment_intent_id
+    or new.platform_fee_payment_attempt is distinct from old.platform_fee_payment_attempt
+    or new.platform_fee_status is distinct from old.platform_fee_status
+  ) and current_setting('mandate.platform_fee_internal',true) is distinct from 'allowed' then
+    raise exception 'PLATFORM_FEE_FIELDS_SERVER_MANAGED' using errcode='55000';
+  end if;
+  return new;
+end;
+$;
+
+revoke all on function mandate_private.guard_platform_fee_election_fields() from public,anon,authenticated;
+create trigger elections_platform_fee_fields_server_managed
+before update on public.elections
+for each row execute function mandate_private.guard_platform_fee_election_fields();
 
 create or replace function mandate_private.guard_platform_fee_before_election_open()
 returns trigger
@@ -331,13 +362,17 @@ declare
   v_locked boolean;
 begin
   if tg_op='DELETE' then v_election_id := old.election_id; else v_election_id := new.election_id; end if;
+  if tg_op='UPDATE' and new.election_id is distinct from old.election_id then
+    raise exception 'VOTER_ELECTION_MEMBERSHIP_IMMUTABLE' using errcode='55000';
+  end if;
   select platform_fee_quoted_at is not null into v_locked
-  from public.elections where id=v_election_id;
+  from public.elections where id=v_election_id for update;
   if coalesce(v_locked,false) then
     if tg_op='INSERT' or tg_op='DELETE'
-      or (tg_op='UPDATE' and (new.election_id is distinct from old.election_id
-        or 
-        new.external_voter_ref is distinct from old.external_voter_ref
+      or (tg_op='UPDATE' and (
+        new.id is distinct from old.id
+        or new.organization_id is distinct from old.organization_id
+        or new.external_voter_ref is distinct from old.external_voter_ref
         or new.display_name is distinct from old.display_name
         or new.normalized_email is distinct from old.normalized_email
         or new.phone_e164 is distinct from old.phone_e164
