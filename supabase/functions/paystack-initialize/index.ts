@@ -38,10 +38,29 @@ Deno.serve(async (request: Request) => {
     if (intent.purpose === "public_vote_credits") {
       return json(409, { error: "PAID_VOTING_FEATURE_GATED" }, cors);
     }
-    if (intent.status !== "initialized") return json(409, { error: "PAYMENT_INTENT_NOT_INITIALIZABLE" }, cors);
-
     await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
     if (!user.email) return json(400, { error: "ACCOUNT_EMAIL_REQUIRED" }, cors);
+
+    // A completed attempt is reusable even though the payment intent has moved to
+    // pending. In-flight/unknown attempts are never automatically retried.
+    const { data: priorAttempt, error: priorAttemptError } = await admin
+      .from("payment_initialization_attempts")
+      .select("status,authorization_url,access_code")
+      .eq("payment_intent_id", intent.id)
+      .maybeSingle();
+    if (priorAttemptError) return json(500, { error: "PAYMENT_INITIALIZATION_STATE_UNAVAILABLE" }, cors);
+    if (priorAttempt?.status === "initialized" && priorAttempt.authorization_url && priorAttempt.access_code) {
+      return json(200, {
+        authorizationUrl: priorAttempt.authorization_url,
+        accessCode: priorAttempt.access_code,
+        reference: intent.provider_reference,
+        duplicate: true,
+      }, cors);
+    }
+    if (priorAttempt) {
+      return json(409, { error: "PAYMENT_INITIALIZATION_OUTCOME_UNKNOWN", message: "This reference may already have been submitted to Paystack. Reconcile it before retrying." }, cors);
+    }
+    if (intent.status !== "initialized") return json(409, { error: "PAYMENT_INTENT_NOT_INITIALIZABLE" }, cors);
 
     // The unique payment_intent_id is the database-level serialization point.
     // If another request already claimed this intent, reuse a completed checkout
