@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
+import { validatePaystackAuthorizationUrl } from "../../lib/payments/paystack";
 
 export type PlatformFeeCheckoutState = {
   error?: string;
@@ -83,12 +84,7 @@ export async function startPlatformFeeCheckoutAction(
     return { error: "Paystack checkout could not be started. The invoice is retained; check its status before retrying." };
   }
 
-  let authorizationUrl: URL;
-  try { authorizationUrl = new URL(responseData.authorizationUrl); } catch {
-    return { error: "Paystack returned an invalid checkout address. No redirect was made." };
-  }
-  if (authorizationUrl.protocol !== "https:" || !authorizationUrl.hostname.endsWith(".paystack.com")) {
-    return { error: "Paystack returned an untrusted checkout address. No redirect was made." };
-  }
-  return { authorizationUrl: authorizationUrl.toString() };
+  const authorizationUrl = validatePaystackAuthorizationUrl(responseData.authorizationUrl);
+  if (!authorizationUrl) return { error: "Paystack returned an untrusted checkout address. No redirect was made." };
+  return { authorizationUrl };
 }
