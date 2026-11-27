@@ -1,4 +1,4 @@
-import { adminClient, assertOrganizationManager, authenticate, corsHeaders, json, paystackRequest, paymentsModeEnabled } from "../_shared/paystack.ts";
+import { adminClient, assertOrganizationManager, authenticate, corsHeaders, json, paystackRequest, paymentPurposeEnabled, paymentsModeEnabled } from "../_shared/paystack.ts";
 
 type PaystackVerifyResponse = {
   status: boolean;
@@ -35,7 +35,7 @@ Deno.serve(async (request: Request) => {
       .maybeSingle();
     if (error || !intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" }, cors);
     if (!intent.organization_id) return json(409, { error: "PAYMENT_INTENT_REQUIRES_ORGANIZATION" }, cors);
-    if (intent.purpose === "public_vote_credits") return json(409, { error: "PAID_VOTING_FEATURE_GATED" }, cors);
+    if (!paymentPurposeEnabled(intent.purpose)) return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);\n    if (intent.purpose === "public_vote_credits") return json(409, { error: "PAID_VOTING_FEATURE_GATED" }, cors);
     await assertOrganizationManager(caller, intent.organization_id, user.id);
 
     const result = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(body.reference)}`);
