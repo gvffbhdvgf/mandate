@@ -34,13 +34,29 @@ export function OrganizationMembersPanel({
   members,
   invitations,
   actorRole,
+  memberNotice,
+  memberError,
 }: {
   organizationId: string;
   members: Member[];
   invitations: Invitation[];
   actorRole: string;
+  memberNotice?: string;
+  memberError?: string;
 }) {
   const [state, action, pending] = useActionState(createOrganizationInvitationAction, {} as MemberActionState);
+  const notices: Record<string, string> = {
+    "role-updated": "Member role updated. Their new permissions are now active.",
+    "member-revoked": "Member access revoked. They can no longer access this organization.",
+    "invitation-revoked": "Invitation revoked. The pending invitation link can no longer be used.",
+  };
+  const errors: Record<string, string> = {
+    "confirm-member": "Confirm that you want to revoke this member’s access.",
+    "confirm-invitation": "Confirm that you want to revoke this invitation.",
+    "role-update-failed": "The member role could not be updated. Refresh and try again.",
+    "revoke-member-failed": "Member access could not be revoked. Refresh and try again.",
+    "revoke-invitation-failed": "The invitation could not be revoked. Refresh and try again.",
+  };
   const availableRoles = actorRole === "owner"
     ? roles
     : roles.filter(([value]) => !["admin", "finance_manager"].includes(value));
@@ -52,6 +68,8 @@ export function OrganizationMembersPanel({
         <span className="count">{members.length}</span>
       </div>
       <p className="muted">Invite colleagues by email and assign only the access they need. Invitations expire after seven days and can be revoked at any time.</p>
+      {memberNotice && notices[memberNotice] && <p className="form-success" role="status">{notices[memberNotice]}</p>}
+      {memberError && errors[memberError] && <p className="form-error" role="alert">{errors[memberError]}</p>}
 
       <div className="member-invite-box">
         <h3>Invite a member</h3>
@@ -92,6 +110,7 @@ export function OrganizationMembersPanel({
                   <form action={revokeOrganizationMemberAction}>
                     <input type="hidden" name="organizationId" value={organizationId} />
                     <input type="hidden" name="memberId" value={member.member_id} />
+                    <label className="form-hint"><input type="checkbox" name="confirmRevokeMember" value="true" required /> Confirm revoke access</label>
                     <button className="quiet-button danger-button">Revoke access</button>
                   </form>
                 </>
@@ -114,6 +133,7 @@ export function OrganizationMembersPanel({
             <form action={revokeOrganizationInvitationAction}>
               <input type="hidden" name="organizationId" value={organizationId} />
               <input type="hidden" name="invitationId" value={invitation.id} />
+              <label className="form-hint"><input type="checkbox" name="confirmRevokeInvitation" value="true" required /> Confirm revoke invitation</label>
               <button className="quiet-button danger-button">Revoke invitation</button>
             </form>
           </article>
