@@ -424,3 +424,29 @@ test("verified provider amounts are captured even when they mismatch the intent"
   assert.match(verify, /provider_status: payment\.status/);
   assert.match(smoke, /rollback;/);
 });
+
+
+test("public participant verification uses email OTP and keeps identity out of ballots", async () => {
+  const migration = await read("../supabase/migrations/20261127180000_0040_public_participant_email_identity.sql");
+  const smoke = await read("../supabase/tests/public_participant_email_identity_smoke.sql");
+  const details = await read("../supabase/functions/public-election-details/index.ts");
+  const session = await read("../supabase/functions/public-participant-session/index.ts");
+  const actions = await read("../app/actions/public-vote.ts");
+  const page = await read("../app/public-vote/[slug]/page.tsx");
+  const form = await read("../app/public-vote/[slug]/participant-verification-form.tsx");
+  const config = await read("../supabase/config.toml");
+  assert.match(migration, /auth_user_id uuid references auth\.users/);
+  assert.match(migration, /unique \(election_id, auth_user_id\)/);
+  assert.match(smoke, /BALLOT_MUST_NOT_CONTAIN_PARTICIPANT_OR_CONTACT_IDENTITY/);
+  assert.match(details, /\.eq\("voting_mode", "public_paid"\)/);
+  assert.match(session, /user\.email_confirmed_at/);
+  assert.match(session, /verification_status: "verified"/);
+  assert.match(session, /\.eq\("auth_user_id", user\.id\)/);
+  assert.match(actions, /signInWithOtp/);
+  assert.match(actions, /shouldCreateUser: true/);
+  assert.match(actions, /verifyOtp/);
+  assert.match(form, /Six-digit email code/);
+  assert.match(page, /ParticipantVerificationForm/);
+  assert.match(config, /\[functions\.public-election-details\]\nverify_jwt = false/);
+  assert.match(config, /\[functions\.public-participant-session\]\nverify_jwt = true/);
+});
