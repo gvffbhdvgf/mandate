@@ -101,9 +101,12 @@ export async function revokeOrganizationInvitationAction(formData: FormData): Pr
   const organizationId = String(formData.get("organizationId") ?? "");
   const invitationId = String(formData.get("invitationId") ?? "");
   if (!uuidSchema.safeParse(organizationId).success || !uuidSchema.safeParse(invitationId).success) return;
+  if (formData.get("confirmRevokeInvitation") !== "true") redirect(`/organizations/${organizationId}?memberError=confirm-invitation`);
   const { supabase } = await requireUser();
-  await supabase.rpc("revoke_organization_invitation", { p_invitation_id: invitationId });
+  const { error } = await supabase.rpc("revoke_organization_invitation", { p_invitation_id: invitationId });
+  if (error) redirect(`/organizations/${organizationId}?memberError=revoke-invitation-failed`);
   revalidatePath(`/organizations/${organizationId}`);
+  redirect(`/organizations/${organizationId}?memberNotice=invitation-revoked`);
 }
 
 export async function changeOrganizationMemberRoleAction(formData: FormData): Promise<void> {
@@ -112,15 +115,20 @@ export async function changeOrganizationMemberRoleAction(formData: FormData): Pr
   const role = String(formData.get("role") ?? "");
   if (!uuidSchema.safeParse(organizationId).success || !uuidSchema.safeParse(memberId).success || !roles.includes(role as typeof roles[number])) return;
   const { supabase } = await requireUser();
-  await supabase.rpc("change_organization_member_role", { p_member_id: memberId, p_role: role });
+  const { error } = await supabase.rpc("change_organization_member_role", { p_member_id: memberId, p_role: role });
+  if (error) redirect(`/organizations/${organizationId}?memberError=role-update-failed`);
   revalidatePath(`/organizations/${organizationId}`);
+  redirect(`/organizations/${organizationId}?memberNotice=role-updated`);
 }
 
 export async function revokeOrganizationMemberAction(formData: FormData): Promise<void> {
   const organizationId = String(formData.get("organizationId") ?? "");
   const memberId = String(formData.get("memberId") ?? "");
   if (!uuidSchema.safeParse(organizationId).success || !uuidSchema.safeParse(memberId).success) return;
+  if (formData.get("confirmRevokeMember") !== "true") redirect(`/organizations/${organizationId}?memberError=confirm-member`);
   const { supabase } = await requireUser();
-  await supabase.rpc("revoke_organization_member", { p_member_id: memberId });
+  const { error } = await supabase.rpc("revoke_organization_member", { p_member_id: memberId });
+  if (error) redirect(`/organizations/${organizationId}?memberError=revoke-member-failed`);
   revalidatePath(`/organizations/${organizationId}`);
+  redirect(`/organizations/${organizationId}?memberNotice=member-revoked`);
 }
