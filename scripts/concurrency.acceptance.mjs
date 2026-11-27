@@ -81,16 +81,25 @@ async function createFixture() {
     );
   });
   const feeIntent = feeIntentResult.rows[0].result;
-  await admin.query(`update public.payment_intents
-    set status='success',
-        provider_transaction_id=$2,
-        provider_status='success',
-        provider_amount_minor=$3,
-        provider_currency='KES',
-        verified_at=now()
-    where id=$1 and purpose='platform_fee' and status='initialized'`,
-    [feeIntent.paymentIntentId, `test-fee-${suffix}`, feeIntent.amountMinor],
-  );
+  await admin.query('begin');
+  try {
+    await admin.query('set local role service_role');
+    await admin.query("select set_config('request.jwt.claim.role','service_role',true)");
+    await admin.query(`update public.payment_intents
+      set status='success',
+          provider_transaction_id=$2,
+          provider_status='success',
+          provider_amount_minor=$3,
+          provider_currency='KES',
+          verified_at=now()
+      where id=$1 and purpose='platform_fee' and status='initialized'`,
+      [feeIntent.paymentIntentId, `test-fee-${suffix}`, feeIntent.amountMinor],
+    );
+    await admin.query('commit');
+  } catch (error) {
+    await admin.query('rollback');
+    throw error;
+  }
   const feeState = await admin.query(
     'select platform_fee_status from public.elections where id=$1', [electionId],
   );
