@@ -387,6 +387,7 @@ test("verified Paystack success atomically posts an unallocated balanced suspens
 
 test("Paystack refund and dispute webhooks freeze payments for explicit reconciliation", async () => {
   const migration = await read("../supabase/migrations/20261127160000_0038_paystack_refund_dispute_exceptions.sql");
+  const verifiedMigration = await read("../supabase/migrations/20261127170000_0039_verified_provider_amount_capture.sql");
   const smoke = await read("../supabase/tests/paystack_refund_dispute_exception_smoke.sql");
   const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
   assert.match(migration, /apply_paystack_payment_exception_event/);
@@ -399,8 +400,8 @@ test("Paystack refund and dispute webhooks freeze payments for explicit reconcil
   assert.match(webhook, /eventType\.startsWith\("charge\.dispute\."\)/);
   assert.match(webhook, /apply_verified_paystack_payment_exception_event/);
   assert.match(webhook, /PAYSTACK_EXCEPTION_VERIFICATION_UNAVAILABLE/);
-  assert.match(migration, /apply_verified_paystack_payment_exception_event/);
-  assert.match(migration, /reversal pending/);
+  assert.match(verifiedMigration, /apply_verified_paystack_payment_exception_event/);
+  assert.match(verifiedMigration, /reversal pending/);
   assert.match(webhook, /verified\.data\.reference !== reference/);
   assert.match(webhook, /PAYSTACK_REFERENCE_MISMATCH/);
   assert.match(webhook, /reconciliationRequired: true/);
