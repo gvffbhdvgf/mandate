@@ -205,6 +205,16 @@ begin
     -- Provider confirmed receipt but the payment did not match the intent.
     -- Record the actual amount in suspense without recognizing revenue or
     -- fulfilling entitlements; reconciliation can resolve the exception.
+    if exists (
+      select 1 from public.ledger_transactions
+      where idempotency_key = 'paystack-payment-receipt:' || new.id::text
+        and status = 'posted'
+    ) then
+      -- The receipt was already captured on the successful transition. A later
+      -- refund/dispute exception freezes the intent but must not repost it.
+      return new;
+    end if;
+
     v_receipt_amount := new.provider_amount_minor;
     v_transaction_type := 'payment_receipt_pending_allocation';
     v_description := 'Verified Paystack amount mismatch held in suspense';
