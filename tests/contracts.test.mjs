@@ -615,7 +615,7 @@ test("registered elections use a versioned server-priced platform fee before inv
   assert.match(smoke, /VERIFIED_PLATFORM_FEE_PAYMENT_MUST_MARK_ELECTION_PAID/);
   assert.match(action, /create_platform_fee_payment_intent/);
   assert.match(action, /paystack-initialize/);
-  assert.match(action, /authorizationUrl\.hostname\.endsWith\("\.paystack\.com"\)/);
+  assert.match(action, /validatePaystackAuthorizationUrl/);
   assert.match(component, /KSh 20 per voter · KSh 500 minimum/);
   assert.match(component, /Continue to secure payment/);
   assert.match(page, /get_platform_fee_quote/);
