@@ -85,6 +85,9 @@ begin
   update public.payment_intents
   set status = v_next_status,
       provider_transaction_id = p_provider_transaction_id,
+      provider_status = p_provider_status,
+      provider_amount_minor = p_amount_minor,
+      provider_currency = p_currency,
       verified_at = pg_catalog.now()
   where id = v_intent.id;
 
