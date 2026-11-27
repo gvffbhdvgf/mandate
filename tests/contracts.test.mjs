@@ -298,7 +298,8 @@ test("ledger posting is balanced, append-only and idempotent", async () => {
   assert.match(migration, /grant execute[\s\S]*to service_role/);
   assert.match(smoke, /LEDGER_DUPLICATE_NOT_IDEMPOTENT/);
   assert.match(smoke, /UNBALANCED_LEDGER_POST_MUST_FAIL/);
-  assert.match(smoke, /POSTED_LEDGER_ENTRY_MUTATION_MUST_FAIL/);\n  assert.match(smoke, /POSTED_LEDGER_TRANSACTION_MUST_REJECT_NEW_ENTRIES/);
+  assert.match(smoke, /POSTED_LEDGER_ENTRY_MUTATION_MUST_FAIL/);
+  assert.match(smoke, /POSTED_LEDGER_TRANSACTION_MUST_REJECT_NEW_ENTRIES/);
 });
 
 test("concurrency fixtures record authority confirmation before opening", async () => {
