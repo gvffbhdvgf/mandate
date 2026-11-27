@@ -25,18 +25,24 @@ test("confirmation resend uses Supabase signup resend and a same-origin callback
   assert.match(login, /Didn't receive the confirmation email/);
 });
 
+test("confirmation notice only promises invitation acceptance for invitation destinations", async () => {
+  const login = await read("../app/login/login-form.tsx");
+  assert.match(login, /next === "\\/invitations\\/accept"/);
+  assert.match(login, /to continue\\./);
+});
+
 test("auth callback reports expired or failed confirmation instead of silently redirecting", async () => {
   const callback = await read("../app/auth/callback/route.ts");
   assert.match(callback, /callbackFailureUrl/);
-  assert.match(callback, /providerError \|\| !code/);
-  assert.match(callback, /exchangeCodeForSession\(code\)/);
+  assert.match(callback, /providerError \\|\\| !code/);
+  assert.match(callback, /exchangeCodeForSession\\(code\\)/);
   assert.match(callback, /confirmation_failed/);
-  assert.match(callback, /forgot-password\?notice=expired/);
+  assert.match(callback, /forgot-password\\?notice=expired/);
   assert.match(callback, /\[auth\.callback\] Code exchange failed/);
 });
 
 test("password recovery callback keeps its dedicated password update route", async () => {
   const callback = await read("../app/auth/callback/route.ts");
-  assert.match(callback, /next === "\/update-password"/);
+  assert.match(callback, /next === "\\/update-password"/);
   assert.match(callback, /returnTo/);
 });
