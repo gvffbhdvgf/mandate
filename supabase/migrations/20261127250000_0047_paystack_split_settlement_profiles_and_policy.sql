@@ -303,7 +303,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 begin
   if old.provider_verified_at is not null and (
     new.organization_id is distinct from old.organization_id
@@ -319,14 +319,14 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 create or replace function mandate_private.guard_public_vote_fee_policy()
 returns trigger
 language plpgsql
 security definer
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 begin
   if old.status <> 'draft' and (
     new.version is distinct from old.version
@@ -355,7 +355,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 revoke all on function mandate_private.guard_paystack_subaccount_profile() from public, anon, authenticated;
 revoke all on function mandate_private.guard_public_vote_fee_policy() from public, anon, authenticated;
