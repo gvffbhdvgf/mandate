@@ -729,3 +729,17 @@ test("registered-election fees and public vote credits share the same Paystack c
   assert.match(verify, /intent\.purpose === "public_vote_credits"/);
   assert.match(verify, /apply_verified_paystack_public_vote_payment/);
 });
+
+
+test("all Paystack checkout purposes share trusted hosted-redirect validation", async () => {
+  const { validatePaystackAuthorizationUrl } = await import("../lib/payments/paystack.ts");
+  const platformFee = await read("../app/actions/payments.ts");
+  const publicVote = await read("../app/actions/public-vote.ts");
+  assert.equal(validatePaystackAuthorizationUrl("https://checkout.paystack.com/example"), "https://checkout.paystack.com/example");
+  assert.equal(validatePaystackAuthorizationUrl("http://checkout.paystack.com/example"), null);
+  assert.equal(validatePaystackAuthorizationUrl("https://paystack.com.example.org/fake"), null);
+  assert.equal(validatePaystackAuthorizationUrl("javascript:alert(1)"), null);
+  assert.equal(validatePaystackAuthorizationUrl(null), null);
+  assert.match(platformFee, /validatePaystackAuthorizationUrl/);
+  assert.match(publicVote, /validatePaystackAuthorizationUrl/);
+});
