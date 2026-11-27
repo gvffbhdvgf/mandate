@@ -34,7 +34,7 @@ Deno.serve(async (request: Request) => {
       .eq("provider_reference", body.reference)
       .maybeSingle();
     if (error || !intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" }, cors);
-    if (!paymentPurposeEnabled(intent.purpose)) return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);
+    if (!paymentsModeEnabled()) return json(503, { error: "PAYMENT_PROVIDER_CONFIGURATION_UNAVAILABLE" }, cors);
     if (intent.purpose === "public_vote_credits") {
       if (intent.organization_id || !intent.election_id || !intent.participant_id || !user.email_confirmed_at) {
         return json(403, { error: "VERIFIED_PARTICIPANT_REQUIRED" }, cors);
