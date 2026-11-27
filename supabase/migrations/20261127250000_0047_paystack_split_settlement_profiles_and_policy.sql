@@ -9,6 +9,8 @@ create table public.organization_paystack_subaccounts (
   provider_subaccount_code text not null unique
     check (provider_subaccount_code ~ '^[A-Za-z0-9_-]{4,128}$'),
   currency character(3) not null default 'KES' check (currency = 'KES'),
+  provider_percentage_charge_basis_points integer not null default 0
+    check (provider_percentage_charge_basis_points between 0 and 9999),
   status text not null default 'pending'
     check (status in ('pending','verified','suspended','revoked')),
   provider_verified_at timestamptz,
@@ -31,7 +33,7 @@ create index organization_paystack_subaccounts_org_status_idx
   on public.organization_paystack_subaccounts(organization_id, status, created_at desc);
 
 comment on table public.organization_paystack_subaccounts is
-  'Server-only Paystack organizer subaccount references. Stores provider code only, never bank-account details. A verified profile must be supported by provider KYC/beneficiary verification.';
+  'Server-only Paystack organizer subaccount references. Stores provider code and the verified main-account percentage charge in basis points, never bank-account details. A verified profile must be supported by provider KYC/beneficiary verification.';
 
 create table public.public_vote_platform_fee_policies (
   version integer primary key check (version > 0),
@@ -218,6 +220,11 @@ begin
     raise exception 'PUBLIC_VOTE_PLATFORM_FEE_EXCEEDS_PAYMENT' using errcode = '23514';
   end if;
 
+  if new.split_fee_type = 'percentage'
+    and v_profile.provider_percentage_charge_basis_points is distinct from new.split_percentage_basis_points then
+    raise exception 'SUBACCOUNT_PERCENTAGE_DOES_NOT_MATCH_FEE_POLICY' using errcode = '23514';
+  end if;
+
   return new;
 end;
 $$;
@@ -302,6 +309,7 @@ begin
     or new.provider is distinct from old.provider
     or new.provider_subaccount_code is distinct from old.provider_subaccount_code
     or new.currency is distinct from old.currency
+    or new.provider_percentage_charge_basis_points is distinct from old.provider_percentage_charge_basis_points
     or new.provider_verified_at is distinct from old.provider_verified_at
     or new.verified_by is distinct from old.verified_by
     or new.created_by is distinct from old.created_by
