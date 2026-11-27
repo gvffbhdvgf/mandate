@@ -27,7 +27,7 @@ values(current_setting('test.org_id')::uuid,current_setting('test.election_id'):
  encode(extensions.digest(convert_to('secret-test-token-1234567890-abcdefghijklmnopqrstuvwxyz','UTF8'),'sha256'),'hex'),now());
 set local role authenticated;
 select set_config('request.jwt.claim.sub','99999999-9999-4999-8999-999999999999',true);
-do $
+do $$
 declare v_quote jsonb; v_intent jsonb;
 begin
   v_quote:=public.get_platform_fee_quote(current_setting('test.election_id')::uuid);
@@ -38,7 +38,7 @@ begin
     (v_quote->>'policyVersion')::integer
   );
   perform set_config('test.platform_fee_intent_id',v_intent->>'paymentIntentId',true);
-end $;
+end $$;
 reset role;
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
