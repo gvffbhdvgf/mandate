@@ -12,8 +12,7 @@ Deno.serve(async (request: Request) => {
 
   try {
     const { user } = await authenticate(request);
-    const verifiedAt = user.email_confirmed_at ?? user.confirmed_at;
-    if (!user.email || !verifiedAt) {
+    if (!user.email || !user.email_confirmed_at) {
       return json(403, { error: "VERIFIED_EMAIL_REQUIRED" }, cors);
     }
 
