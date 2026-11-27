@@ -156,6 +156,23 @@ Deno.serve(async (request: Request) => {
     return json(409, { error: "PAYSTACK_AMOUNT_INVALID" });
   }
 
+  if (verified.data.reference !== reference) {
+    const { error } = await admin.from("payment_events").update({
+      processing_status: "failed",
+      processed_at: null,
+      redacted_payload: {
+        status: verified.data.status,
+        amount: String(verified.data.amount),
+        currency: verified.data.currency,
+        transaction_id: String(verified.data.id),
+        verified_reference: verified.data.reference,
+        reason: "PAYSTACK_REFERENCE_MISMATCH",
+      },
+    }).eq("id", eventId);
+    if (error) return json(500, { error: "WEBHOOK_RECONCILIATION_STATE_PERSIST_FAILED" });
+    return json(200, { received: true, processed: false, reconciliationRequired: true, reason: "PAYSTACK_REFERENCE_MISMATCH" });
+  }
+
   const { data: result, error: applyError } = await admin.rpc("apply_verified_paystack_webhook_event", {
     p_event_id: eventId,
     p_provider_reference: reference,
