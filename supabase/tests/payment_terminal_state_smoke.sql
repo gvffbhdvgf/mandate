@@ -2,26 +2,26 @@
 begin;
 
 insert into public.payment_intents(
-  purpose, provider, provider_reference, amount_minor, currency, status,
+  id, purpose, provider, provider_reference, amount_minor, currency, status,
   provider_transaction_id, idempotency_key
 ) values (
-  'platform_fee', 'paystack', 'mandate-terminal-state-smoke-20261127',
+  '11111111-1111-4111-8111-111111111135', 'platform_fee', 'paystack', 'mandate-terminal-state-smoke-20261127',
   2500, 'KES', 'refunded', 'paystack-original-transaction',
   'mandate-terminal-state-smoke-20261127'
 );
 
 insert into public.payment_events(
-  provider, provider_event_key, provider_reference, event_type,
+  id, provider, provider_event_key, provider_reference, event_type,
   signature_verified, processing_status
 ) values (
-  'paystack', 'paystack:charge.success:terminal-smoke',
+  '11111111-1111-4111-8111-111111111136', 'paystack', 'paystack:charge.success:terminal-smoke',
   'mandate-terminal-state-smoke-20261127', 'charge.success',
   true, 'received'
 );
 
 set local role service_role;
 select public.apply_verified_paystack_webhook_event(
-  (select id from public.payment_events where provider_event_key='paystack:charge.success:terminal-smoke'),
+  '11111111-1111-4111-8111-111111111136',
   'mandate-terminal-state-smoke-20261127',
   'paystack-original-transaction',
   'success',
