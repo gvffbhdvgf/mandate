@@ -645,3 +645,19 @@ test("manual voter entry reuses private staging, server validation and the exist
   assert.match(page, /ManualVoterForm/);
   assert.match(page, /CommitImportForm/);
 });
+
+
+test("unconfirmed accounts receive explicit sign-in guidance and can request a safe resend", async () => {
+  const actions = await read("../app/actions/auth.ts");
+  const form = await read("../app/login/login-form.tsx");
+  assert.match(actions, /email_not_confirmed/);
+  assert.match(actions, /needsConfirmation: true/);
+  assert.match(actions, /resendConfirmationAction/);
+  assert.match(actions, /type: "signup"/);
+  assert.match(actions, /If this address is eligible for confirmation/);
+  assert.match(actions, /safeInternalPath/);
+  assert.match(form, /waiting for email confirmation/);
+  assert.match(form, /Resend confirmation email/);
+  assert.match(form, /state\.needsConfirmation/);
+  assert.match(form, /role="status"/);
+});

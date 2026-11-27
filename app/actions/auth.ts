@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { safeInternalPath } from "../../lib/navigation";
 
-export type AuthActionState = { error?: string };
+export type AuthActionState = { error?: string; message?: string; needsConfirmation?: boolean };
 
 type AuthProviderError = {
   code?: string;
@@ -57,6 +57,9 @@ export async function signInAction(
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error?.code === "email_not_confirmed") {
+    return { error: "Your account is awaiting email confirmation. Open the confirmation email before signing in.", needsConfirmation: true };
+  }
   if (error) return { error: "We could not sign you in. Check your details and try again." };
 
   redirect(next);
@@ -104,6 +107,46 @@ export async function signUpAction(
   if (authError) return { error: signUpErrorMessage(authError) };
   if (sessionCreated) redirect(next);
   redirect(`/login?notice=confirm&next=${encodeURIComponent(next)}`);
+}
+
+export async function resendConfirmationAction(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const next = safeInternalPath(String(formData.get("next") ?? ""));
+  if (!email || email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    return { error: "Enter a valid email address before requesting another confirmation email." };
+  }
+
+  const requestHeaders = await headers();
+  const origin = requestHeaders.get("origin")
+    ?? (requestHeaders.get("host") ? `https://${requestHeaders.get("host")}` : "http://localhost:3001");
+  const callbackUrl = new URL("/auth/callback", origin);
+  callbackUrl.searchParams.set("next", next);
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: callbackUrl.toString() },
+    });
+    if (error) {
+      console.error("[auth.confirmation.resend] Supabase rejected resend", {
+        code: error.code ?? "unknown",
+        status: error.status ?? null,
+      });
+    }
+  } catch (cause) {
+    console.error("[auth.confirmation.resend] Unexpected resend exception", {
+      name: cause instanceof Error ? cause.name : "unknown",
+    });
+  }
+
+  return {
+    message: "If this address is eligible for confirmation, a new email will be sent. Check your inbox and spam folder.",
+  };
 }
 
 export async function signOutAction() {
