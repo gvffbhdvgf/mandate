@@ -129,7 +129,7 @@ export async function stageVoterImportAction(
     return { error: "The voter import could not be validated. Check the CSV and try again." };
   }
 
-  redirect(`/organizations/${organizationId}/elections/${electionId}?batchId=${data.batchId}`);
+  redirect(`/organizations/${organizationId}/elections/${electionId}?batchId=${data.batchId}&validated=1&source=csv`);
 }
 
 export async function stageManualVoterAction(
@@ -203,14 +203,13 @@ export async function stageManualVoterAction(
     return { error: "The voter could not be validated. Check the details and try again." };
   }
 
-  redirect(`/organizations/${organizationId}/elections/${electionId}?batchId=${data.batchId}`);
+  redirect(`/organizations/${organizationId}/elections/${electionId}?batchId=${data.batchId}&validated=1&source=manual`);
 }
 
 export async function commitVoterImportAction(
   _previousState: VoterImportActionState,
   formData: FormData,
 ): Promise<VoterImportActionState> {
-  if (formData.get("confirmImport") !== "true") return { error: "Review the voter count and confirm before adding the register." };
   const organizationId = String(formData.get("organizationId") ?? "");
   const electionId = String(formData.get("electionId") ?? "");
   const batchId = String(formData.get("batchId") ?? "");
@@ -225,5 +224,5 @@ export async function commitVoterImportAction(
   const { error } = await supabase.rpc("commit_voter_import", { p_batch_id: batchId });
   if (error) return { error: "The voter register could not be committed. Check that the election is still a draft and retry." };
 
-  redirect(`/organizations/${organizationId}/elections/${electionId}`);
+  redirect(`/organizations/${organizationId}/elections/${electionId}?imported=1`);
 }
