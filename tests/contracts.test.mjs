@@ -588,6 +588,6 @@ test("registered elections use a versioned server-priced platform fee before inv
   assert.match(page, /PlatformFeeCheckout/);
   assert.match(invitations, /PLATFORM_FEE_PAYMENT_REQUIRED/);
   assert.match(verify, /intent\.purpose === "platform_fee"/);
-  assert.match(callback, /organizations\\\\\\/\[0-9a-f-\]\{36\}/);
+  assert.match(callback, /safeReturnPath/);
   assert.match(docs, /KES 2,000 per eligible voter and KES 50,000 minimum/);
 });
