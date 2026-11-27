@@ -53,13 +53,6 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 - Paystack exposes settlement listing and settlement transaction listing; large settlements must be paged until `meta.pageCount` is exhausted. The export URL is short-lived, so do not persist it as a durable import source. See [Settlement API](https://paystack.com/docs/api/settlement/) and [Settlement Transactions](https://paystack.com/docs/payments/settlement-transactions/).
 - **Still outstanding:** secure operator authorization and ingestion workflow, pagination/retry/idempotency for provider imports, aggregate gross/fees/net-to-bank reconciliation, exception review and resolution workflow, and accounting-approved fee/refund/chargeback/purpose allocation. The settlement-ready live switch remains off.
 
-## Payment exception queue — migration 0045
-
-- Migration `0045_paystack_payment_exception_queue` adds a private, read-only view over Paystack payment intents with exception status or signed refund/dispute events.
-- The view shows expected versus provider-observed amount/currency, provider transaction facts, related refund/dispute event types, whether the suspense receipt exists, and any imported settlement reconciliation statuses.
-- It intentionally omits customer contact details and raw provider payloads. Access is restricted to `service_role`; no browser role can read it.
-- This is an operator review queue, not a resolution engine. It does not reverse ledger postings, revoke credits, decide partial-refund amounts, settle disputes, allocate fees, or authorize payouts. A reviewed resolution workflow and approval/audit model remain to be built.
-
 ## Important boundaries
 
 - Never accept client-supplied amount, fee, currency, purpose, payment status or provider reference as authoritative.
