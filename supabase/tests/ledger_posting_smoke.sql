@@ -57,6 +57,24 @@ begin
   where transaction_id = (v_result->>'id')::uuid;
   if v_entries <> 2 then raise exception 'LEDGER_DUPLICATE_CREATED_ENTRIES'; end if;
 
+  v_rejected := false;
+  begin
+    perform public.post_ledger_transaction(
+      'acceptance_payment',
+      'acceptance_test',
+      v_source,
+      'ledger-acceptance-idempotency-0001',
+      'Rollback-only ledger acceptance fixture',
+      jsonb_build_array(
+        jsonb_build_object('account_id', v_clearing, 'direction', 'debit', 'amount_minor', 12501, 'currency', 'KES'),
+        jsonb_build_object('account_id', v_revenue, 'direction', 'credit', 'amount_minor', 12501, 'currency', 'KES')
+      )
+    );
+  exception when unique_violation then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'LEDGER_IDEMPOTENCY_CONFLICT_MUST_FAIL'; end if;
+
   begin
     perform public.post_ledger_transaction(
       'acceptance_payment',
