@@ -1,13 +1,22 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { requestPublicParticipantOtp, verifyPublicParticipantOtp } from "../../actions/public-vote";
+import { initializePublicVoteCreditCheckout, requestPublicParticipantOtp, verifyPublicParticipantOtp } from "../../actions/public-vote";
 
 export function ParticipantVerificationForm({ slug }: { slug: string }) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
-  const [verified, setVerified] = useState(false);
+  const [participantElection, setParticipantElection] = useState<{
+    title: string;
+    currency: string;
+    pricePerCreditMinor: number;
+    maxCreditsPerParticipant: number;
+    endsAt: string;
+    timezone: string;
+  } | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -30,14 +39,57 @@ export function ParticipantVerificationForm({ slug }: { slug: string }) {
     startTransition(async () => {
       const result = await verifyPublicParticipantOtp(email, code, slug);
       if (result.error) setMessage(result.error);
-      else setVerified(true);
+      else if (result.election) {
+        setParticipantElection(result.election);
+        setQuantity(1);
+      }
     });
   }
 
-  if (verified) {
+  if (participantElection) {
+    const totalMinor = participantElection.pricePerCreditMinor * quantity;
     return (
       <section className="form-stack" aria-live="polite">
-        <p className="form-hint" role="status">Your email is verified for this election. The next step is checkout; payment remains unavailable until the election and payment release gates are enabled.</p>
+        <p className="form-hint" role="status">Your email is verified for this election. Your ballot choices remain separate from your payment identity.</p>
+        <form
+          className="form-stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setMessage("");
+            const key = idempotencyKey || crypto.randomUUID();
+            setIdempotencyKey(key);
+            startTransition(async () => {
+              const result = await initializePublicVoteCreditCheckout(slug, quantity, key);
+              if (result.error) setMessage(result.error);
+              else if (result.authorizationUrl) window.location.assign(result.authorizationUrl);
+            });
+          }}
+        >
+          <label>Voting credits to purchase
+            <input
+              type="number"
+              min={1}
+              max={participantElection.maxCreditsPerParticipant}
+              step={1}
+              value={quantity}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (Number.isSafeInteger(next) && next >= 1 && next <= participantElection.maxCreditsPerParticipant) {
+                  setQuantity(next);
+                  setIdempotencyKey("");
+                }
+              }}
+              required
+            />
+          </label>
+          <p className="form-hint">
+            {quantity} credit{quantity === 1 ? "" : "s"} · KSh {(totalMinor / 100).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <button className="primary-button" disabled={pending || quantity < 1 || quantity > participantElection.maxCreditsPerParticipant}>
+            {pending ? "Preparing secure checkout…" : "Continue to Paystack"}
+          </button>
+        </form>
+        {message && <p className="form-error" role="alert">{message}</p>}
       </section>
     );
   }
