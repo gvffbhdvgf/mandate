@@ -38,6 +38,7 @@ jobs:
           deno check --node-modules-dir=none supabase/functions/paystack-initialize/index.ts
           deno check --node-modules-dir=none supabase/functions/paystack-verify/index.ts
           deno check --node-modules-dir=none supabase/functions/paystack-webhook/index.ts
+          deno check --node-modules-dir=none supabase/functions/send-voter-invitations/index.ts
           deno check --node-modules-dir=none supabase/functions/public-election-details/index.ts
           deno check --node-modules-dir=none supabase/functions/public-participant-session/index.ts
           deno check --node-modules-dir=none supabase/functions/public-vote-credit-intent/index.ts
