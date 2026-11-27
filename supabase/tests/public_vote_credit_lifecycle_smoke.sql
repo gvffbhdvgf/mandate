@@ -370,11 +370,6 @@ $$;
 
 reset role;
 
--- Test-owner-only fixture isolation; service_role intentionally cannot mutate credit lots directly.
-update public.vote_credit_lots
-set entitlement_status='suspended'
-where payment_id=current_setting('test.public_credit_organizer_bearer_intent_id')::uuid;
-
 do $$
 declare
   v_failed_status text;
@@ -442,7 +437,7 @@ declare
   v_duplicate jsonb;
 begin
   v_context := public.get_public_paid_ballot_context('public-credit-acceptance');
-  if (v_context->>'creditsRemaining')::bigint <> 2 then
+  if (v_context->>'creditsRemaining')::bigint <> 4 then
     raise exception 'PUBLIC_PARTICIPANT_CONTEXT_MUST_SHOW_VERIFIED_CREDITS';
   end if;
 
@@ -490,11 +485,17 @@ begin
   select coalesce(sum(credits_consumed),0) into v_consumed
   from public.vote_credit_consumptions consumption
   join public.vote_credit_lots lot on lot.id=consumption.credit_lot_id
-  where lot.payment_id=current_setting('test.public_credit_intent_id')::uuid;
+  where lot.payment_id in (
+    current_setting('test.public_credit_intent_id')::uuid,
+    current_setting('test.public_credit_organizer_bearer_intent_id')::uuid
+  );
 
-  select credits_remaining into v_remaining
+  select coalesce(sum(credits_remaining),0) into v_remaining
   from public.vote_credit_lots
-  where payment_id=current_setting('test.public_credit_intent_id')::uuid;
+  where payment_id in (
+    current_setting('test.public_credit_intent_id')::uuid,
+    current_setting('test.public_credit_organizer_bearer_intent_id')::uuid
+  );
 
   if v_ballots <> 1 or v_controls <> 1 or v_consumed <> 2 or v_remaining <> 0 then
     raise exception 'PUBLIC_PAID_BALLOT_MUST_CONSUME_CREDITS_ONCE_AND_KEEP_BALLOT_ANONYMOUS';
