@@ -43,11 +43,15 @@ The repository's current `.github/workflows/production-deploy.yml` deploys the C
 
 ## Current verified baseline (27 November 2026)
 
-- Production Supabase project: `yhdosrhtzcsfqfuuqhsk`, status `ACTIVE_HEALTHY`, PostgreSQL 17.12.
-- Production migration history ends at `20261127100000` (`0033_election_setup_confirmation_index`). PR #19 migrations `0034–0048` are not applied.
-- Production Paystack Edge Functions are older versions than PR #19: initialize v7, verify v7, webhook v8. Settlement importer and public participant/credit functions are not deployed.
-- PR #19 current head `a7728a3b39f158b3848557586af060408eb4131c` includes migration 0048 and atomic split verification. Exact-head Mandate CI and Paystack Edge integration are in progress/completed as indicated by the linked Actions runs; database acceptance is still running. Earlier database acceptance passed on commit `4fb35e75f6bae09aa336a52e264f2b9517040db4`, validating migrations through 0047, but does not validate 0048.
-- No production migration, function, secret, Auth template, Paystack setting, release flag, charge, refund, transfer or payout was changed during preparation of this runbook.
+- Production Supabase project: `yhdosrhtzcsfqfuuqhsk`, status `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `eu-central-1`.
+- Read-only migration listing confirms production ends at version `20261127100000` (`0033_election_setup_confirmation_index`). PR #19 migrations `0034–0048` are not applied.
+- Production Paystack Edge Functions: `paystack-initialize` v7 (JWT required), `paystack-verify` v7 (JWT required), and `paystack-webhook` v8 (public provider delivery with signature verification in the function). Settlement importer and public participant/credit functions are not deployed.
+- PR #19 exact head `15641c5a1167ce3d654ecc58befb1c9566b650fc` includes migration 0048 and atomic split verification. All exact-head checks passed: [Mandate CI 46059819343](https://github.com/gvffbhdvgf/mandate/actions/runs/46059819343), [Paystack Edge integration 46059819329](https://github.com/gvffbhdvgf/mandate/actions/runs/46059819329), and [database acceptance 46059819351](https://github.com/gvffbhdvgf/mandate/actions/runs/46059819351). Database acceptance applied every repository migration to a disposable Supabase stack, passed every rollback-only SQL acceptance test, and passed independent-session concurrency tests.
+- The prior database failure on `c7b509a` was a test-fixture expectation error: three credits were issued across two verified split purchases, two were consumed, and one correctly remained unspent. The assertion was corrected in `15641c5`; no payment or migration implementation code changed for that fix.
+- Production Security Advisor currently reports one WARN for disabled leaked-password protection and 16 INFO default-deny RLS/no-policy notices. Performance Advisor reports 45 unused-index INFO notices. These were read-only checks; do not purchase a plan upgrade solely to clear the warning without confirming availability and cost.
+- Read-only Paystack dashboard inspection reached the merchant login page; no authenticated session was available. Callback/webhook URLs and event subscriptions therefore remain unverified. No credentials were entered.
+- PR #19 remains draft and unmerged. It is 0 commits behind main, 340 commits ahead by history, with 62 files in the net diff. A squash merge is preferred if it is later approved, to avoid importing noisy branch history.
+- No production migration, function, secret, Auth template, Paystack setting, release flag, charge, refund, transfer or payout was changed during this verification.
 
 ## Evidence links
 
