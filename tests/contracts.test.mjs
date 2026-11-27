@@ -756,10 +756,10 @@ test("committing a staged voter register requires explicit administrator confirm
 
 
 test("member access controls show pending feedback while server actions are running", async () => {
-  const button = await read("../app/components/pending-submit-button.tsx");
   const panel = await read("../app/organizations/[organizationId]/members-panel.tsx");
-  assert.match(button, /useFormStatus/);
-  assert.match(button, /disabled=\{pending\}/);
+  assert.match(panel, /function PendingMemberForm/);
+  assert.match(panel, /useState/);
+  assert.match(panel, /disabled=\{pending\}/);
   assert.match(panel, /Saving role/);
   assert.match(panel, /Revoking access/);
   assert.match(panel, /Revoking invitation/);
