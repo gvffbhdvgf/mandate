@@ -36,6 +36,15 @@ Deno.serve(async (request: Request) => {
 
     const providerReference = `mandate_${crypto.randomUUID().replaceAll("-", "")}`;
     const admin = adminClient();
+    const { data: releaseFlags, error: releaseFlagsError } = await admin
+      .from("platform_payment_feature_flags")
+      .select("public_vote_credits_enabled")
+      .eq("singleton", true)
+      .maybeSingle();
+    if (releaseFlagsError || releaseFlags?.public_vote_credits_enabled !== true) {
+      return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);
+    }
+
     const { data, error } = await admin.rpc("create_public_vote_credit_payment_intent", {
       p_auth_user_id: user.id,
       p_election_slug: slug,
