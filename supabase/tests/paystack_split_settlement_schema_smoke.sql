@@ -53,6 +53,29 @@ begin
     or not has_table_privilege('service_role','public.public_vote_platform_fee_policies','select') then
     raise exception 'SERVICE_ROLE_MUST_READ_SPLIT_CONFIGURATION';
   end if;
+
+  if has_function_privilege('anon',
+      'public.apply_verified_paystack_public_vote_split(uuid,text,text,text,bigint,text,jsonb,text,numeric)','execute')
+    or has_function_privilege('authenticated',
+      'public.apply_verified_paystack_public_vote_split(uuid,text,text,text,bigint,text,jsonb,text,numeric)','execute')
+    or not has_function_privilege('service_role',
+      'public.apply_verified_paystack_public_vote_split(uuid,text,text,text,bigint,text,jsonb,text,numeric)','execute') then
+    raise exception 'PUBLIC_VOTE_SPLIT_RPC_MUST_BE_SERVICE_ROLE_ONLY';
+  end if;
+
+  if not exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.payment_intents'::regclass
+      and tgname = 'payment_intents_require_verified_public_vote_split'
+      and not tgisinternal
+  ) then
+    raise exception 'PUBLIC_VOTE_CREDIT_SUCCESS_MUST_REQUIRE_VERIFIED_SPLIT';
+  end if;
+
+  if position('PUBLIC_VOTE_SPLIT_VERIFICATION_REQUIRED' in
+      pg_get_functiondef('mandate_private.require_verified_public_vote_split()'::regprocedure)) = 0 then
+    raise exception 'PUBLIC_VOTE_SPLIT_GUARD_FUNCTION_MUST_REJECT_UNVERIFIED_SUCCESS';
+  end if;
 end;
 $$;
 
