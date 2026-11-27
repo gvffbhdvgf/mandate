@@ -18,7 +18,7 @@ Deno.serve(async (request: Request) => {
 
   try {
     if (!paymentsModeEnabled()) {
-      return json(503, { error: "PAYMENTS_DISABLED", message: "Payment verification is restricted to configured Paystack test credentials. Live transactions remain disabled." }, cors);
+      return json(503, { error: "PAYMENTS_DISABLED", message: "A valid mode-specific Paystack configuration is required." }, cors);
     }
 
     const { user, caller } = await authenticate(request);
@@ -70,7 +70,7 @@ Deno.serve(async (request: Request) => {
     const code = error instanceof Error ? error.message : "PAYMENT_VERIFICATION_FAILED";
     const status = code === "AUTHENTICATION_REQUIRED" || code === "INVALID_SESSION" ? 401
       : code === "FORBIDDEN" ? 403
-      : code === "PAYSTACK_SECRET_KEY_MISSING" || code === "SUPABASE_FUNCTION_CONFIG_MISSING" ? 503
+      : code === "PAYSTACK_MODE_CONFIG_INVALID" || code === "SUPABASE_FUNCTION_CONFIG_MISSING" ? 503
       : 500;
     return json(status, { error: code }, cors);
   }
