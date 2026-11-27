@@ -23,7 +23,7 @@ The repository's current `.github/workflows/production-deploy.yml` deploys the C
 
 1. **Freeze and verify.** Record the exact approved PR head, current `main` SHA, workflow URLs and production baseline. Keep all payment purpose flags and live mode disabled.
 2. **Back up production.** Confirm a recent recoverable backup/PITR point and document the restore owner and recovery procedure. Do not rely on a database dump as the only backup.
-3. **Review migration plan.** Confirm production migration history ends at `0033_election_setup_confirmation_index`. Review the exact pending migration list `0034–0046`, dependency order, lock behavior, data impact, grants/RLS and rollback implications. Reconcile any migration-history mismatch before applying anything.
+3. **Review migration plan.** Confirm production migration history ends at `0033_election_setup_confirmation_index`. Review the exact pending migration list `0034–0048` (including the existing `0045` exception-queue migration and its `0044` dependency), dependency order, lock behavior, data impact, grants/RLS and rollback implications. Reconcile any migration-history mismatch before applying anything.
 4. **Apply database migrations first.** In an approved maintenance window, apply the exact PR migrations to the production Supabase project in order. Verify every migration is recorded and run read-only schema/security assertions. Do not use ad hoc SQL to mark migrations applied.
 5. **Deploy Edge Functions.** Deploy the exact tested function sources from the approved commit. Verify function versions, JWT settings and non-secret configuration. Do not enable settlement import or any payment purpose merely because the function is deployed.
 6. **Verify Auth and provider configuration.** Complete the OTP delivery test and Paystack dashboard callback/webhook checks. Send a signed test event and run controlled test-mode checkout/verification/reconciliation. Do not use a real charge.
@@ -44,17 +44,17 @@ The repository's current `.github/workflows/production-deploy.yml` deploys the C
 ## Current verified baseline (27 November 2026)
 
 - Production Supabase project: `yhdosrhtzcsfqfuuqhsk`, status `ACTIVE_HEALTHY`, PostgreSQL 17.12.
-- Production migration history ends at `20261127100000` (`0033_election_setup_confirmation_index`). PR #19 migrations `0034–0046` are not applied.
+- Production migration history ends at `20261127100000` (`0033_election_setup_confirmation_index`). PR #19 migrations `0034–0048` are not applied.
 - Production Paystack Edge Functions are older versions than PR #19: initialize v7, verify v7, webhook v8. Settlement importer and public participant/credit functions are not deployed.
-- PR #19 head `059ecdf62dc1829d53c4732afa4f1144fce2ee26` passed Mandate CI, Paystack Edge integration and disposable Supabase database acceptance, including independent-session concurrency.
+- PR #19 current head `a7728a3b39f158b3848557586af060408eb4131c` includes migration 0048 and atomic split verification. Exact-head Mandate CI and Paystack Edge integration are in progress/completed as indicated by the linked Actions runs; database acceptance is still running. Earlier database acceptance passed on commit `4fb35e75f6bae09aa336a52e264f2b9517040db4`, validating migrations through 0047, but does not validate 0048.
 - No production migration, function, secret, Auth template, Paystack setting, release flag, charge, refund, transfer or payout was changed during preparation of this runbook.
 
 ## Evidence links
 
 - [PR #19](https://github.com/gvffbhdvgf/mandate/pull/19)
-- [Mandate CI](https://github.com/gvffbhdvgf/mandate/actions/runs/46051478091)
-- [Paystack Edge integration](https://github.com/gvffbhdvgf/mandate/actions/runs/46051478092)
-- [Database acceptance](https://github.com/gvffbhdvgf/mandate/actions/runs/46051478172)
+- [Mandate CI](https://github.com/gvffbhdvgf/mandate/actions/runs/46056370314)
+- [Paystack Edge integration](https://github.com/gvffbhdvgf/mandate/actions/runs/46056370332)
+- [Database acceptance](https://github.com/gvffbhdvgf/mandate/actions/runs/46056370365)
 - [Shared-revenue accounting design](./shared-revenue-accounting.md)
 - [Paystack Kenya Merchant Services Agreement](https://paystack.com/ke/terms)
 - [ODPC Guidance Notes for Electoral Purposes](https://www.odpc.go.ke/wp-content/uploads/2024/02/ODPC-Guidance-Notes-for-Electoral-Purposes.pdf)
@@ -65,7 +65,7 @@ The repository's current `.github/workflows/production-deploy.yml` deploys the C
 - Public paid-voting organizer proceeds must use the accepted Paystack split-settlement target: an approved active KES organizer subaccount receives its share directly from Paystack; Mandate receives only its approved platform fee.
 - Do not launch the prior model where Mandate collects all proceeds and later pays organizers unless Paystack expressly approves that model in writing.
 - Do not create real organizer subaccounts until Paystack confirms the paid-voting use case and the organizer's identity/KYC and beneficiary details have been verified and authorized.
-- A server-only subaccount profile and versioned public-voting fee policy are required. Their database schema is not yet approved or implemented; no production migration may be written/applied until that schema change is explicitly approved.
+- A server-only organizer subaccount profile and versioned public-voting fee policy are implemented in migration `0047`; atomic provider split verification and the success guard are implemented in migration `0048`. Neither migration has been applied to production. No active policy or verified organizer subaccount is seeded.
 - The platform fee amount/formula and Paystack fee bearer are still unresolved. The existing registered-election KES 20-per-voter / KES 500-minimum fee is not the public-voting fee.
-- Before a test/live split is considered ready, verify Paystack's actual split formula and per-party shares from the provider transaction/webhook, reconcile them to the immutable intent snapshot, and test partial/full refunds, reversals and disputes for split transactions.
+- Fixed-fee single-subaccount split verification is implemented fail-closed: webhook and manual verification reconcile Paystack `fees_split` and subaccount identity to the immutable intent snapshot before credit fulfillment. Percentage split checkout remains disabled until exact KES rounding behavior is evidenced and tested. Before a test/live split is considered ready, also test partial/full refunds, reversals and disputes for split transactions.
 - If Paystack does not approve this model, evaluate direct organizer merchant-of-record with a separately charged Mandate service fee; do not silently fall back to collecting all proceeds into Mandate.
