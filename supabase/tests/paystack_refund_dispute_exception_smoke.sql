@@ -1,4 +1,6 @@
 -- Rollback-only acceptance: signed refund/dispute events freeze payment intents.
+-- Model the real provider sequence: capture the verified charge receipt once,
+-- then process the signed refund event with independently verified provider facts.
 begin;
 
 insert into public.payment_intents(
@@ -10,8 +12,28 @@ insert into public.payment_intents(
   8400, 'KES', 'pending', 'mandate-refund-exception-smoke-20261127'
 );
 
+insert into public.payment_events(
+  id, provider, provider_event_key, provider_reference, event_type,
+  signature_verified, redacted_payload, processing_status
+) values (
+  '22222222-2222-4222-8222-222222222238',
+  'paystack', 'paystack:charge.success:refund-exception-smoke',
+  'mandate-refund-exception-smoke-20261127', 'charge.success',
+  true, '{"status":"success","amount":"8400","currency":"KES"}'::jsonb,
+  'received'
+);
+
 set local role service_role;
 select set_config('request.jwt.claim.role', 'service_role', true);
+
+select public.apply_verified_paystack_webhook_event(
+  '22222222-2222-4222-8222-222222222238',
+  'mandate-refund-exception-smoke-20261127',
+  'paystack-refund-exception-transaction',
+  'success',
+  8400,
+  'KES'
+);
 
 insert into public.payment_events(
   id, provider, provider_event_key, provider_reference, event_type,
@@ -33,6 +55,7 @@ select public.apply_verified_paystack_payment_exception_event(
   'KES'
 );
 
+-- Re-delivery must remain idempotent and must not duplicate the receipt.
 select public.apply_verified_paystack_payment_exception_event(
   '22222222-2222-4222-8222-222222222239',
   'mandate-refund-exception-smoke-20261127',
@@ -54,7 +77,8 @@ declare
   v_provider_status text;
   v_provider_amount bigint;
 begin
-  select status into v_status
+  select status, provider_status, provider_amount_minor
+  into v_status, v_provider_status, v_provider_amount
   from public.payment_intents
   where id = '11111111-1111-4111-8111-111111111139';
 
@@ -69,11 +93,6 @@ begin
   if v_event_status <> 'processed' then
     raise exception 'REFUND_EVENT_MUST_BE_ACKNOWLEDGED';
   end if;
-
-  select provider_status, provider_amount_minor
-  into v_provider_status, v_provider_amount
-  from public.payment_intents
-  where id = '11111111-1111-4111-8111-111111111139';
 
   if v_provider_status <> 'reversal pending' or v_provider_amount <> 8400 then
     raise exception 'REFUND_EVENT_MUST_PERSIST_VERIFIED_PROVIDER_FACTS';

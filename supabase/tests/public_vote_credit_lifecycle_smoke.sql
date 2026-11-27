@@ -1,7 +1,7 @@
--- Rollback-only end-to-end acceptance for participant-scoped public vote credits.
+-- Rollback-only end-to-end acceptance for participant-scoped, single-merchant public vote credits.
 begin;
 
--- Enable only inside this rollback-only fixture; the platform release flag defaults off.
+-- Enable only inside this rollback-only fixture; the production release flag remains off.
 update public.platform_payment_feature_flags
 set public_vote_credits_enabled=true
 where singleton;
@@ -77,33 +77,6 @@ insert into public.public_participants(
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 
-insert into public.organization_paystack_subaccounts(
-  id,organization_id,provider_subaccount_code,currency,
-  provider_percentage_charge_basis_points,status,provider_verified_at,verified_by,created_by
-) values (
-  '77777777-7777-4777-8777-777777777741',
-  '22222222-2222-4222-8222-222222222241',
-  'ACCT_TEST_PUBLIC_CREDIT','KES',0,'verified',now(),
-  '11111111-1111-4111-8111-111111111141',
-  '11111111-1111-4111-8111-111111111141'
-);
-
-insert into public.public_vote_platform_fee_policies(
-  version,currency,fee_type,fixed_fee_minor,fee_bearer,status,
-  effective_from,approved_at,approved_by,approval_reference
-) values (
-  9001,'KES','fixed',50,'mandate','approved',now()-interval '1 minute',now(),
-  '11111111-1111-4111-8111-111111111141','acceptance-fixture-only'
-);
-
-insert into public.public_vote_platform_fee_policies(
-  version,currency,fee_type,fixed_fee_minor,fee_bearer,status,
-  effective_from,approved_at,approved_by,approval_reference
-) values (
-  9002,'KES','fixed',50,'organizer','approved',now()-interval '1 minute',now(),
-  '11111111-1111-4111-8111-111111111141','acceptance-fixture-organizer-bears-fee'
-);
-
 select public.create_public_vote_credit_payment_intent(
   '11111111-1111-4111-8111-111111111141',
   'public-credit-acceptance',
@@ -150,17 +123,10 @@ begin
   exception when check_violation then
     v_rejected := true;
   end;
-  if not v_rejected then raise exception 'ACTIVE_CREDIT_RESERVATIONS_MUST_ENFORCE_PARTICIPANT_CAP'; end if;
+  if not v_rejected then
+    raise exception 'ACTIVE_CREDIT_RESERVATIONS_MUST_ENFORCE_PARTICIPANT_CAP';
+  end if;
 
-  update public.payment_intents
-  set split_status='pending',
-      split_policy_version=9001,
-      split_subaccount_profile_id='77777777-7777-4777-8777-777777777741',
-      split_fee_type='fixed',
-      split_fixed_fee_minor=50,
-      split_fee_bearer='mandate',
-      split_snapshot_at=now()
-  where id=(v_first->>'paymentIntentId')::uuid;
   perform set_config('test.public_credit_intent_id',v_first->>'paymentIntentId',true);
 end;
 $$;
@@ -168,22 +134,26 @@ $$;
 do $$
 declare
   v_reference text;
+  v_first jsonb;
+  v_duplicate jsonb;
 begin
-  select provider_reference into v_reference
+  select provider_reference into strict v_reference
   from public.payment_intents
   where id=current_setting('test.public_credit_intent_id')::uuid;
-  perform public.apply_verified_paystack_public_vote_split(
-    null,v_reference,'paystack-public-credit-transaction-141','success',500,'KES',
-    '{"paystack":15,"integration":35,"subaccount":450}'::jsonb,
-    'ACCT_TEST_PUBLIC_CREDIT',null
+
+  v_first := public.apply_verified_paystack_public_vote_payment(
+    null,v_reference,'paystack-public-credit-transaction-141','success',500,'KES',15
   );
+  v_duplicate := public.apply_verified_paystack_public_vote_payment(
+    null,v_reference,'paystack-public-credit-transaction-141','success',500,'KES',15
+  );
+
+  if v_first->>'status' <> 'success' or v_first->>'matched' <> 'true'
+    or v_duplicate->>'duplicate' <> 'true' then
+    raise exception 'VERIFIED_SINGLE_MERCHANT_PAYMENT_MUST_SUCCEED_IDEMPOTENTLY';
+  end if;
 end;
 $$;
-
--- A repeated verified success cannot issue a second lot or receipt posting.
-update public.payment_intents
-set verified_at=verified_at+interval '1 second'
-where id=current_setting('test.public_credit_intent_id')::uuid;
 
 reset role;
 
@@ -192,7 +162,8 @@ declare
   v_lots bigint;
   v_issued bigint;
   v_reservation_status text;
-  v_ledger_count bigint;
+  v_revenue_receipts bigint;
+  v_processor_fee_expenses bigint;
 begin
   select count(*),coalesce(sum(credits_issued),0)
   into v_lots,v_issued
@@ -203,229 +174,30 @@ begin
   from public.vote_credit_reservations
   where payment_intent_id=current_setting('test.public_credit_intent_id')::uuid;
 
-  select count(*) into v_ledger_count
+  select count(*) into v_revenue_receipts
   from public.ledger_transactions
   where source_type='payment_intent'
     and source_id=current_setting('test.public_credit_intent_id')::uuid
-    and transaction_type='payment_receipt_pending_allocation';
+    and transaction_type='mandate_public_vote_revenue';
 
-  if v_lots <> 1 or v_issued <> 2 or v_reservation_status <> 'fulfilled' or v_ledger_count <> 1 then
-    raise exception 'VERIFIED_PUBLIC_PAYMENT_MUST_FULFILL_ONE_CREDIT_LOT_AND_ONE_RECEIPT';
+  select count(*) into v_processor_fee_expenses
+  from public.ledger_transactions
+  where source_type='payment_intent'
+    and source_id=current_setting('test.public_credit_intent_id')::uuid
+    and transaction_type='public_vote_provider_processing_fee';
+
+  if v_lots <> 1 or v_issued <> 2 or v_reservation_status <> 'fulfilled'
+    or v_revenue_receipts <> 1 or v_processor_fee_expenses <> 1 then
+    raise exception 'VERIFIED_SINGLE_MERCHANT_PAYMENT_MUST_POST_ONE_REVENUE_RECEIPT_ONE_FEE_AND_ONE_CREDIT_LOT';
   end if;
 end;
 $$;
 
--- A failed verified payment releases its reservation; an exception keeps it held.
-set local role service_role;
-select set_config('request.jwt.claim.role','service_role',true);
-
-do $$
-declare
-  v_failed jsonb;
-  v_exception jsonb;
-  v_mismatch jsonb;
-  v_organizer_bearer jsonb;
-begin
-  v_failed := public.create_public_vote_credit_payment_intent(
-    '11111111-1111-4111-8111-111111111141',
-    'public-credit-acceptance',
-    1,
-    'public-credit-acceptance-idempotency-003',
-    'mandate_55555555555545558555555555555555'
-  );
-  perform set_config('test.public_credit_failed_intent_id',v_failed->>'paymentIntentId',true);
-
-  begin
-    update public.payment_intents
-    set status='success',
-        provider_status='success',
-        provider_transaction_id='paystack-public-credit-unverified-141',
-        provider_amount_minor=250,
-        provider_currency='KES',
-        verified_at=now()
-    where id=(v_failed->>'paymentIntentId')::uuid;
-    raise exception 'UNVERIFIED_PUBLIC_VOTE_PAYMENT_MUST_NOT_SUCCEED';
-  exception when check_violation then
-    null;
-  end;
-
-  v_exception := public.create_public_vote_credit_payment_intent(
-    '11111111-1111-4111-8111-111111111141',
-    'public-credit-acceptance',
-    1,
-    'public-credit-acceptance-idempotency-004',
-    'mandate_66666666666646668666666666666666'
-  );
-  update public.payment_intents
-  set split_status='pending',
-      split_policy_version=9001,
-      split_subaccount_profile_id='77777777-7777-4777-8777-777777777741',
-      split_fee_type='fixed',
-      split_fixed_fee_minor=50,
-      split_fee_bearer='mandate',
-      split_snapshot_at=now()
-  where id=(v_exception->>'paymentIntentId')::uuid;
-  perform set_config('test.public_credit_exception_intent_id',v_exception->>'paymentIntentId',true);
-
-  v_mismatch := public.create_public_vote_credit_payment_intent(
-    '11111111-1111-4111-8111-111111111141',
-    'public-credit-acceptance',
-    1,
-    'public-credit-acceptance-idempotency-005',
-    'mandate_77777777777747778777777777777777'
-  );
-  update public.payment_intents
-  set split_status='pending',
-      split_policy_version=9001,
-      split_subaccount_profile_id='77777777-7777-4777-8777-777777777741',
-      split_fee_type='fixed',
-      split_fixed_fee_minor=50,
-      split_fee_bearer='mandate',
-      split_snapshot_at=now()
-  where id=(v_mismatch->>'paymentIntentId')::uuid;
-  perform set_config('test.public_credit_mismatch_intent_id',v_mismatch->>'paymentIntentId',true);
-
-  v_organizer_bearer := public.create_public_vote_credit_payment_intent(
-    '11111111-1111-4111-8111-111111111141',
-    'public-credit-acceptance',
-    1,
-    'public-credit-acceptance-idempotency-006',
-    'mandate_88888888888848888888888888888888'
-  );
-  update public.payment_intents
-  set split_status='pending',
-      split_policy_version=9002,
-      split_subaccount_profile_id='77777777-7777-4777-8777-777777777741',
-      split_fee_type='fixed',
-      split_fixed_fee_minor=50,
-      split_fee_bearer='organizer',
-      split_snapshot_at=now()
-  where id=(v_organizer_bearer->>'paymentIntentId')::uuid;
-  perform set_config('test.public_credit_organizer_bearer_intent_id',v_organizer_bearer->>'paymentIntentId',true);
-end;
-$$;
-
-update public.payment_intents
-set status='failed',
-    provider_status='failed',
-    provider_transaction_id='paystack-public-credit-failed-141',
-    provider_amount_minor=250,
-    provider_currency='KES',
-    verified_at=now()
-where id=current_setting('test.public_credit_failed_intent_id')::uuid;
-
-do $$
-declare
-  v_reference text;
-begin
-  select provider_reference into v_reference
-  from public.payment_intents
-  where id=current_setting('test.public_credit_exception_intent_id')::uuid;
-  perform public.apply_verified_paystack_public_vote_split(
-    null,v_reference,'paystack-public-credit-exception-141','success',250,'KES',
-    '{"paystack":15,"integration":35,"subaccount":200}'::jsonb,
-    'ACCT_TEST_PUBLIC_CREDIT',null
-  );
-end;
-$$;
-
-update public.payment_intents
-set status='exception',
-    provider_status='reversal pending',
-    verified_at=verified_at+interval '1 second'
-where id=current_setting('test.public_credit_exception_intent_id')::uuid;
-
-do $$
-declare
-  v_reference text;
-  v_result jsonb;
-begin
-  select provider_reference into v_reference
-  from public.payment_intents
-  where id=current_setting('test.public_credit_mismatch_intent_id')::uuid;
-  v_result := public.apply_verified_paystack_public_vote_split(
-    null,v_reference,'paystack-public-credit-mismatch-141','success',250,'KES',
-    '{"paystack":15,"integration":45,"subaccount":190}'::jsonb,
-    'ACCT_TEST_PUBLIC_CREDIT',null
-  );
-  if v_result->>'status' <> 'exception'
-    or v_result->>'reason' <> 'PAYSTACK_SPLIT_AMOUNT_MISMATCH' then
-    raise exception 'MISMATCHED_PROVIDER_SPLIT_MUST_BE_QUARANTINED';
-  end if;
-
-  select provider_reference into v_reference
-  from public.payment_intents
-  where id=current_setting('test.public_credit_organizer_bearer_intent_id')::uuid;
-  v_result := public.apply_verified_paystack_public_vote_split(
-    null,v_reference,'paystack-public-credit-organizer-bearer-141','success',250,'KES',
-    '{"paystack":15,"integration":50,"subaccount":185}'::jsonb,
-    'ACCT_TEST_PUBLIC_CREDIT',null
-  );
-  if v_result->>'status' <> 'success' or v_result->>'matched' <> 'true' then
-    raise exception 'ORGANIZER_FEE_BEARER_SPLIT_MUST_RECONCILE';
-  end if;
-
-end;
-$$;
-
-reset role;
-
-do $$
-declare
-  v_failed_status text;
-  v_exception_status text;
-  v_entitlement text;
-  v_mismatch_status text;
-  v_mismatch_lots bigint;
-  v_organizer_bearer_status text;
-  v_organizer_bearer_lots bigint;
-begin
-  select status into v_failed_status
-  from public.vote_credit_reservations
-  where payment_intent_id=current_setting('test.public_credit_failed_intent_id')::uuid;
-
-  select r.status,l.entitlement_status
-  into v_exception_status,v_entitlement
-  from public.vote_credit_reservations r
-  join public.vote_credit_lots l on l.payment_id=r.payment_intent_id
-  where r.payment_intent_id=current_setting('test.public_credit_exception_intent_id')::uuid;
-
-  if v_failed_status <> 'released' then
-    raise exception 'VERIFIED_FAILED_PAYMENT_MUST_RELEASE_RESERVATION';
-  end if;
-  if v_exception_status <> 'exception' or v_entitlement <> 'suspended' then
-    raise exception 'REVERSAL_EXCEPTION_MUST_HOLD_RESERVATION_AND_SUSPEND_UNSPENT_CREDITS';
-  end if;
-
-  select status into v_mismatch_status
-  from public.vote_credit_reservations
-  where payment_intent_id=current_setting('test.public_credit_mismatch_intent_id')::uuid;
-  select count(*) into v_mismatch_lots
-  from public.vote_credit_lots
-  where payment_id=current_setting('test.public_credit_mismatch_intent_id')::uuid;
-  if v_mismatch_status <> 'exception' or v_mismatch_lots <> 0 then
-    raise exception 'MISMATCHED_SPLIT_MUST_NOT_ISSUE_VOTE_CREDITS';
-  end if;
-
-  select status into v_organizer_bearer_status
-  from public.vote_credit_reservations
-  where payment_intent_id=current_setting('test.public_credit_organizer_bearer_intent_id')::uuid;
-  select count(*) into v_organizer_bearer_lots
-  from public.vote_credit_lots
-  where payment_id=current_setting('test.public_credit_organizer_bearer_intent_id')::uuid;
-  if v_organizer_bearer_status <> 'fulfilled' or v_organizer_bearer_lots <> 1 then
-    raise exception 'ORGANIZER_FEE_BEARER_MUST_FULFILL_ONLY_AFTER_EXACT_SPLIT_RECONCILIATION';
-  end if;
-end;
-$$;
-
--- Pause new public-credit checkout after purchase. Existing holders must still
--- be able to cast their paid credits.
+-- Stop new checkout after purchase. Existing holders must still be able to cast.
 update public.platform_payment_feature_flags
 set public_vote_credits_enabled=false
 where singleton;
 
--- Authenticated participant context and casting: no participant identifier enters ballot rows.
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111141',true);
@@ -437,7 +209,7 @@ declare
   v_duplicate jsonb;
 begin
   v_context := public.get_public_paid_ballot_context('public-credit-acceptance');
-  if (v_context->>'creditsRemaining')::bigint <> 3 then
+  if (v_context->>'creditsRemaining')::bigint <> 2 then
     raise exception 'PUBLIC_PARTICIPANT_CONTEXT_MUST_SHOW_VERIFIED_CREDITS';
   end if;
 
@@ -485,21 +257,13 @@ begin
   select coalesce(sum(credits_consumed),0) into v_consumed
   from public.vote_credit_consumptions consumption
   join public.vote_credit_lots lot on lot.id=consumption.credit_lot_id
-  where lot.payment_id in (
-    current_setting('test.public_credit_intent_id')::uuid,
-    current_setting('test.public_credit_organizer_bearer_intent_id')::uuid
-  );
+  where lot.payment_id=current_setting('test.public_credit_intent_id')::uuid;
 
   select coalesce(sum(credits_remaining),0) into v_remaining
   from public.vote_credit_lots
-  where payment_id in (
-    current_setting('test.public_credit_intent_id')::uuid,
-    current_setting('test.public_credit_organizer_bearer_intent_id')::uuid
-  );
+  where payment_id=current_setting('test.public_credit_intent_id')::uuid;
 
-  -- Three credits were issued across the two verified split scenarios; the ballot
-  -- consumes two from the first lot, leaving the organizer-bearer lot untouched.
-  if v_ballots <> 1 or v_controls <> 1 or v_consumed <> 2 or v_remaining <> 1 then
+  if v_ballots <> 1 or v_controls <> 1 or v_consumed <> 2 or v_remaining <> 0 then
     raise exception 'PUBLIC_PAID_BALLOT_MUST_CONSUME_CREDITS_ONCE_AND_KEEP_BALLOT_ANONYMOUS';
   end if;
 

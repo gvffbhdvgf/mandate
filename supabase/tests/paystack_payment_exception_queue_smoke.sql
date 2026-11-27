@@ -1,4 +1,6 @@
 -- Rollback-only acceptance: exception queue exposes evidence without PII or mutations.
+-- Model the real refund/dispute path: a verified successful receipt is first posted,
+-- then a signed refund event freezes the intent for reconciliation.
 begin;
 
 insert into public.payment_intents(
@@ -13,7 +15,7 @@ set local role service_role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 
 update public.payment_intents
-set status = 'exception',
+set status = 'success',
     provider_transaction_id = 'paystack-exception-queue-transaction',
     provider_status = 'success',
     provider_amount_minor = 8400,
@@ -27,7 +29,20 @@ insert into public.payment_events(
 ) values (
   'paystack', 'paystack:refund.processed:exception-queue-smoke',
   'mandate-exception-queue-smoke-20261127', 'refund.processed',
-  true, '{"status":"processed","amount":"8400","currency":"KES"}'::jsonb, 'processed'
+  true, '{"status":"processed","amount":"8400","currency":"KES"}'::jsonb, 'received'
+);
+
+-- Migration 0039 replaced the earlier unverified two-argument RPC with a
+-- provider-evidence-bound six-argument function. Keep this test aligned with
+-- the production security boundary: the signed event alone is insufficient.
+select public.apply_verified_paystack_payment_exception_event(
+  (select id from public.payment_events
+   where provider_event_key = 'paystack:refund.processed:exception-queue-smoke'),
+  'mandate-exception-queue-smoke-20261127',
+  'paystack-exception-queue-transaction',
+  'success',
+  8400,
+  'KES'
 );
 
 reset role;

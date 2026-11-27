@@ -73,10 +73,10 @@ export function ElectionLifecycleControls({
           <form action={openAction} className="form-stack lifecycle-form">
             {hiddenFields}
             <p className="muted">{votingMode === "public_paid"
-              ? "Opening freezes the public price, participant cap, rules and candidate snapshot. Platform payment release and paid-voting authorization must be active; the database enforces these gates."
+              ? "Opening freezes the public price, participant cap, rules and candidate snapshot. Mandate merchant authorization and the public paid-voting release gates must be active; the database enforces these gates."
               : "Opening freezes the rules and candidate snapshot. The voter register must be complete and every eligible voter must have an invitation issued."}</p>
             {openState.error && <p className="form-error" role="alert">{openState.error}</p>}
-            <label className="ballot-confirmation"><input type="checkbox" name="confirmRules" value="true" required /> I have reviewed the election rules, options and eligible voter register.</label>
+            <label className="ballot-confirmation"><input type="checkbox" name="confirmRules" value="true" required /> I have reviewed the election rules, options and {votingMode === "public_paid" ? "public participant access and credit limits" : "eligible voter register and voter access"}.</label>
             <button className="primary-button" disabled={openPending}>{openPending ? "Checking opening requirements…" : "Open election"}</button>
           </form>
         ) : <p className="form-hint">An election manager or administrator must open this election.</p>
