@@ -100,6 +100,6 @@ begin
     raise exception 'PAYMENT_TABLES_MUST_REMAIN_PRIVATE_TO_BROWSER_ROLES';
   end if;
 end;
-$;
+$$;
 
 rollback;
