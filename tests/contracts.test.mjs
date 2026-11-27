@@ -313,3 +313,15 @@ test("concurrency fixtures record authority confirmation before opening", async 
   assert.match(concurrency, /public[.]confirm_election_setup/);
   assert.match(concurrency, /public[.]open_election/);
 });
+
+
+test("manual Paystack verification cannot overwrite terminal payment states or race a webhook", async () => {
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  assert.match(verify, /Terminal states are immutable/);
+  assert.match(verify, /if \(intent\.status === "success"\)/);
+  assert.match(verify, /PAYMENT_STATE_TERMINAL/);
+  assert.match(verify, /\.in\("status", \["initialized", "pending"\]\)/);
+  assert.match(verify, /\.select\("id"\)\.maybeSingle\(\)/);
+  assert.match(verify, /PAYMENT_STATE_CHANGED/);
+  assert.match(verify, /current\.status === "success" && isSuccess/);
+});
