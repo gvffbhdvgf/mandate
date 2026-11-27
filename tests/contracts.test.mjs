@@ -518,6 +518,30 @@ test("public paid elections require platform release and freeze pricing before o
   assert.match(lifecycleControls, /public price, participant cap/);
 });
 
+test("public paid voting uses Mandate single-merchant collection and readable audit details", async () => {
+  const migration = await read("../supabase/migrations/20261128010000_0049_single_merchant_public_vote_payments.sql");
+  const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
+  const audit = await read("../app/organizations/[organizationId]/elections/[electionId]/audit-timeline.tsx");
+  const lifecycle = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
+  assert.match(migration, /apply_verified_paystack_public_vote_payment/);
+  assert.match(migration, /split_status <> 'not_configured'/);
+  assert.match(migration, /provider_fee_minor/);
+  assert.match(migration, /payment_intents_require_verified_public_vote_split/);
+  assert.match(initialize, /public_vote_credits_enabled/);
+  assert.doesNotMatch(initialize, /PAYSTACK_SPLIT_NOT_CONFIGURED|VERIFIED_ORGANIZER_SUBACCOUNT_REQUIRED|splitInitialization/);
+  assert.match(verify, /apply_verified_paystack_public_vote_payment/);
+  assert.doesNotMatch(verify, /apply_verified_paystack_public_vote_split|fees_split/);
+  assert.match(webhook, /apply_verified_paystack_public_vote_payment/);
+  assert.doesNotMatch(webhook, /apply_verified_paystack_public_vote_split|fees_split/);
+  assert.match(audit, /formatMetadataValue/);
+  assert.match(audit, /audit-metadata-row/);
+  assert.doesNotMatch(audit, /JSON\.stringify/);
+  assert.match(lifecycle, /public participant access and credit limits/);
+  assert.match(lifecycle, /Mandate merchant authorization/);
+});
+
 test("Paystack settlement importer is service-role-only and safely paginated", async () => {
   const importer = await read("../supabase/functions/paystack-settlement-import/index.ts");
   const config = await read("../supabase/config.toml");
