@@ -89,7 +89,7 @@ begin
     select 1
     from jsonb_array_elements(p_entries) e(value)
     where jsonb_typeof(e.value) is distinct from 'object'
-      or jsonb_object_length(e.value) <> 4
+      or case when jsonb_typeof(e.value) = 'object' then jsonb_object_length(e.value) else -1 end <> 4
       or not (e.value ?& array['account_id','direction','amount_minor','currency'])
   ) then
     raise exception 'LEDGER_ENTRY_SHAPE_INVALID' using errcode = '22023';
