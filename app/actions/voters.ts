@@ -210,6 +210,7 @@ export async function commitVoterImportAction(
   _previousState: VoterImportActionState,
   formData: FormData,
 ): Promise<VoterImportActionState> {
+  if (formData.get("confirmImport") !== "true") return { error: "Review the voter count and confirm before adding the register." };
   const organizationId = String(formData.get("organizationId") ?? "");
   const electionId = String(formData.get("electionId") ?? "");
   const batchId = String(formData.get("batchId") ?? "");
