@@ -33,10 +33,10 @@ with settlement as (
   returning id
 )
 insert into public.paystack_settlement_transactions(
-  settlement_id, provider_transaction_id, provider_reference, provider_status,
+  settlement_id, environment, provider_transaction_id, provider_reference, provider_status,
   amount_minor, currency, fee_minor, paid_at
 )
-select id, 'paystack-settlement-recon-transaction',
+select id, 'test', 'paystack-settlement-recon-transaction',
   'mandate-settlement-recon-smoke-20261127', 'success',
   12500, 'KES', 362, now()
 from settlement;
