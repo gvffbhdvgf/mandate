@@ -74,6 +74,7 @@ function PaidContest({
         setError(result.error);
       } else {
         setReceipt(result.receiptCode ?? "");
+        setIdempotencyKey("");
         if (result.context) onContextChange(result.context as BallotContext);
       }
     });
@@ -87,7 +88,13 @@ function PaidContest({
       <form className="form-stack" onSubmit={submit}>
         <fieldset className="form-stack">
           <legend>Select one option</legend>
-          {contest.options.map((option) => (
+          {maxCredits < 1 ? (
+        <p className="form-hint">No voting credits remain. Purchase additional credits if the election is still accepting payments.</p>
+      ) : (
+        <form className="form-stack" onSubmit={submit}>
+          <fieldset className="form-stack">
+            <legend>Select one option</legend>
+            {contest.options.map((option) => (
             <label key={option.id}>
               <input
                 type="radio"
@@ -102,30 +109,31 @@ function PaidContest({
               />
               {option.displayName}
             </label>
-          ))}
-        </fieldset>
-        <label>Credits to use
-          <input
-            type="number"
-            min={1}
-            max={maxCredits}
-            step={1}
-            value={credits}
-            onChange={(event) => {
-              const next = Number(event.target.value);
-              if (Number.isSafeInteger(next) && next >= 1 && next <= Math.max(1, maxCredits)) {
-                setCredits(next);
-                setIdempotencyKey("");
-                setReceipt("");
-              }
-            }}
-            required
-          />
-        </label>
-        <button className="primary-button" disabled={pending || !optionId || maxCredits < 1}>
-          {pending ? "Recording ballot…" : "Confirm and cast ballot"}
-        </button>
-      </form>
+            ))}
+          </fieldset>
+          <label>Credits to use
+            <input
+              type="number"
+              min={1}
+              max={maxCredits}
+              step={1}
+              value={credits}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (Number.isSafeInteger(next) && next >= 1 && next <= Math.max(1, maxCredits)) {
+                  setCredits(next);
+                  setIdempotencyKey("");
+                  setReceipt("");
+                }
+              }}
+              required
+            />
+          </label>
+          <button className="primary-button" disabled={pending || !optionId || maxCredits < 1}>
+            {pending ? "Recording ballot…" : "Confirm and cast ballot"}
+          </button>
+        </form>
+      )}
       {error && <p className="form-error" role="alert">{error}</p>}
       {receipt && <p className="form-hint" role="status">Ballot accepted. Receipt: {receipt}</p>}
     </article>
