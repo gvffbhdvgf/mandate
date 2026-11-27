@@ -517,3 +517,22 @@ test("public paid elections require platform release and freeze pricing before o
   assert.match(electionPage, /PLATFORM AUTHORIZATION PENDING/);
   assert.match(lifecycleControls, /public price, participant cap/);
 });
+
+test("Paystack settlement importer is service-role-only and safely paginated", async () => {
+  const importer = await read("../supabase/functions/paystack-settlement-import/index.ts");
+  const config = await read("../supabase/config.toml");
+  const migration = await read("../supabase/migrations/20261127220000_0044_paystack_settlement_reconciliation.sql");
+  const smoke = await read("../supabase/tests/paystack_settlement_reconciliation_smoke.sql");
+  assert.match(importer, /SERVICE_ROLE_REQUIRED/);
+  assert.match(importer, /PAYSTACK_MODE/);
+  assert.match(importer, /MAX_SETTLEMENT_PAGES/);
+  assert.match(importer, /nextTransactionPage/);
+  assert.match(importer, /onConflict: "environment,provider_transaction_id"/);
+  assert.match(importer, /31 \* 24 \* 60 \* 60 \* 1000/);
+  assert.doesNotMatch(importer, /customer\.email|customer\.phone|metadata/);
+  assert.match(config, /\[functions\.paystack-settlement-import\]\nverify_jwt = true/);
+  assert.match(migration, /security_invoker = true/);
+  assert.match(migration, /matched_to_receipt/);
+  assert.match(smoke, /PAYSTACK_SETTLEMENT_RECEIPT_MATCH_FAILED/);
+  assert.match(smoke, /PAYSTACK_SETTLEMENT_MUST_REMAIN_SERVER_ONLY/);
+});
