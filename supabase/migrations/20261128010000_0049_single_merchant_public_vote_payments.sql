@@ -111,8 +111,10 @@ begin
   update public.payment_intents
   set status = v_next_status, provider_transaction_id = p_provider_transaction_id,
       provider_status = p_provider_status, provider_amount_minor = p_amount_minor,
-      provider_currency = p_currency, provider_fee_minor = p_provider_fee_minor,
-      provider_fee_verified_at = case when p_provider_fee_minor is null then null else pg_catalog.now() end,
+      provider_currency = p_currency,
+      provider_fee_minor = case when v_matches then p_provider_fee_minor else null end,
+      provider_fee_verified_at = case when v_matches and p_provider_fee_minor is not null
+        then pg_catalog.now() else null end,
       verified_at = pg_catalog.now()
   where id = v_intent.id;
 
