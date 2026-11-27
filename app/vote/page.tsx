@@ -44,7 +44,7 @@ export default function VoterBallotPage() {
   }, []);
 
   return (
-    <main className="ballot-shell">
+    <main id="main-content" className="ballot-shell">
       <header className="ballot-header">
         <span className="brand"><span className="brand-mark">M</span><span>mandate</span></span>
         <span className="eyebrow">PRIVATE VOTING</span>
