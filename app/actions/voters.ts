@@ -52,7 +52,6 @@ export async function stageVoterImportAction(
   if (records.length > 25_000) return { error: "A voter import can contain at most 25,000 rows." };
 
   const headers = Object.keys(records[0]).map((header) => header.trim().toLowerCase());
-  const allowedHeaders = new Set(["voter_ref", "name", "email", "phone_e164", "weight"]);
   if (!headers.includes("voter_ref") || !headers.includes("name")) {
     return { error: "Required columns are missing. Include voter_ref and name, plus email or phone_e164 for each voter." };
   }
