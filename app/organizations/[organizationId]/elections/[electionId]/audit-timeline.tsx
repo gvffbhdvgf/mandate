@@ -26,6 +26,8 @@ function formatMetadataValue(key: string, value: unknown, metadata: Record<strin
   }
   if (typeof value === "string") {
     if (key === "votingMode") return value === "public_paid" ? "Public paid voting" : humanize(value);
+    if (key === "setupConfirmedBy") return "Authorized organization member";
+    if (/Id$/i.test(key) || /Hash$/i.test(key)) return "Recorded";
     if (/At$/.test(key) && !Number.isNaN(Date.parse(value)))
       return new Date(value).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
     if (/Hash$/.test(key)) return "Recorded";
