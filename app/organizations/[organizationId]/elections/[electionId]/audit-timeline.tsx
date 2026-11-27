@@ -30,7 +30,6 @@ function formatMetadataValue(key: string, value: unknown, metadata: Record<strin
     if (/Id$/i.test(key) || /Hash$/i.test(key)) return "Recorded";
     if (/At$/.test(key) && !Number.isNaN(Date.parse(value)))
       return new Date(value).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
-    if (/Hash$/.test(key)) return "Recorded";
     return value.includes("_") ? humanize(value) : value;
   }
   if (Array.isArray(value)) return value.map(String).join(", ");
