@@ -397,7 +397,10 @@ test("Paystack refund and dispute webhooks freeze payments for explicit reconcil
   assert.match(smoke, /REFUND_EVENT_MUST_NOT_AUTO_REVERSE_LEDGER/);
   assert.match(webhook, /eventType\.startsWith\("refund\."\)/);
   assert.match(webhook, /eventType\.startsWith\("charge\.dispute\."\)/);
-  assert.match(webhook, /apply_paystack_payment_exception_event/);
+  assert.match(webhook, /apply_verified_paystack_payment_exception_event/);
+  assert.match(webhook, /PAYSTACK_EXCEPTION_VERIFICATION_UNAVAILABLE/);
+  assert.match(migration, /apply_verified_paystack_payment_exception_event/);
+  assert.match(migration, /reversal pending/);
   assert.match(webhook, /verified\.data\.reference !== reference/);
   assert.match(webhook, /PAYSTACK_REFERENCE_MISMATCH/);
   assert.match(webhook, /reconciliationRequired: true/);
