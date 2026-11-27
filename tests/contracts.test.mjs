@@ -325,3 +325,16 @@ test("manual Paystack verification cannot overwrite terminal payment states or r
   assert.match(verify, /PAYMENT_STATE_CHANGED/);
   assert.match(verify, /current\.status === "success" && isSuccess/);
 });
+
+
+test("Paystack webhook processing cannot resurrect refunded or reversed payment intents", async () => {
+  const migration = await read("../supabase/migrations/20261127130000_0035_paystack_terminal_state_guard.sql");
+  const smoke = await read("../supabase/tests/payment_terminal_state_smoke.sql");
+  assert.match(migration, /v_intent\.status not in \('initialized', 'pending'\)/);
+  assert.match(migration, /PAYMENT_INTENT_TERMINAL/);
+  assert.match(migration, /processing_status = 'processed'/);
+  assert.match(smoke, /'refunded'/);
+  assert.match(smoke, /REFUNDED_PAYMENT_MUST_NOT_BE_RESURRECTED/);
+  assert.match(smoke, /set local role service_role/);
+  assert.match(smoke, /rollback;/);
+});
