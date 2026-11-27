@@ -56,6 +56,21 @@ Deno.serve(async (request: Request) => {
       const sameSuccessfulTransaction = isSuccess
         && String(payment.id) === String(intent.provider_transaction_id);
       if (sameSuccessfulTransaction) {
+        const { data: refreshed, error: refreshError } = await admin
+          .from("payment_intents")
+          .update({
+            provider_status: payment.status,
+            provider_amount_minor: providerAmountMinor,
+            provider_currency: payment.currency,
+            verified_at: new Date().toISOString(),
+          })
+          .eq("id", intent.id)
+          .eq("status", "success")
+          .eq("provider_transaction_id", String(payment.id))
+          .select("id")
+          .maybeSingle();
+        if (refreshError) return json(500, { error: "PAYMENT_VERIFICATION_PERSIST_FAILED" }, cors);
+        if (!refreshed) return json(409, { error: "PAYMENT_STATE_TERMINAL" }, cors);
         return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true }, cors);
       }
       return json(409, { error: "PAYMENT_STATE_TERMINAL", status: intent.status }, cors);
