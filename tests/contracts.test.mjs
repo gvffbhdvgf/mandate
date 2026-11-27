@@ -137,7 +137,7 @@ test("election audit timeline exposes only redacted non-ballot activity", async 
   assert.match(migration, /action not like 'wallet\.%'/);
   assert.match(migration, /redacted_metadata/);
   assert.match(migration, /grant execute on function public\.get_election_audit_trail.*to authenticated/);
-  assert.match(component, /Event details/);
+  assert.match(component, /View event information/);
 });
 
 test("audit timeline uses a strict action allowlist and removes free-text metadata", async () => {
