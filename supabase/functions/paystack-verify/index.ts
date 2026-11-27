@@ -90,7 +90,8 @@ Deno.serve(async (request: Request) => {
       const integrationShare = Number(feesSplit?.integration);
       const organizerShare = Number(feesSplit?.subaccount);
       const subaccountPercentageCharge = subaccount?.percentage_charge == null ? null : Number(subaccount.percentage_charge);
-      if (!feesSplit || (subaccountPercentageCharge !== null
+      if (!feesSplit || feesSplit.paystack == null || feesSplit.integration == null || feesSplit.subaccount == null
+        || (subaccountPercentageCharge !== null
           && (!Number.isFinite(subaccountPercentageCharge) || subaccountPercentageCharge < 0))
         || !Number.isSafeInteger(paystackFee) || paystackFee < 0
         || !Number.isSafeInteger(integrationShare) || integrationShare < 0
