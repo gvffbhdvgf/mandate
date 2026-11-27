@@ -362,3 +362,19 @@ test("Paystack initialization is one-shot, idempotent and fails closed on uncert
   assert.match(smoke, /INITIALIZATION_ATTEMPTS_MUST_BE_PRIVATE/);
   assert.match(smoke, /rollback;/);
 });
+
+
+test("verified Paystack success atomically posts an unallocated balanced suspense receipt", async () => {
+  const migration = await read("../supabase/migrations/20261127150000_0037_verified_payment_receipt_suspense.sql");
+  const smoke = await read("../supabase/tests/verified_payment_receipt_suspense_smoke.sql");
+  assert.match(migration, /payment_intents_capture_verified_receipt/);
+  assert.match(migration, /old\.status is distinct from new\.status/);
+  assert.match(migration, /provider_clearing/);
+  assert.match(migration, /unallocated-payment-receipts/);
+  assert.match(migration, /payment_receipt_pending_allocation/);
+  assert.match(migration, /mandate_private\.post_ledger_transaction/);
+  assert.match(migration, /does not classify revenue/);
+  assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_MUST_BE_BALANCED/);
+  assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_POSTING_MUST_BE_IDEMPOTENT/);
+  assert.match(smoke, /rollback;/);
+});
