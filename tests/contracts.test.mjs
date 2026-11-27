@@ -262,13 +262,20 @@ test("Paystack webhook application is atomic, idempotent and retryable", async (
   assert.doesNotMatch(webhook, /vote_credit_lots|ledger_entries/);
 });
 
-test("Paystack initialization, verification and webhooks all fail closed outside test mode", async () => {
+test("Paystack initialization, verification and webhooks enforce explicit mode and purpose gates", async () => {
   const shared = await read("../supabase/functions/_shared/paystack.ts");
   const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
   const verify = await read("../supabase/functions/paystack-verify/index.ts");
   const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
-  assert.match(shared, /PAYSTACK_MODE.*=== "test"/);
-  assert.match(shared, /PAYSTACK_SECRET_KEY.*startsWith\("sk_test_"\)/);
+  assert.match(shared, /PAYSTACK_TEST_SECRET_KEY/);
+  assert.match(shared, /PAYSTACK_LIVE_SECRET_KEY/);
+  assert.match(shared, /PAYSTACK_LIVE_TRANSACTIONS_ENABLED/);
+  assert.match(shared, /PAYSTACK_TEST_WEBHOOK_SECRET/);
+  assert.match(shared, /PAYSTACK_LIVE_WEBHOOK_SECRET/);
+  assert.match(shared, /PAYSTACK_\$\{config\.mode\.toUpperCase\(\)\}_\$\{purposeKey\}_ENABLED/);
+  assert.match(initialize, /paymentPurposeEnabled\(intent\.purpose\)/);
+  assert.match(verify, /paymentPurposeEnabled\(intent\.purpose\)/);
+  assert.match(webhook, /paymentPurposeEnabled\(intent\.purpose\)/);
   assert.match(initialize, /if \(!paymentsModeEnabled\(\)\)/);
   assert.match(verify, /if \(!paymentsModeEnabled\(\)\)/);
   assert.match(webhook, /if \(!paymentsModeEnabled\(\)\)/);
