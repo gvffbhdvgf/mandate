@@ -86,7 +86,20 @@ begin
   if v_duplicate_count <> 1 then
     raise exception 'VERIFIED_RECEIPT_LEDGER_POSTING_MUST_BE_IDEMPOTENT';
   end if;
+
+  if not has_table_privilege('service_role', 'public.payment_intents', 'select')
+    or not has_table_privilege('service_role', 'public.payment_intents', 'update')
+    or not has_table_privilege('service_role', 'public.payment_events', 'select')
+    or not has_table_privilege('service_role', 'public.payment_events', 'insert')
+    or not has_table_privilege('service_role', 'public.payment_events', 'update') then
+    raise exception 'PAYMENT_EDGE_SERVICE_ROLE_GRANTS_MISSING';
+  end if;
+
+  if has_table_privilege('authenticated', 'public.payment_intents', 'update')
+    or has_table_privilege('anon', 'public.payment_events', 'insert') then
+    raise exception 'PAYMENT_TABLES_MUST_REMAIN_PRIVATE_TO_BROWSER_ROLES';
+  end if;
 end;
-$$;
+$;
 
 rollback;
