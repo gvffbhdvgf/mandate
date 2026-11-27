@@ -69,6 +69,15 @@ Deno.serve(async (request: Request) => {
       return json(403, { error: "PARTICIPANT_BLOCKED" }, cors);
     }
 
+    if (existing?.verification_status === "unverified") {
+      const { error: verifyError } = await admin
+        .from("public_participants")
+        .update({ verification_status: "verified" })
+        .eq("id", existing.id)
+        .eq("verification_status", "unverified");
+      if (verifyError) return json(500, { error: "PARTICIPANT_VERIFICATION_PERSIST_FAILED" }, cors);
+    }
+
     if (!existing) {
       const { error: insertError } = await admin.from("public_participants").insert({
         election_id: election.id,
