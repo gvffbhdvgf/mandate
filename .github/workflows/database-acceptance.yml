@@ -61,8 +61,21 @@ jobs:
           printf '\n[db]\nport = %s\nshadow_port = %s\n' "$db_port" "$shadow_port" >> supabase/config.toml
           echo "Using disposable database port $db_port"
 
-      - name: Start one disposable local Supabase stack
-        run: npx --yes supabase@2.114.0 start -x edge-runtime,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,studio,supavisor,vector
+      - name: Start one disposable local Supabase stack (retry registry throttling)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npx --yes supabase@2.114.0 start -x edge-runtime,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,studio,supavisor,vector; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Supabase image pull/start failed (attempt $attempt); retrying after backoff"
+              sleep $((attempt * 20))
+            fi
+          done
+          echo "Supabase local stack failed to start after 3 attempts" >&2
+          exit 1
 
       - name: Apply all repository migrations
         run: npx --yes supabase@2.114.0 db reset --local --no-seed
