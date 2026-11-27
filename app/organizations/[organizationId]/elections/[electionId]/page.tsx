@@ -37,7 +37,7 @@ export default async function ElectionPage({ params, searchParams }: {
 
   const { data: election, error } = await supabase
     .from("elections")
-    .select("id,organization_id,title,description,status,voting_mode,public_slug,currency,price_per_credit_minor,max_credits_per_participant,paid_voting_authorized_at,starts_at,ends_at,timezone,result_visibility,setup_confirmed_at,platform_fee_status,platform_fee_amount_minor,platform_fee_eligible_voter_count,platform_fee_policy_version")
+    .select("id,organization_id,title,description,status,voting_mode,public_slug,currency,price_per_credit_minor,max_credits_per_participant,paid_voting_authorized_at,starts_at,ends_at,timezone,result_visibility,setup_confirmed_at,platform_fee_status,platform_fee_amount_minor,platform_fee_eligible_voter_count,platform_fee_policy_version,platform_fee_quoted_at")
     .eq("id", electionId)
     .eq("organization_id", organizationId)
     .maybeSingle();
@@ -178,16 +178,25 @@ export default async function ElectionPage({ params, searchParams }: {
               {importBatch.status === "committed" && <p className="form-hint">This import has been committed to the voter register.</p>}
             </div>
           )}
-          {canManageRegister && election.status === "draft" && (
+          {canManageRegister && election.status === "draft" && !election.platform_fee_quoted_at && (
             <>
               <p className="template-link"><Link href="/voter-register-template.csv" download>Download CSV template</Link></p>
               <VoterImportForm organizationId={organizationId} electionId={electionId} />
               {(voterCount ?? 0) > 0 && (
                 <div className="invitation-section">
                   <div className="form-section-title">Voter invitations</div>
-                  <p className="form-hint">Invitations are sent privately to registered email addresses. Phone-only voters need a separate delivery channel. The raw access token is never shown in this workspace.</p>
-                  <DispatchInvitationsForm organizationId={organizationId} electionId={electionId} />
+                  {election.platform_fee_status === "paid" ? (
+                    <>
+                      <p className="form-hint">Invitations are sent privately to registered email addresses. Phone-only voters need a separate delivery channel. The raw access token is never shown in this workspace.</p>
+                      <DispatchInvitationsForm organizationId={organizationId} electionId={electionId} />
+                    </>
+                  ) : (
+                    <p className="form-hint">Pay the Mandate platform service fee before voter invitations can be dispatched.</p>
+                  )}
                 </div>
+              )}
+              {election.platform_fee_quoted_at && (
+                <p className="form-hint">The voter register is frozen against platform-fee policy v{election.platform_fee_policy_version} and the quoted eligible-voter count. To change the register, the invoice must be cancelled through an audited support process.</p>
               )}
             </>
           )}
