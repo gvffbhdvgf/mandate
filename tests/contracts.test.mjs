@@ -764,3 +764,13 @@ test("member access controls show pending feedback while server actions are runn
   assert.match(panel, /Revoking access/);
   assert.match(panel, /Revoking invitation/);
 });
+
+
+test("server CSV import accepts ignored extra columns consistently with the browser preview", async () => {
+  const actions = await read("../app/actions/voters.ts");
+  const preview = await read("../lib/ui/voter-import-preview.ts");
+  assert.match(actions, /headers\.includes\("voter_ref"\)/);
+  assert.match(actions, /headers\.includes\("name"\)/);
+  assert.doesNotMatch(actions, /headers\.some\(\(header\) => !allowedHeaders\.has\(header\)\)/);
+  assert.match(preview, /Additional columns are not used and will be ignored/);
+});
