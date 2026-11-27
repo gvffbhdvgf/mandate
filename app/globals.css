@@ -305,6 +305,18 @@ button:disabled, .primary-button:disabled, .secondary-button:disabled { cursor: 
 .audit-details dl > div { min-width: 0; padding: 9px 11px; border-radius: 8px; background: #F6F8F5; }
 .audit-details dt { color: var(--muted); font-size: 10px; }
 .audit-details dd { margin: 3px 0 0; color: var(--ink); font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+.audit-metadata { display: grid; gap: 8px; margin: 10px 0 2px; }
+.audit-metadata-row { display: grid; grid-template-columns: minmax(125px, .8fr) minmax(0, 1.4fr); gap: 12px; padding: 8px 10px; border-radius: 8px; background: #F6F8F5; }
+.audit-metadata-row dt { color: var(--muted); font-size: 12px; }
+.audit-metadata-row dd { margin: 0; color: var(--ink); font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .audit-metadata-row { grid-template-columns: 1fr; gap: 3px; } }
+
+.audit-metadata { display: grid; gap: 8px; margin: 10px 0 2px; }
+.audit-metadata-row { display: grid; grid-template-columns: minmax(125px, .8fr) minmax(0, 1.4fr); gap: 12px; padding: 8px 10px; border-radius: 8px; background: #F6F8F5; }
+.audit-metadata-row dt { color: var(--muted); font-size: 12px; }
+.audit-metadata-row dd { margin: 0; color: var(--ink); font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .audit-metadata-row { grid-template-columns: 1fr; gap: 3px; } }
+
 .contest-card { padding: 18px 0; }
 .contest-card h3 { font-size: 15px; }
 .contest-card li { border-radius: 9px; background: #F7F9F6; font-size: 12px; }
