@@ -56,7 +56,62 @@ alter table public.elections
       and platform_fee_status <> 'not_quoted')
   );
 
-create or replace function mandate_private.create_platform_fee_payment_intent(p_election_id uuid)
+create or replace function mandate_private.get_platform_fee_quote(p_election_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, pg_temp
+as $
+declare
+  v_user uuid := auth.uid();
+  v_e public.elections%rowtype;
+  v_policy public.platform_fee_policies%rowtype;
+  v_count integer;
+  v_amount bigint;
+begin
+  if v_user is null then raise exception 'AUTHENTICATION_REQUIRED' using errcode='28000'; end if;
+  select * into v_e from public.elections where id=p_election_id;
+  if not found then raise exception 'ELECTION_NOT_FOUND' using errcode='P0002'; end if;
+  if not exists (
+    select 1 from public.organization_members m
+    where m.organization_id=v_e.organization_id and m.user_id=v_user
+      and m.status='active' and m.role in ('owner','admin','finance_manager')
+  ) then raise exception 'FORBIDDEN' using errcode='42501'; end if;
+  if v_e.voting_mode not in ('registered_single','registered_weighted') then
+    raise exception 'PLATFORM_FEE_NOT_APPLICABLE_TO_PUBLIC_PAID_ELECTION' using errcode='22023';
+  end if;
+  select count(*)::integer into v_count from public.election_voters
+  where election_id=v_e.id and eligibility_status='eligible';
+  if v_e.platform_fee_quoted_at is not null then
+    return jsonb_build_object(
+      'eligibleVoterCount',v_e.platform_fee_eligible_voter_count,
+      'amountMinor',v_e.platform_fee_amount_minor,'currency','KES',
+      'policyVersion',v_e.platform_fee_policy_version,
+      'status',v_e.platform_fee_status,'quotedAt',v_e.platform_fee_quoted_at
+    );
+  end if;
+  select * into v_policy from public.platform_fee_policies
+  where active=true and effective_from<=now() order by version desc limit 1;
+  if not found then raise exception 'PLATFORM_FEE_POLICY_UNAVAILABLE' using errcode='55000'; end if;
+  v_amount := greatest(v_count::bigint * v_policy.amount_per_eligible_voter_minor,v_policy.minimum_fee_minor);
+  return jsonb_build_object(
+    'eligibleVoterCount',v_count,'amountMinor',v_amount,'currency',v_policy.currency,
+    'policyVersion',v_policy.version,'status',case when v_count=0 then 'awaiting_voter_register' else 'quote_available' end
+  );
+end;
+$;
+
+revoke all on function mandate_private.get_platform_fee_quote(uuid) from public,anon;
+grant execute on function mandate_private.get_platform_fee_quote(uuid) to authenticated;
+create or replace function public.get_platform_fee_quote(p_election_id uuid)
+returns jsonb language sql security invoker set search_path=pg_catalog
+as $ select mandate_private.get_platform_fee_quote($1); $;
+revoke all on function public.get_platform_fee_quote(uuid) from public,anon;
+grant execute on function public.get_platform_fee_quote(uuid) to authenticated;
+
+create or replace function mandate_private.create_platform_fee_payment_intent(
+  p_election_id uuid,p_expected_voter_count integer,p_expected_amount_minor bigint,p_expected_policy_version integer
+)
 returns jsonb
 language plpgsql
 security definer
@@ -103,6 +158,21 @@ begin
   where election_id=v_e.id and eligibility_status='eligible';
   if v_count<1 then raise exception 'ELIGIBLE_VOTERS_REQUIRED' using errcode='23514'; end if;
 
+  if v_e.platform_fee_quoted_at is not null then
+    if p_expected_voter_count is distinct from v_e.platform_fee_eligible_voter_count
+      or p_expected_amount_minor is distinct from v_e.platform_fee_amount_minor
+      or p_expected_policy_version is distinct from v_e.platform_fee_policy_version then
+      raise exception 'PLATFORM_FEE_QUOTE_CHANGED' using errcode='40001';
+    end if;
+  else
+    v_amount := greatest(v_count::bigint * v_policy.amount_per_eligible_voter_minor,v_policy.minimum_fee_minor);
+    if p_expected_voter_count is distinct from v_count
+      or p_expected_amount_minor is distinct from v_amount
+      or p_expected_policy_version is distinct from v_policy.version then
+      raise exception 'PLATFORM_FEE_QUOTE_CHANGED' using errcode='40001';
+    end if;
+  end if;
+
   if v_e.platform_fee_payment_intent_id is not null then
     select * into v_intent from public.payment_intents
     where id=v_e.platform_fee_payment_intent_id;
@@ -116,6 +186,7 @@ begin
         'policyVersion',v_e.platform_fee_policy_version,'status','paid','duplicate',true
       );
     elsif v_intent.status not in ('failed','abandoned') then
+      v_duplicate := true;
       return jsonb_build_object(
         'paymentIntentId',v_intent.id,'reference',v_intent.provider_reference,
         'amountMinor',v_intent.amount_minor,'currency',v_intent.currency,
@@ -191,18 +262,16 @@ begin
 end;
 $$;
 
-revoke all on function mandate_private.create_platform_fee_payment_intent(uuid) from public,anon;
-grant execute on function mandate_private.create_platform_fee_payment_intent(uuid) to authenticated;
+revoke all on function mandate_private.create_platform_fee_payment_intent(uuid,integer,bigint,integer) from public,anon;
+grant execute on function mandate_private.create_platform_fee_payment_intent(uuid,integer,bigint,integer) to authenticated;
 
-create or replace function public.create_platform_fee_payment_intent(p_election_id uuid)
-returns jsonb
-language sql
-security invoker
-set search_path=pg_catalog
-as $$ select mandate_private.create_platform_fee_payment_intent($1); $$;
-
-revoke all on function public.create_platform_fee_payment_intent(uuid) from public,anon;
-grant execute on function public.create_platform_fee_payment_intent(uuid) to authenticated;
+create or replace function public.create_platform_fee_payment_intent(
+  p_election_id uuid,p_expected_voter_count integer,p_expected_amount_minor bigint,p_expected_policy_version integer
+)
+returns jsonb language sql security invoker set search_path=pg_catalog
+as $ select mandate_private.create_platform_fee_payment_intent($1,$2,$3,$4); $;
+revoke all on function public.create_platform_fee_payment_intent(uuid,integer,bigint,integer) from public,anon;
+grant execute on function public.create_platform_fee_payment_intent(uuid,integer,bigint,integer) to authenticated;
 
 create or replace function mandate_private.sync_platform_fee_payment_status()
 returns trigger
