@@ -9,6 +9,7 @@ This runbook is an operator checklist. A checkbox is complete only when the link
 
 - M0–M5 registered-election release was consolidated in [PR #10](https://github.com/gvffbhdvgf/mandate/pull/10), merged to `main` at merge commit `47523f85435e46a15316940052827f38d1bd2465`. The PR head `4b0d8d5d2e293161c2ff02a8fd9b9195bb146097` passed the application, disposable database migration/invariant/concurrency and Paystack Edge Function workflows.
 - Production Cloudflare Worker `mandate` is deployed at [https://mandate.markmachukhu97.workers.dev](https://mandate.markmachukhu97.workers.dev). Production deployment run [#4](https://github.com/gvffbhdvgf/mandate/actions/runs/45924589936) passed contract/type/compatibility checks, Worker build and smoke checks for home, login and signup. The deployed source commit is `3858cbb950fc439178efd932ef197b76af98c314`; Cloudflare reports the Worker script is present and modified on 2026-11-27.
+- A read-only independent Chrome smoke check on 2026-11-27 confirmed the homepage, `/login` and `/signup` render expected Mandate content; unauthenticated `/dashboard` redirects to `/login`. No form was submitted and no account or application data was changed.
 - Supabase project `yhdosrhtzcsfqfuuqhsk` (Mandate, `eu-central-1`) is `ACTIVE_HEALTHY`, with hosted migrations through `0033_election_setup_confirmation_index`.
 - Supabase security advisors have no WARN findings. Sixteen RLS-enabled tables without policies are intentional private/default-deny tables; access must be through approved RPCs. Forty-eight unused-index notices are INFO findings and should not be removed without production workload evidence.
 - Active hosted Edge Functions include Paystack initialize v3, verify v3 and webhook v4, voter invitations v10, and organization invitations v2. Paystack remains test-gated; payment functions do not issue vote credits, settle funds or initiate payouts.
@@ -23,14 +24,14 @@ This runbook is an operator checklist. A checkbox is complete only when the link
 - [x] PR #10 reviewed, merged to `main`, and required application/database/Edge Function checks passed on the recorded PR head.
 - [x] Production Worker deployed from `main`.
 - [x] Production deployment workflow passed home, login and signup route smoke checks.
+- [x] Independent read-only browser smoke check confirmed homepage, login and signup render and unauthenticated `/dashboard` redirects to `/login`.
 - [x] Supabase Auth production Site URL and callback allowlist configured.
 - [x] Hosted Supabase migration history verified through `0033_election_setup_confirmation_index`.
 - [x] Supabase security advisors checked; no WARN findings.
 
 ### Still required before real pilot use
 
-- [ ] From an independent browser/network, verify unauthenticated `/dashboard` redirects to sign-in.
-- [ ] Using a designated test account, verify signup, email confirmation, callback, login and password reset on the production origin.
+- [ ] Using a designated test account, verify signup, email confirmation, callback, login and password reset on the production origin. The current browser check only confirmed that the forms render; it did not submit them.
 - [ ] Confirm a project-controlled sending domain. Configure and verify its DNS in Resend, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Supabase function secrets. Use only an explicitly authorized test mailbox before real invitations. Do not transfer or claim `poptraworld.digital` without explicit authorization.
 - [ ] Test organization invitation creation, delivery, acceptance, expiry, revocation and assigned-role boundaries after sender setup.
 - [ ] Test the election setup and lifecycle on non-production test data: create/resume draft, confirm authority, import a test voter list, run registered voting, close/tally/publish, and verify audited aggregate CSV/PDF exports.
