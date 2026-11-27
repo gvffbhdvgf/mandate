@@ -443,7 +443,10 @@ test("public participant verification uses email OTP and keeps identity out of b
   assert.match(smoke, /BALLOT_MUST_NOT_CONTAIN_PARTICIPANT_OR_CONTACT_IDENTITY/);
   assert.match(details, /\.eq\("voting_mode", "public_paid"\)/);
   assert.match(session, /user\.email_confirmed_at/);
+  assert.match(session, /checkoutEnabled/);
+  assert.match(session, /platform_payment_feature_flags/);
   assert.match(session, /verification_status: "verified"/);
+  assert.match(form, /New voting-credit purchases are temporarily paused/);
   assert.match(session, /\.eq\("auth_user_id", user\.id\)/);
   assert.match(actions, /signInWithOtp/);
   assert.match(actions, /shouldCreateUser: true/);
