@@ -11,6 +11,16 @@ insert into auth.users(
   '{"display_name":"Finance acceptance"}'::jsonb,now(),now()
 );
 
+insert into auth.users(
+  id,aud,role,email,encrypted_password,email_confirmed_at,
+  raw_app_meta_data,raw_user_meta_data,created_at,updated_at
+) values (
+  '11111111-1111-4111-8111-111111111147',
+  'authenticated','authenticated','mandate-platform-fee-owner-smoke@example.invalid','',
+  now(),'{"provider":"email","providers":["email"]}'::jsonb,
+  '{"display_name":"Owner acceptance"}'::jsonb,now(),now()
+);
+
 insert into public.organizations(id,name,slug,created_by)
 values (
   '22222222-2222-4222-8222-222222222246',
@@ -23,6 +33,13 @@ values (
   '22222222-2222-4222-8222-222222222246',
   '11111111-1111-4111-8111-111111111146',
   'finance_manager','active'
+);
+
+insert into public.organization_members(organization_id,user_id,role,status)
+values (
+  '22222222-2222-4222-8222-222222222246',
+  '11111111-1111-4111-8111-111111111147',
+  'owner','active'
 );
 
 insert into public.elections(
@@ -52,6 +69,25 @@ values (
 );
 
 set local role authenticated;
+select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111146',true);
+select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111146","role":"authenticated"}',true);
+
+select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111147',true);
+select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111147","role":"authenticated"}',true);
+
+do $
+declare v_rejected boolean := false;
+begin
+  begin
+    update public.elections set platform_fee_status='paid'
+    where id='33333333-3333-4333-8333-333333333346';
+  exception when sqlstate '55000' then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'CLIENT_MUST_NOT_WRITE_PLATFORM_FEE_STATUS'; end if;
+end;
+$;
+
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111146',true);
 select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111146","role":"authenticated"}',true);
 
