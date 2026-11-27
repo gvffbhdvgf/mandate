@@ -49,6 +49,11 @@ begin
     raise exception 'PUBLIC_PAID_PRICE_AND_CAP_MUST_BE_FROZEN_IN_SETUP_HASH';
   end if;
 
+  if position('price_per_credit_minor' in pg_get_functiondef('mandate_private.guard_election_snapshot()'::regprocedure))=0
+    or position('public_slug' in pg_get_functiondef('mandate_private.guard_election_snapshot()'::regprocedure))=0 then
+    raise exception 'PUBLIC_PAID_PRICE_AND_SLUG_MUST_FREEZE_AFTER_OPEN';
+  end if;
+
   if position('participant_id' in pg_get_functiondef('mandate_private.tally_and_reconcile(uuid)'::regprocedure))=0
     or position('PAID_VOTING_FEATURE_GATED' in pg_get_functiondef('mandate_private.tally_and_reconcile(uuid)'::regprocedure))>0 then
     raise exception 'PUBLIC_PAID_TALLY_MUST_RECONCILE_PARTICIPANT_CONTROLS';
