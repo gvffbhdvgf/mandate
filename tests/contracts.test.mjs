@@ -383,3 +383,21 @@ test("verified Paystack success atomically posts an unallocated balanced suspens
   assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_POSTING_MUST_BE_IDEMPOTENT/);
   assert.match(smoke, /rollback;/);
 });
+
+
+test("Paystack refund and dispute webhooks freeze payments for explicit reconciliation", async () => {
+  const migration = await read("../supabase/migrations/20261127160000_0038_paystack_refund_dispute_exceptions.sql");
+  const smoke = await read("../supabase/tests/paystack_refund_dispute_exception_smoke.sql");
+  const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
+  assert.match(migration, /apply_paystack_payment_exception_event/);
+  assert.match(migration, /charge\.dispute\./);
+  assert.match(migration, /set status = 'exception'/);
+  assert.match(migration, /does not infer final refund settlement/i);
+  assert.match(smoke, /REFUND_EVENT_MUST_FREEZE_PAYMENT/);
+  assert.match(smoke, /REFUND_EVENT_MUST_NOT_AUTO_REVERSE_LEDGER/);
+  assert.match(webhook, /eventType\.startsWith\("refund\."\)/);
+  assert.match(webhook, /eventType\.startsWith\("charge\.dispute\."\)/);
+  assert.match(webhook, /apply_paystack_payment_exception_event/);
+  assert.match(webhook, /reconciliationRequired: true/);
+  assert.match(smoke, /rollback;/);
+});
