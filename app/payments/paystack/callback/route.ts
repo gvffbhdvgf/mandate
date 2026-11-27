@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 const referencePattern = /^[A-Za-z0-9.=-]{8,100}$/;
 
 function statusPage(status: number, title: string, message: string, returnPath = "/dashboard") {
-  const safeReturnPath = /^\\/public-vote\\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(returnPath)
+  const safeReturnPath = /^\/public-vote\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(returnPath)
     ? returnPath
     : "/dashboard";
   const returnLabel = safeReturnPath === "/dashboard" ? "Return to Mandate" : "Continue to your election";
