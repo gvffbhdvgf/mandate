@@ -553,3 +553,41 @@ test("Paystack payment exceptions are exposed through a private read-only eviden
   assert.match(smoke, /PAYSTACK_EXCEPTION_QUEUE_MUST_REMAIN_SERVER_ONLY/);
   assert.match(smoke, /rollback;/);
 });
+
+
+test("registered elections use a versioned server-priced platform fee before invitations and opening", async () => {
+  const migration = await read("../supabase/migrations/20261127240000_0046_platform_fee_pricing_policy.sql");
+  const smoke = await read("../supabase/tests/platform_fee_pricing_smoke.sql");
+  const action = await read("../app/actions/payments.ts");
+  const component = await read("../app/organizations/[organizationId]/elections/[electionId]/platform-fee-checkout.tsx");
+  const page = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
+  const invitations = await read("../supabase/functions/send-voter-invitations/index.ts");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  const callback = await read("../app/payments/paystack/callback/route.ts");
+  const docs = await read("../docs/payments/paystack-integration.md");
+
+  assert.match(migration, /amount_per_eligible_voter_minor bigint/);
+  assert.match(migration, /minimum_fee_minor bigint/);
+  assert.match(migration, /values \(1,'KES',2000,50000,true\)/);
+  assert.match(migration, /get_platform_fee_quote/);
+  assert.match(migration, /create_platform_fee_payment_intent/);
+  assert.match(migration, /PLATFORM_FEE_QUOTE_CHANGED/);
+  assert.match(migration, /VOTER_REGISTER_FROZEN_BY_PLATFORM_FEE_QUOTE/);
+  assert.match(migration, /PLATFORM_FEE_PAYMENT_REQUIRED/);
+  assert.match(migration, /sync_platform_fee_payment_status/);
+  assert.match(smoke, /PLATFORM_FEE_SERVER_PRICING_OR_IDEMPOTENCY_FAILED/);
+  assert.match(smoke, /VOTER_REGISTER_MUST_FREEZE_AFTER_FEE_QUOTE/);
+  assert.match(smoke, /ELECTION_OPEN_MUST_REQUIRE_PAID_PLATFORM_FEE/);
+  assert.match(smoke, /VERIFIED_PLATFORM_FEE_PAYMENT_MUST_MARK_ELECTION_PAID/);
+  assert.match(action, /create_platform_fee_payment_intent/);
+  assert.match(action, /paystack-initialize/);
+  assert.match(action, /authorizationUrl\.hostname\.endsWith\("\.paystack\.com"\)/);
+  assert.match(component, /KSh 20 per voter · KSh 500 minimum/);
+  assert.match(component, /Continue to secure payment/);
+  assert.match(page, /get_platform_fee_quote/);
+  assert.match(page, /PlatformFeeCheckout/);
+  assert.match(invitations, /PLATFORM_FEE_PAYMENT_REQUIRED/);
+  assert.match(verify, /intent\.purpose === "platform_fee"/);
+  assert.match(callback, /organizations\\\\\\/\[0-9a-f-\]\{36\}/);
+  assert.match(docs, /KES 2,000 per eligible voter and KES 50,000 minimum/);
+});
