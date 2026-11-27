@@ -335,7 +335,7 @@ set status='exception',
     verified_at=verified_at+interval '1 second'
 where id=current_setting('test.public_credit_exception_intent_id')::uuid;
 
-do $
+do $$
 declare
   v_reference text;
   v_result jsonb;
