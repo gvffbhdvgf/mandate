@@ -8,6 +8,7 @@ values
 
 create temporary table m2_test_ids(election_id uuid, payment_intent_id uuid);
 grant select,insert,update,delete on m2_test_ids to authenticated;
+grant select on m2_test_ids to service_role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','77777777-7777-4777-8777-777777777777',true);
