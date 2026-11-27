@@ -18,7 +18,15 @@ type PaystackEvent = {
 };
 type PaystackVerifyResponse = {
   status: boolean;
-  data: { id: number | string; status: string; reference: string; amount: number; currency: string };
+  data: {
+    id: number | string;
+    status: string;
+    reference: string;
+    amount: number;
+    currency: string;
+    fees_split?: { paystack?: number | string; integration?: number | string; subaccount?: number | string };
+    subaccount?: { subaccount_code?: string; percentage_charge?: number | string };
+  };
 };
 
 const sha256Hex = async (value: string) => {
