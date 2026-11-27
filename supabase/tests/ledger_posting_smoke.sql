@@ -1,16 +1,12 @@
 begin;
-set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
 
+-- Seed ledger accounts as the database owner. The API service role intentionally
+-- has no direct table privileges; it may only call the controlled posting RPC.
 do $$
 declare
   v_clearing uuid;
   v_revenue uuid;
   v_source uuid := gen_random_uuid();
-  v_result jsonb;
-  v_duplicate jsonb;
-  v_entries bigint;
-  v_rejected boolean := false;
 begin
   insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
   values ('provider_clearing', null, 'KES', 'acceptance-clearing')
@@ -20,6 +16,25 @@ begin
   values ('platform_revenue', null, 'KES', 'acceptance-revenue')
   returning id into v_revenue;
 
+  perform set_config('test.ledger_clearing', v_clearing::text, true);
+  perform set_config('test.ledger_revenue', v_revenue::text, true);
+  perform set_config('test.ledger_source', v_source::text, true);
+end;
+$$;
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+
+-- The service role can post only through the controlled RPC.
+do $$
+declare
+  v_clearing uuid := current_setting('test.ledger_clearing')::uuid;
+  v_revenue uuid := current_setting('test.ledger_revenue')::uuid;
+  v_source uuid := current_setting('test.ledger_source')::uuid;
+  v_result jsonb;
+  v_duplicate jsonb;
+  v_rejected boolean := false;
+begin
   v_result := public.post_ledger_transaction(
     'acceptance_payment',
     'acceptance_test',
@@ -35,6 +50,7 @@ begin
   if v_result->>'status' <> 'posted' or (v_result->>'duplicate')::boolean then
     raise exception 'LEDGER_FIRST_POST_FAILED';
   end if;
+  perform set_config('test.ledger_transaction', v_result->>'id', true);
 
   v_duplicate := public.post_ledger_transaction(
     'acceptance_payment',
@@ -52,12 +68,6 @@ begin
     raise exception 'LEDGER_DUPLICATE_NOT_IDEMPOTENT';
   end if;
 
-  select count(*) into v_entries
-  from public.ledger_entries
-  where transaction_id = (v_result->>'id')::uuid;
-  if v_entries <> 2 then raise exception 'LEDGER_DUPLICATE_CREATED_ENTRIES'; end if;
-
-  v_rejected := false;
   begin
     perform public.post_ledger_transaction(
       'acceptance_payment',
@@ -75,6 +85,7 @@ begin
   end;
   if not v_rejected then raise exception 'LEDGER_IDEMPOTENCY_CONFLICT_MUST_FAIL'; end if;
 
+  v_rejected := false;
   begin
     perform public.post_ledger_transaction(
       'acceptance_payment',
@@ -91,11 +102,27 @@ begin
     v_rejected := true;
   end;
   if not v_rejected then raise exception 'UNBALANCED_LEDGER_POST_MUST_FAIL'; end if;
+end;
+$$;
 
-  v_rejected := false;
+reset role;
+
+-- Owner-level checks verify the ledger remains append-only after posting.
+do $$
+declare
+  v_clearing uuid := current_setting('test.ledger_clearing')::uuid;
+  v_transaction uuid := current_setting('test.ledger_transaction')::uuid;
+  v_entries bigint;
+  v_rejected boolean := false;
+begin
+  select count(*) into v_entries
+  from public.ledger_entries
+  where transaction_id = v_transaction;
+  if v_entries <> 2 then raise exception 'LEDGER_DUPLICATE_CREATED_ENTRIES'; end if;
+
   begin
     update public.ledger_entries set amount_minor = 12501
-    where transaction_id = (v_result->>'id')::uuid;
+    where transaction_id = v_transaction;
   exception when sqlstate '55000' then
     v_rejected := true;
   end;
@@ -104,7 +131,7 @@ begin
   v_rejected := false;
   begin
     insert into public.ledger_entries(transaction_id, account_id, direction, amount_minor, currency)
-    values ((v_result->>'id')::uuid, v_clearing, 'debit', 1, 'KES');
+    values (v_transaction, v_clearing, 'debit', 1, 'KES');
   exception when sqlstate '55000' then
     v_rejected := true;
   end;
@@ -113,7 +140,7 @@ begin
   v_rejected := false;
   begin
     update public.ledger_transactions set description = 'tampered'
-    where id = (v_result->>'id')::uuid;
+    where id = v_transaction;
   exception when sqlstate '55000' then
     v_rejected := true;
   end;
