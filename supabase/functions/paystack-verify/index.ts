@@ -30,7 +30,7 @@ Deno.serve(async (request: Request) => {
     const admin = adminClient();
     const { data: intent, error } = await admin
       .from("payment_intents")
-      .select("id,organization_id,purpose,provider_reference,amount_minor,currency,status")
+      .select("id,organization_id,purpose,provider_reference,amount_minor,currency,status,provider_transaction_id")
       .eq("provider_reference", body.reference)
       .maybeSingle();
     if (error || !intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" }, cors);
@@ -46,26 +46,58 @@ Deno.serve(async (request: Request) => {
     const referenceMatches = payment.reference === intent.provider_reference;
     const isSuccess = payment.status === "success" && amountMatches && currencyMatches && referenceMatches;
 
+    // Terminal states are immutable through this user-facing verification path.
+    // A repeat of the same successful provider transaction is safe and idempotent.
+    if (intent.status === "success") {
+      const sameSuccessfulTransaction = isSuccess
+        && String(payment.id) === String(intent.provider_transaction_id);
+      if (sameSuccessfulTransaction) {
+        return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true }, cors);
+      }
+      return json(409, { error: "PAYMENT_STATE_TERMINAL", status: intent.status }, cors);
+    }
+    if (!["initialized", "pending"].includes(intent.status)) {
+      return json(409, { error: "PAYMENT_STATE_TERMINAL", status: intent.status }, cors);
+    }
+
     const nextStatus = payment.status === "success" && !isSuccess ? "exception"
       : payment.status === "success" ? "success"
       : payment.status === "failed" ? "failed"
       : payment.status === "abandoned" ? "abandoned"
       : "pending";
 
-    const { error: updateError } = await admin
+    // Compare-and-set prevents a late manual verification response from
+    // overwriting a webhook's success/refund/reversal or another concurrent update.
+    const { data: updated, error: updateError } = await admin
       .from("payment_intents")
       .update({
         status: nextStatus,
         provider_transaction_id: String(payment.id),
         verified_at: new Date().toISOString(),
       })
-      .eq("id", intent.id);
+      .eq("id", intent.id)
+      .in("status", ["initialized", "pending"])
+      .select("id")
+      .maybeSingle();
     if (updateError) return json(500, { error: "PAYMENT_VERIFICATION_PERSIST_FAILED" }, cors);
+    if (!updated) {
+      const { data: current, error: currentError } = await admin
+        .from("payment_intents")
+        .select("status,provider_transaction_id")
+        .eq("id", intent.id)
+        .maybeSingle();
+      if (currentError || !current) return json(500, { error: "PAYMENT_STATE_RECHECK_FAILED" }, cors);
+      if (current.status === "success" && isSuccess
+        && String(current.provider_transaction_id) === String(payment.id)) {
+        return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true }, cors);
+      }
+      return json(409, { error: "PAYMENT_STATE_CHANGED", status: current.status }, cors);
+    }
 
     if (payment.status === "success" && !isSuccess) {
       return json(409, { error: "PAYMENT_MISMATCH", status: nextStatus }, cors);
     }
-    return json(200, { status: nextStatus, reference: payment.reference, verified: isSuccess });
+    return json(200, { status: nextStatus, reference: payment.reference, verified: isSuccess }, cors);
   } catch (error) {
     const code = error instanceof Error ? error.message : "PAYMENT_VERIFICATION_FAILED";
     const status = code === "AUTHENTICATION_REQUIRED" || code === "INVALID_SESSION" ? 401
