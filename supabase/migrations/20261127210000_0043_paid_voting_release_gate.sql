@@ -358,12 +358,8 @@ begin
       v_starts_at,v_ends_at,v_timezone,v_result_visibility
     );
   else
-    if not exists (
-      select 1 from public.platform_payment_feature_flags
-      where singleton and public_vote_credits_enabled
-    ) then
-      raise exception 'PAID_VOTING_FEATURE_GATED' using errcode = '55000';
-    end if;
+    -- Draft configuration may be prepared while the platform release switch is off.
+    -- Setup confirmation and opening remain blocked until platform approval.
     if not mandate_private.has_org_role(
       p_organization_id,
       array['owner','admin','election_manager']::public.organization_role[]
