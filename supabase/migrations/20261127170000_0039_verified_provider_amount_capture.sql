@@ -355,5 +355,10 @@ revoke all on function public.apply_verified_paystack_payment_exception_event(uu
 grant execute on function public.apply_verified_paystack_payment_exception_event(uuid,text,text,text,bigint,text)
   to service_role;
 
+-- Remove the earlier unverified exception RPC so all refund/dispute state
+-- transitions must carry a server-verified provider transaction response.
+drop function if exists public.apply_paystack_payment_exception_event(uuid,text);
+drop function if exists mandate_private.apply_paystack_payment_exception_event(uuid,text);
+
 comment on function mandate_private.capture_verified_payment_receipt()
   is 'Captures actual provider-reported KES success and reversal-state amounts to clearing and suspense, including mismatched payments requiring reconciliation. Never books the expected intent amount as cash received.';
