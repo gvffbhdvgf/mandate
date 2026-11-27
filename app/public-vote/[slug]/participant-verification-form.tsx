@@ -72,6 +72,10 @@ export function ParticipantVerificationForm({
     });
   }
 
+  if (participantElection && participantElection.creditsRemaining > 0 && !ballotContext) {
+    return <p className="form-error" role="alert">Your verified credit balance is available, but ballot details could not be loaded. Reload this page before purchasing or casting anything else.</p>;
+  }
+
   if (participantElection && ballotContext && ballotContext.creditsRemaining > 0) {
     return (
       <section className="form-stack">
