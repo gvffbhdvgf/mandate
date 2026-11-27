@@ -625,3 +625,23 @@ test("registered elections use a versioned server-priced platform fee before inv
   assert.match(callback, /safeReturnPath/);
   assert.match(docs, /KES 2,000 per eligible voter and KES 50,000 minimum/);
 });
+
+
+test("manual voter entry reuses private staging, server validation and the existing review/commit workflow", async () => {
+  const actions = await read("../app/actions/voters.ts");
+  const form = await read("../app/organizations/[organizationId]/elections/[electionId]/manual-voter-form.tsx");
+  const page = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
+  assert.match(actions, /stageManualVoterAction/);
+  assert.match(actions, /createSupabaseServerClient/);
+  assert.match(actions, /mandate-voter-imports/);
+  assert.match(actions, /stage_voter_import/);
+  assert.match(actions, /p_original_filename: "manual-voter-entry\.csv"/);
+  assert.match(actions, /commit_voter_import/);
+  assert.match(actions, /registered_single/);
+  assert.match(actions, /weight !== 1/);
+  assert.match(form, /Add one voter manually/);
+  assert.match(form, /at least one contact address/);
+  assert.match(form, /Validate manual entry/);
+  assert.match(page, /ManualVoterForm/);
+  assert.match(page, /CommitImportForm/);
+});
