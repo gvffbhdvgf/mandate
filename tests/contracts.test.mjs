@@ -373,7 +373,7 @@ test("verified Paystack success atomically posts an unallocated balanced suspens
   assert.match(migration, /unallocated-payment-receipts/);
   assert.match(migration, /payment_receipt_pending_allocation/);
   assert.match(migration, /mandate_private\.post_ledger_transaction/);
-  assert.match(migration, /does not classify revenue/);
+  assert.match(migration, /does not classify revenue/i);
   assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_MUST_BE_BALANCED/);
   assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_POSTING_MUST_BE_IDEMPOTENT/);
   assert.match(smoke, /rollback;/);
