@@ -48,7 +48,7 @@ Deno.test("Paystack mode config fails closed for missing, mixed or mismatched cr
 
   Deno.env.set("PAYSTACK_MODE", "test");
   Deno.env.set("PAYSTACK_TEST_SECRET_KEY", "sk_live_wrong_mode");
-  Deno.env.set("PAYSTACK_TEST_WEBHOOK_SECRET", "whsec_test_webhook_secret");
+  Deno.env.set("PAYSTACK_TEST_WEBHOOK_SECRET", "test-webhook-secret");
   if (paymentsModeEnabled()) throw new Error("Live key in test mode must be disabled");
 
   Deno.env.set("PAYSTACK_TEST_SECRET_KEY", "sk_test_unit_test_key");
