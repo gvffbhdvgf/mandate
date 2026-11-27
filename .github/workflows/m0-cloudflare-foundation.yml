@@ -1,0 +1,74 @@
+name: Mandate CI
+
+on:
+  pull_request:
+    branches: [main, feat/m0-vinext-foundation]
+  push:
+    branches:
+      - main
+      - feat/m0-vinext-foundation
+      - "feat/**"
+      - "fix/**"
+      - "test/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mandate-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Contract, type, compatibility and Worker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact commit under test
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run contract, type and compatibility checks
+        run: npm run check
+
+      - name: Build the Workers application
+        run: npm run build:vinext
+
+      - name: Smoke-test the development runtime and authentication boundary
+        shell: bash
+        run: |
+          npm run dev:vinext -- --host 127.0.0.1 --port 4174 > /tmp/mandate-worker-dev.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          STATUS=""
+          for attempt in $(seq 1 40); do
+            STATUS=$(curl --silent --output /tmp/mandate-dashboard.html --dump-header /tmp/mandate-dashboard.headers --write-out "%{http_code}" http://127.0.0.1:4174/dashboard || true)
+            if [ "$STATUS" = "307" ] || [ "$STATUS" = "302" ]; then break; fi
+            sleep 2
+          done
+          test "$STATUS" = "307" -o "$STATUS" = "302"
+          grep -qi "location: /login" /tmp/mandate-dashboard.headers
+          curl --fail --silent http://127.0.0.1:4174/login > /tmp/mandate-worker-login.html
+          grep -q "Sign in to Mandate" /tmp/mandate-worker-login.html
+
+      - name: Smoke-test the built application preview
+        shell: bash
+        run: |
+          npm run start:vinext -- --host 127.0.0.1 --port 4173 > /tmp/mandate-preview.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /tmp/mandate-home.html; then break; fi
+            sleep 2
+          done
+          grep -q "Organizational elections" /tmp/mandate-home.html
+          grep -q "made clear" /tmp/mandate-home.html
