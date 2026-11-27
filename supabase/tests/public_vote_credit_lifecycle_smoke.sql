@@ -215,6 +215,7 @@ do $$
 declare
   v_failed jsonb;
   v_exception jsonb;
+  v_mismatch jsonb;
 begin
   v_failed := public.create_public_vote_credit_payment_intent(
     '11111111-1111-4111-8111-111111111141',
@@ -256,8 +257,26 @@ begin
       split_snapshot_at=now()
   where id=(v_exception->>'paymentIntentId')::uuid;
   perform set_config('test.public_credit_exception_intent_id',v_exception->>'paymentIntentId',true);
+
+  v_mismatch := public.create_public_vote_credit_payment_intent(
+    '11111111-1111-4111-8111-111111111141',
+    'public-credit-acceptance',
+    1,
+    'public-credit-acceptance-idempotency-005',
+    'mandate_77777777777747778777777777777777'
+  );
+  update public.payment_intents
+  set split_status='pending',
+      split_policy_version=9001,
+      split_subaccount_profile_id='77777777-7777-4777-8777-777777777741',
+      split_fee_type='fixed',
+      split_fixed_fee_minor=50,
+      split_fee_bearer='mandate',
+      split_snapshot_at=now()
+  where id=(v_mismatch->>'paymentIntentId')::uuid;
+  perform set_config('test.public_credit_mismatch_intent_id',v_mismatch->>'paymentIntentId',true);
 end;
-$$;
+$;
 
 update public.payment_intents
 set status='failed',
@@ -289,6 +308,26 @@ set status='exception',
     verified_at=verified_at+interval '1 second'
 where id=current_setting('test.public_credit_exception_intent_id')::uuid;
 
+do $
+declare
+  v_reference text;
+  v_result jsonb;
+begin
+  select provider_reference into v_reference
+  from public.payment_intents
+  where id=current_setting('test.public_credit_mismatch_intent_id')::uuid;
+  v_result := public.apply_verified_paystack_public_vote_split(
+    null,v_reference,'paystack-public-credit-mismatch-141','success',250,'KES',
+    '{"paystack":15,"integration":45,"subaccount":190}'::jsonb,
+    'ACCT_TEST_PUBLIC_CREDIT',null
+  );
+  if v_result->>'status' <> 'exception'
+    or v_result->>'reason' <> 'PAYSTACK_SPLIT_AMOUNT_MISMATCH' then
+    raise exception 'MISMATCHED_PROVIDER_SPLIT_MUST_BE_QUARANTINED';
+  end if;
+end;
+$;
+
 reset role;
 
 do $$
@@ -296,6 +335,8 @@ declare
   v_failed_status text;
   v_exception_status text;
   v_entitlement text;
+  v_mismatch_status text;
+  v_mismatch_lots bigint;
 begin
   select status into v_failed_status
   from public.vote_credit_reservations
@@ -313,8 +354,18 @@ begin
   if v_exception_status <> 'exception' or v_entitlement <> 'suspended' then
     raise exception 'REVERSAL_EXCEPTION_MUST_HOLD_RESERVATION_AND_SUSPEND_UNSPENT_CREDITS';
   end if;
+
+  select status into v_mismatch_status
+  from public.vote_credit_reservations
+  where payment_intent_id=current_setting('test.public_credit_mismatch_intent_id')::uuid;
+  select count(*) into v_mismatch_lots
+  from public.vote_credit_lots
+  where payment_id=current_setting('test.public_credit_mismatch_intent_id')::uuid;
+  if v_mismatch_status <> 'exception' or v_mismatch_lots <> 0 then
+    raise exception 'MISMATCHED_SPLIT_MUST_NOT_ISSUE_VOTE_CREDITS';
+  end if;
 end;
-$$;
+$;
 
 -- Pause new public-credit checkout after purchase. Existing holders must still
 -- be able to cast their paid credits.
