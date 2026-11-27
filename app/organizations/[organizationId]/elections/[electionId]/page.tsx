@@ -8,6 +8,7 @@ import { DispatchInvitationsForm } from "./dispatch-invitations-form";
 import { ElectionLifecycleControls } from "./lifecycle-controls";
 import { ElectionAuditTimeline } from "./audit-timeline";
 import { SetupConfirmation } from "./setup-confirmation";
+import { PlatformFeeCheckout } from "./platform-fee-checkout";
 
 export default async function ElectionPage({ params, searchParams }: {
   params: Promise<{ organizationId: string; electionId: string }>;
@@ -27,7 +28,8 @@ export default async function ElectionPage({ params, searchParams }: {
     .maybeSingle();
   const role = membership?.status === "active" ? membership.role : "viewer";
   const canManageRegister = ["owner", "admin", "election_manager"].includes(role);
-  const canViewRegister = ["owner", "admin", "election_manager", "returning_officer"].includes(role);
+  const canViewRegister = ["owner", "admin", "election_manager", "returning_officer", "finance_manager"].includes(role);
+  const canManagePayments = ["owner", "admin", "finance_manager"].includes(role);
   const canOpen = ["owner", "admin", "election_manager"].includes(role);
   const canClose = ["owner", "admin", "election_manager", "returning_officer"].includes(role);
   const canTally = canClose;
@@ -35,7 +37,7 @@ export default async function ElectionPage({ params, searchParams }: {
 
   const { data: election, error } = await supabase
     .from("elections")
-    .select("id,organization_id,title,description,status,voting_mode,public_slug,currency,price_per_credit_minor,max_credits_per_participant,paid_voting_authorized_at,starts_at,ends_at,timezone,result_visibility,setup_confirmed_at")
+    .select("id,organization_id,title,description,status,voting_mode,public_slug,currency,price_per_credit_minor,max_credits_per_participant,paid_voting_authorized_at,starts_at,ends_at,timezone,result_visibility,setup_confirmed_at,platform_fee_status,platform_fee_amount_minor,platform_fee_eligible_voter_count,platform_fee_policy_version")
     .eq("id", electionId)
     .eq("organization_id", organizationId)
     .maybeSingle();
@@ -50,8 +52,19 @@ export default async function ElectionPage({ params, searchParams }: {
 
   const { count: voterCount, error: voterCountError } = canViewRegister && election.voting_mode !== "public_paid"
     ? await supabase.from("election_voters").select("id", { count: "exact", head: true }).eq("election_id", electionId)
+      .eq("eligibility_status", "eligible")
     : { count: null, error: null };
   if (voterCountError) throw new Error("Could not load the voter register count.");
+
+  let platformFeeQuote: {
+    eligibleVoterCount: number; amountMinor: number; currency: string; policyVersion: number; status: string;
+  } | null = null;
+  if (canManagePayments && election.voting_mode !== "public_paid") {
+    const { data: quote } = await supabase.rpc("get_platform_fee_quote", { p_election_id: electionId });
+    if (quote && typeof quote === "object") {
+      platformFeeQuote = quote as typeof platformFeeQuote;
+    }
+  }
 
   let importBatch = null;
   if (canViewRegister && election.voting_mode !== "public_paid") {
@@ -133,6 +146,13 @@ export default async function ElectionPage({ params, searchParams }: {
             <div><span>Platform approval</span><strong>{election.paid_voting_authorized_at ? "Authorized" : "Pending"}</strong></div>
           </div>
         </section>
+      )}
+      {canManagePayments && platformFeeQuote && election.voting_mode !== "public_paid" && (
+        <PlatformFeeCheckout
+          organizationId={organizationId}
+          electionId={electionId}
+          quote={platformFeeQuote}
+        />
       )}
       {canViewRegister && election.voting_mode !== "public_paid" && (
         <section className="panel voter-register-panel">
