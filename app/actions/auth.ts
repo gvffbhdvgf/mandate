@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { safeInternalPath } from "../../lib/navigation";
 
-export type AuthActionState = { error?: string };
+export type AuthActionState = { error?: string; message?: string };
 
 type AuthProviderError = {
   code?: string;
