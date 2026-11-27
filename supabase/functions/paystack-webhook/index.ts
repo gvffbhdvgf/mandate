@@ -92,6 +92,9 @@ Deno.serve(async (request: Request) => {
   if (intentError) return json(500, { error: "PAYMENT_INTENT_LOOKUP_FAILED" });
   if (!intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" });
   if (!paymentPurposeEnabled(intent.purpose)) return json(503, { error: "PAYMENT_PURPOSE_DISABLED" });
+  if (intent.purpose === "public_vote_credits") {
+    return json(503, { error: "PUBLIC_VOTE_CREDIT_FULFILLMENT_NOT_READY" });
+  }
 
   let verified: PaystackVerifyResponse;
   try {
