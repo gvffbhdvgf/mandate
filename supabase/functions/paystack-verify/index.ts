@@ -141,7 +141,7 @@ Deno.serve(async (request: Request) => {
       if (currentError || !current) return json(500, { error: "PAYMENT_STATE_RECHECK_FAILED" }, cors);
       if (current.status === "success" && isSuccess
         && String(current.provider_transaction_id) === String(payment.id)) {
-        return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true }, cors);
+        return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true, returnPath }, cors);
       }
       return json(409, { error: "PAYMENT_STATE_CHANGED", status: current.status }, cors);
     }
