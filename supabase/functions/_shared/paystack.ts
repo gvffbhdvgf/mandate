@@ -85,6 +85,39 @@ export const paymentPurposeEnabled = (purpose: PaymentPurpose) => {
   return env(`PAYSTACK_${config.mode.toUpperCase()}_${purposeKey}_ENABLED`).toLowerCase() === "true";
 };
 
+export function paymentCallbackUrl(): string | undefined {
+  const configured = env("MANDATE_PAYMENT_CALLBACK_URL");
+  const siteUrl = env("MANDATE_SITE_URL");
+  const candidate = configured || (siteUrl ? new URL("/payments/paystack/callback", siteUrl).toString() : "");
+  if (!candidate) return undefined;
+
+  let callback: URL;
+  try {
+    callback = new URL(candidate);
+  } catch {
+    throw new Error("PAYMENT_CALLBACK_URL_INVALID");
+  }
+
+  const allowedOrigins = [siteUrl, ...env("MANDATE_ALLOWED_ORIGINS").split(",")]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => {
+      try { return new URL(value).origin; } catch { return ""; }
+    })
+    .filter(Boolean);
+
+  if (callback.protocol !== "https:"
+    || callback.username
+    || callback.password
+    || callback.pathname !== "/payments/paystack/callback"
+    || callback.search
+    || callback.hash
+    || !allowedOrigins.includes(callback.origin)) {
+    throw new Error("PAYMENT_CALLBACK_URL_INVALID");
+  }
+  return callback.toString();
+}
+
 export async function paystackRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const config = paystackModeConfig();
   if (!config) throw new Error("PAYSTACK_MODE_CONFIG_INVALID");
