@@ -499,7 +499,7 @@ test("public paid elections require platform release and freeze pricing before o
   assert.match(release, /verified_participants/);
   assert.match(release, /ballots_public_paid_feature_guard/);
   assert.match(releaseSmoke, /PUBLIC_VOTE_CREDITS_MUST_DEFAULT_DISABLED/);
-  assert.match(lifecycle, /public_payment/);
+  assert.match(lifecycle, /public-credit-acceptance/);
   assert.match(setupForm, /public_paid/);
   assert.match(setupForm, /price_per_credit_minor/);
   assert.match(setupForm, /max_credits_per_participant/);
