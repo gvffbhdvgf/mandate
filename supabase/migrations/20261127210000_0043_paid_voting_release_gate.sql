@@ -682,25 +682,16 @@ $$;
 
 -- Even if an Edge Function is misconfigured, a server-only database flag prevents
 -- creating new public-credit payment intents and inserting paid ballots while disabled.
+-- The release flag governs creation of new public-credit payment intents only.
+-- Existing verified credit holders must still be able to cast the credits they paid for.
 create or replace function mandate_private.guard_public_vote_credit_feature_flag()
 returns trigger
 language plpgsql
 security definer
 set search_path = pg_catalog
 as $$
-declare
-  v_mode public.voting_mode;
 begin
-  if tg_table_name = 'payment_intents' then
-    if new.purpose <> 'public_vote_credits' then return new; end if;
-  elsif tg_table_name = 'ballots' then
-    select voting_mode into v_mode
-    from public.elections
-    where id = new.election_id;
-    if v_mode is distinct from 'public_paid' then return new; end if;
-  else
-    return new;
-  end if;
+  if new.purpose <> 'public_vote_credits' then return new; end if;
 
   if not exists (
     select 1 from public.platform_payment_feature_flags
@@ -723,10 +714,6 @@ when (new.purpose='public_vote_credits')
 execute function mandate_private.guard_public_vote_credit_feature_flag();
 
 drop trigger if exists ballots_public_paid_feature_guard on public.ballots;
-create trigger ballots_public_paid_feature_guard
-before insert on public.ballots
-for each row
-execute function mandate_private.guard_public_vote_credit_feature_flag();
 
 comment on function mandate_private.tally_and_reconcile(uuid)
   is 'Reconciles registered elections by eligible voter register and public-paid elections by verified participant base while preserving anonymous ballot rows.';
