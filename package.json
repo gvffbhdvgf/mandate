@@ -11,7 +11,7 @@
     "dev:vinext": "vite dev --port 3001",
     "build:vinext": "vite build",
     "start:vinext": "vite preview",
-    "deploy:vinext": "vinext-cloudflare deploy --warm-cache --warm-cache-target https://mandate.markmachukhu97.workers.dev",
+    "deploy:vinext": "vinext-cloudflare deploy",
     "test:concurrency": "node scripts/concurrency.acceptance.mjs"
   },
   "repository": {
