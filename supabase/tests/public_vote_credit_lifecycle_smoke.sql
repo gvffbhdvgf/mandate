@@ -364,6 +364,11 @@ begin
   if v_result->>'status' <> 'success' or v_result->>'matched' <> 'true' then
     raise exception 'ORGANIZER_FEE_BEARER_SPLIT_MUST_RECONCILE';
   end if;
+
+  -- Keep this independent fee-bearer fixture out of the later ballot-consumption assertion.
+  update public.vote_credit_lots
+  set entitlement_status='suspended'
+  where payment_id=current_setting('test.public_credit_organizer_bearer_intent_id')::uuid;
 end;
 $$;
 
@@ -436,7 +441,7 @@ declare
   v_duplicate jsonb;
 begin
   v_context := public.get_public_paid_ballot_context('public-credit-acceptance');
-  if (v_context->>'creditsRemaining')::bigint <> 3 then
+  if (v_context->>'creditsRemaining')::bigint <> 2 then
     raise exception 'PUBLIC_PARTICIPANT_CONTEXT_MUST_SHOW_VERIFIED_CREDITS';
   end if;
 
