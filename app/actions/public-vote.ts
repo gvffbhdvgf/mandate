@@ -89,7 +89,7 @@ export async function verifyPublicParticipantOtp(emailValue: string, tokenValue:
 
 export async function initializePublicVoteCreditCheckout(slug: string, quantity: number, idempotencyKey: string) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80
-    || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100000
+    || !Number.isSafeInteger(quantity) || quantity < 1
     || !/^[A-Za-z0-9._:-]{16,200}$/.test(idempotencyKey)) {
     return { error: "Review the quantity and try again." };
   }
