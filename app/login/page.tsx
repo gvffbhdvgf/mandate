@@ -6,7 +6,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const params = await searchParams;
   const next = safeInternalPath(params.next);
   return (
-    <main className="auth-shell">
+    <main className="auth-shell" id="main-content" tabIndex={-1}>
       <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
       <section className="auth-card">
         <p className="kicker">WELCOME BACK</p>

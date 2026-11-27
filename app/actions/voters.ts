@@ -124,12 +124,12 @@ export async function stageVoterImportAction(
 
   if (error || !data?.batchId) {
     await supabase.storage.from("mandate-voter-imports").remove([objectPath]);
-    if (error?.message.includes("VOTER_ALREADY_REGISTERED")) return { error: "One or more voters are already in this election register." };
+    if (error?.message.includes("VOTER_ALREADY_REGISTERED")) return { error: "One or more voters are already in this election register. Compare the references and email addresses with the current register; no voters were added." };
     if (error?.message.includes("DUPLICATE_VOTER")) return { error: "The file contains duplicate voter references or email addresses." };
     return { error: "The voter import could not be validated. Check the CSV and try again." };
   }
 
-  redirect(`/organizations/${organizationId}/elections/${electionId}?batchId=${data.batchId}`);
+  redirect(`/organizations/${organizationId}/elections/${electionId}?batchId=${data.batchId}&validated=1`);
 }
 
 export async function commitVoterImportAction(
@@ -139,6 +139,9 @@ export async function commitVoterImportAction(
   const organizationId = String(formData.get("organizationId") ?? "");
   const electionId = String(formData.get("electionId") ?? "");
   const batchId = String(formData.get("batchId") ?? "");
+  if (formData.get("confirmImport") !== "true") {
+    return { error: "Review the voter count and confirm before adding the register." };
+  }
   if (![organizationId, electionId, batchId].every((value) => z.string().uuid().safeParse(value).success)) {
     return { error: "The import reference is invalid. Refresh and try again." };
   }
@@ -150,5 +153,5 @@ export async function commitVoterImportAction(
   const { error } = await supabase.rpc("commit_voter_import", { p_batch_id: batchId });
   if (error) return { error: "The voter register could not be committed. Check that the election is still a draft and retry." };
 
-  redirect(`/organizations/${organizationId}/elections/${electionId}`);
+  redirect(`/organizations/${organizationId}/elections/${electionId}?imported=1`);
 }

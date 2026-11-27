@@ -44,15 +44,15 @@ export default function VoterBallotPage() {
   }, []);
 
   return (
-    <main className="ballot-shell">
+    <main className="ballot-shell" id="main-content" tabIndex={-1}>
       <header className="ballot-header">
         <span className="brand"><span className="brand-mark">M</span><span>mandate</span></span>
         <span className="eyebrow">PRIVATE VOTING</span>
       </header>
       {loading ? (
-        <section className="ballot-panel"><p className="kicker">SECURE BALLOT</p><h1>Preparing your ballot…</h1><p className="muted">Your access link is being verified.</p></section>
+        <section className="ballot-panel" role="status" aria-live="polite"><p className="kicker">SECURE BALLOT</p><h1>Preparing your ballot…</h1><p className="muted">Your access link is being verified. Keep this page open.</p></section>
       ) : error ? (
-        <section className="ballot-panel"><p className="kicker">BALLOT UNAVAILABLE</p><h1>We could not open this ballot.</h1><p className="muted">{error}</p></section>
+        <section className="ballot-panel" role="alert"><p className="kicker">BALLOT UNAVAILABLE</p><h1>We could not open this ballot.</h1><p className="muted">{error}</p></section>
       ) : context ? (
         <>
           <section className="ballot-panel">
@@ -60,7 +60,7 @@ export default function VoterBallotPage() {
             <h1>{context.election.title}</h1>
             <p className="muted">Your access link is valid. Make your selection in each required contest. Your identity is kept separate from your ballot choices.</p>
             <div className="ballot-meta">
-              <span>{context.election.votingMode.replaceAll("_", " ")}</span>
+              <span>{context.election.votingMode === "registered_single" ? "One person, one vote" : context.election.votingMode === "registered_weighted" ? "Weighted voting" : "Registered voting"}</span>
               <span>Closes {new Date(context.election.endsAt).toLocaleString("en-KE", { timeZone: context.election.timezone })}</span>
             </div>
           </section>

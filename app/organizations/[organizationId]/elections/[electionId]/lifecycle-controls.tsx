@@ -1,7 +1,9 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatStatusLabel } from "../../../../../lib/ui/presentation";
+import { ActionToast } from "../../../../components/action-toast";
 import {
   closeElectionAction,
   openElectionAction,
@@ -34,6 +36,7 @@ export function ElectionLifecycleControls({
   canTally,
   canPublish,
   tallySummary,
+  openingChecks,
 }: {
   organizationId: string;
   electionId: string;
@@ -44,6 +47,7 @@ export function ElectionLifecycleControls({
   canTally: boolean;
   canPublish: boolean;
   tallySummary: TallySummary | null;
+  openingChecks: Array<{ label: string; complete: boolean; detail: string }>;
 }) {
   const router = useRouter();
   const [openState, openAction, openPending] = useActionState(openElectionAction, initialState);
@@ -52,6 +56,21 @@ export function ElectionLifecycleControls({
   const [resumeState, resumeAction, resumePending] = useActionState(resumeElectionAction, initialState);
   const [tallyState, tallyAction, tallyPending] = useActionState(tallyElectionAction, initialState);
   const [publishState, publishAction, publishPending] = useActionState(publishResultsAction, initialState);
+  const [toastMessage, setToastMessage] = useState("");
+  const previousActionStates = useRef({ open: openState, close: closeState, pause: pauseState, resume: resumeState, tally: tallyState, publish: publishState });
+
+  useEffect(() => {
+    const currentStates = { open: openState, close: closeState, pause: pauseState, resume: resumeState, tally: tallyState, publish: publishState };
+    let latestMessage = "";
+    for (const key of Object.keys(currentStates) as Array<keyof typeof currentStates>) {
+      const current = currentStates[key];
+      if (previousActionStates.current[key] !== current) {
+        previousActionStates.current[key] = current;
+        if (current.message) latestMessage = current.message;
+      }
+    }
+    if (latestMessage) setToastMessage(latestMessage);
+  }, [openState, closeState, pauseState, resumeState, tallyState, publishState]);
 
   useEffect(() => {
     if (openState.success || closeState.success || pauseState.success || resumeState.success || tallyState.success || publishState.success) router.refresh();
@@ -65,20 +84,35 @@ export function ElectionLifecycleControls({
   );
 
   return (
-    <section className="panel lifecycle-panel">
-      <div className="panel-heading"><div><p className="kicker">ELECTION CONTROL</p><h2>Lifecycle and results</h2></div><span className="status-pill">{status.replaceAll("_", " ")}</span></div>
+    <section className="panel lifecycle-panel" id="lifecycle">
+      <div className="panel-heading"><div><p className="kicker">ELECTION CONTROL</p><h2>Lifecycle and results</h2></div><span className={`status-pill status-${status}`}>{formatStatusLabel(status)}</span></div>
+      <ActionToast message={toastMessage} />
 
       {votingMode === "public_paid" ? (
         <p className="form-hint">Public paid voting is feature-gated pending legal, provider and operational approval. This election cannot be opened in this mode yet.</p>
       ) : status === "draft" || status === "scheduled" ? (
         canOpen ? (
+          <>
+          <div className="opening-readiness">
+            <h3>Before you open voting</h3>
+            <p className="muted">Complete each requirement. Mandate checks them again when you open the election.</p>
+            <ul className="readiness-list">
+              {openingChecks.map((check) => (
+                <li className={`readiness-item${check.complete ? " is-complete" : ""}`} key={check.label}>
+                  <span className="readiness-icon" aria-hidden="true">{check.complete ? "✓" : "–"}</span>
+                  <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                </li>
+              ))}
+            </ul>
+          </div>
           <form action={openAction} className="form-stack lifecycle-form">
             {hiddenFields}
             <p className="muted">Opening freezes the rules and candidate snapshot. The voter register must be complete and every eligible voter must have an invitation issued.</p>
             {openState.error && <p className="form-error" role="alert">{openState.error}</p>}
             <label className="ballot-confirmation"><input type="checkbox" name="confirmRules" value="true" required /> I have reviewed the election rules, options and eligible voter register.</label>
-            <button className="primary-button" disabled={openPending}>{openPending ? "Checking opening requirements…" : "Open election"}</button>
+            <button className="primary-button" disabled={openPending || !openingChecks.every((check) => check.complete)}>{openPending ? "Checking opening requirements…" : openingChecks.every((check) => check.complete) ? "Open election" : "Complete the checklist to open"}</button>
           </form>
+          </>
         ) : <p className="form-hint">An election manager or administrator must open this election.</p>
       ) : null}
 
@@ -106,7 +140,8 @@ export function ElectionLifecycleControls({
             {hiddenFields}
             <label>Reason for closing<textarea name="reason" minLength={10} maxLength={1000} required placeholder="Record why the election is being closed." /></label>
             {closeState.error && <p className="form-error" role="alert">{closeState.error}</p>}
-            <button className="danger-button" disabled={closePending}>{closePending ? "Closing election…" : "Close election"}</button>
+            <label className="ballot-confirmation"><input type="checkbox" name="confirmClose" value="true" required /> I understand that closing voting stops further ballot submissions.</label>
+            <button className="danger-button" disabled={closePending}>{closePending ? "Closing election…" : "Confirm and close voting"}</button>
           </form>
         ) : <p className="form-hint">A returning officer or election manager must close this election.</p>
       )}
@@ -117,7 +152,6 @@ export function ElectionLifecycleControls({
             {hiddenFields}
             <p className="muted">Reconciliation checks ballot records against the separate participation controls and frozen election snapshot. It publishes aggregate counts only.</p>
             {tallyState.error && <p className="form-error" role="alert">{tallyState.error}</p>}
-            {tallyState.message && <p className="form-success" role="status">{tallyState.message}</p>}
             <button className="primary-button" disabled={tallyPending}>{tallyPending ? "Reconciling ballots…" : "Run tally and reconciliation"}</button>
           </form>
         ) : <p className="form-hint">A returning officer or election manager must run reconciliation.</p>
@@ -147,8 +181,8 @@ export function ElectionLifecycleControls({
             <form action={publishAction} className="form-stack lifecycle-form">
               {hiddenFields}
               {publishState.error && <p className="form-error" role="alert">{publishState.error}</p>}
-              {publishState.message && <p className="form-success" role="status">{publishState.message}</p>}
-              <button className="primary-button" disabled={publishPending}>{publishPending ? "Publishing results…" : "Publish results"}</button>
+              <label className="ballot-confirmation"><input type="checkbox" name="confirmPublish" value="true" required /> I have reviewed the reconciled counts and authorize publication of these results.</label>
+              <button className="primary-button" disabled={publishPending}>{publishPending ? "Publishing results…" : "Confirm and publish results"}</button>
             </form>
           ) : <p className="form-hint">An owner, administrator or returning officer must publish results.</p>}
         </div>

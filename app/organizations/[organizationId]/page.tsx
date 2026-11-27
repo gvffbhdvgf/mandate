@@ -4,9 +4,16 @@ import { signOutAction } from "../../actions/auth";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { CreateElectionForm } from "./create-election-form";
 import { OrganizationMembersPanel } from "./members-panel";
+import { WorkspaceShell } from "../../components/workspace-shell";
+import { ActionToast } from "../../components/action-toast";
+import { formatDateTime, formatStatusLabel, formatVotingMode } from "../../../lib/ui/presentation";
 
-export default async function OrganizationPage({ params }: { params: Promise<{ organizationId: string }> }) {
+export default async function OrganizationPage({ params, searchParams }: {
+  params: Promise<{ organizationId: string }>;
+  searchParams: Promise<{ memberNotice?: string; memberError?: string }>;
+}) {
   const { organizationId } = await params;
+  const { memberNotice, memberError } = await searchParams;
   const supabase = await createSupabaseServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) redirect("/login");
@@ -60,26 +67,41 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
   if (electionsError) throw new Error("Could not load elections.");
   const elections = electionRows ?? [];
 
+  const noticeMessages: Record<string, string> = {
+    "role-updated": "Member access updated.",
+    "member-revoked": "Member access revoked.",
+    "invitation-revoked": "Invitation revoked.",
+  };
+  const errorMessages: Record<string, string> = {
+    "confirm-member": "Confirm member access removal before continuing.",
+    "confirm-invitation": "Confirm invitation revocation before continuing.",
+    "role-update-failed": "The role could not be updated. Check your permissions and try again.",
+    "revoke-member-failed": "Member access could not be revoked. Check your permissions and try again.",
+    "revoke-invitation-failed": "The invitation could not be revoked. Check its current status and try again.",
+  };
+
   return (
+    <WorkspaceShell
+      section="Organization workspace"
+      context={organization.name}
+      items={[
+        { label: "Dashboard", href: "/dashboard" },
+        { label: "Organization", href: `/organizations/${organizationId}` },
+        { label: "Elections", href: `/organizations/${organizationId}#elections` },
+        ...(canManageMembers ? [{ label: "Members", href: `/organizations/${organizationId}#members` }] : []),
+      ]}
+      activeHref={`/organizations/${organizationId}`}
+      actions={<form action={signOutAction}><button className="quiet-button">Sign out</button></form>}
+    >
     <main className="dashboard-shell">
-      <header className="topbar">
-        <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
-        <div className="nav-actions"><Link href="/dashboard">All organizations</Link><form action={signOutAction}><button className="quiet-button">Sign out</button></form></div>
-      </header>
+      <ActionToast message={memberNotice ? noticeMessages[memberNotice] : undefined} />
+      {memberError && errorMessages[memberError] && <p className="form-error" role="alert">{errorMessages[memberError]}</p>}
       <section className="dashboard-intro">
         <p className="kicker">ORGANIZATION WORKSPACE</p>
         <h1>{organization.name}</h1>
-        <p className="muted">/{organization.slug} · {organization.status}</p>
+        <p className="muted">/{organization.slug} · {formatStatusLabel(organization.status)}</p>
       </section>
-      {canManageMembers && (
-        <OrganizationMembersPanel
-          organizationId={organizationId}
-          members={members}
-          invitations={pendingInvitations}
-          actorRole={membership.role}
-        />
-      )}
-      <section className="dashboard-grid organization-workspace-grid">
+      <section className="dashboard-grid organization-workspace-grid" id="elections">
         <div className="panel">
           <div className="panel-heading"><div><p className="kicker">ELECTIONS</p><h2>Election workspace</h2></div><span className="count">{elections.length}</span></div>
           {elections.length === 0 ? (
@@ -88,8 +110,8 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
             <div className="organization-list">
               {elections.map((election) => (
                 <Link className="organization-item election-item" href={`/organizations/${organizationId}/elections/${election.id}`} key={election.id}>
-                  <div><h3>{election.title}</h3><p className="muted">{election.voting_mode.replaceAll("_", " ")} · {new Date(election.starts_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}</p></div>
-                  <span className="status-pill">{election.status}</span>
+                  <div><h3>{election.title}</h3><p className="muted">{formatVotingMode(election.voting_mode)} · {new Date(election.starts_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}</p></div>
+                  <span className={`status-pill status-${election.status}`}>{formatStatusLabel(election.status)}</span>
                 </Link>
               ))}
             </div>
@@ -101,6 +123,15 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
           <CreateElectionForm organizationId={organizationId} drafts={setupDrafts} />
         </div>}
       </section>
+      {canManageMembers && (
+        <OrganizationMembersPanel
+          organizationId={organizationId}
+          members={members}
+          invitations={pendingInvitations}
+          actorRole={membership.role}
+        />
+      )}
     </main>
+    </WorkspaceShell>
   );
 }

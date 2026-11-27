@@ -22,12 +22,12 @@ export function CreateOrganizationForm() {
   }
 
   return (
-    <form action={action} className="form-stack organization-form">
+    <form action={action} className="form-stack organization-form" aria-busy={pending}>
       {state.error && <p className="form-error" role="alert">{state.error}</p>}
-      <label>Organization name<input name="name" value={name} onChange={(event) => updateName(event.target.value)} minLength={2} maxLength={160} required /></label>
-      <label>Organization URL<input name="slug" value={slug} onChange={(event) => { setSlugEdited(true); setSlug(makeSlug(event.target.value)); }} minLength={3} maxLength={60} pattern="[a-z0-9]+(-[a-z0-9]+)*" required /><small>Use lowercase letters, numbers and hyphens. You can edit this address.</small></label>
-      <label>Contact email (optional)<input name="contactEmail" type="email" autoComplete="email" /></label>
-      <button className="primary-button" disabled={pending || slug.length < 3}>{pending ? "Creating…" : "Create organization"}</button>
+      <label htmlFor="organization-name">Organization name<input id="organization-name" name="name" value={name} onChange={(event) => updateName(event.target.value)} minLength={2} maxLength={160} required /></label>
+      <label htmlFor="organization-slug">Organization web address<input id="organization-slug" name="slug" value={slug} onChange={(event) => { setSlugEdited(true); setSlug(makeSlug(event.target.value)); }} minLength={3} maxLength={60} pattern="[a-z0-9]+(-[a-z0-9]+)*" aria-describedby="organization-slug-help" required /><small id="organization-slug-help">Use lowercase letters, numbers and hyphens. You can edit this address.</small></label>
+      <label htmlFor="organization-contact">Contact email (optional)<input id="organization-contact" name="contactEmail" type="email" autoComplete="email" inputMode="email" /></label>
+      <button className="primary-button" disabled={pending || slug.length < 3}>{pending ? "Creating workspace…" : "Create organization"}</button>
     </form>
   );
 }

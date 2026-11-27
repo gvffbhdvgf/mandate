@@ -39,7 +39,11 @@ export async function openElectionAction(_previous: LifecycleActionState, formDa
   if (error) {
     if (error.message.includes("VOTER_ACCESS_NOT_ISSUED")) return { error: "Every eligible voter must receive a secure invitation before this election can open." };
     if (error.message.includes("ELIGIBLE_VOTERS_REQUIRED")) return { error: "Import and commit the eligible voter register before opening." };
-    if (error.message.includes("ELECTION_NOT_STARTED")) return { error: "The scheduled start time has not arrived." };
+    if (error.message.includes("ELECTION_NOT_STARTED")) return { error: "The scheduled start time has not arrived. Refresh the page after the scheduled start time." };
+    if (error.message.includes("ELECTION_WINDOW_EXPIRED")) return { error: "The scheduled end time has passed. Update the draft schedule before opening." };
+    if (error.message.includes("ELECTION_SETUP_CHANGED_RECONFIRM") || error.message.includes("ELECTION_SETUP_NOT_CONFIRMED")) {
+      return { error: "The election settings changed after review. Review the current setup and record approval again before opening." };
+    }
     return { error: "The election could not be opened. Check the rules, options and voter access checklist." };
   }
   return { success: true, message: "Election opened. The frozen ballot snapshot is now active." };
@@ -66,6 +70,7 @@ export async function resumeElectionAction(_previous: LifecycleActionState, form
 }
 
 export async function closeElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
+  if (formData.get("confirmClose") !== "true") return { error: "Confirm that you want to close voting for this election." };
   const reason = String(formData.get("reason") ?? "").trim();
   if (reason.length < 10 || reason.length > 1000) return { error: "Enter a closure reason between 10 and 1,000 characters." };
   const auth = await authorizedElection(formData);
@@ -100,6 +105,7 @@ export async function tallyElectionAction(_previous: LifecycleActionState, formD
 }
 
 export async function publishResultsAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
+  if (formData.get("confirmPublish") !== "true") return { error: "Confirm that the reconciled results are ready to publish." };
   const auth = await authorizedElection(formData);
   if ("error" in auth) return { error: auth.error };
   const { error } = await auth.supabase.rpc("publish_results", { p_election_id: auth.electionId });
