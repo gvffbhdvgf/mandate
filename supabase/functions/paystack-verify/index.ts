@@ -89,7 +89,10 @@ Deno.serve(async (request: Request) => {
       const paystackFee = Number(feesSplit?.paystack);
       const integrationShare = Number(feesSplit?.integration);
       const organizerShare = Number(feesSplit?.subaccount);
-      if (!feesSplit || !Number.isSafeInteger(paystackFee) || paystackFee < 0
+      const subaccountPercentageCharge = subaccount?.percentage_charge == null ? null : Number(subaccount.percentage_charge);
+      if (!feesSplit || (subaccountPercentageCharge !== null
+          && (!Number.isFinite(subaccountPercentageCharge) || subaccountPercentageCharge < 0))
+        || !Number.isSafeInteger(paystackFee) || paystackFee < 0
         || !Number.isSafeInteger(integrationShare) || integrationShare < 0
         || !Number.isSafeInteger(organizerShare) || organizerShare < 0
         || !subaccount?.subaccount_code) {
@@ -104,7 +107,7 @@ Deno.serve(async (request: Request) => {
         p_currency: payment.currency,
         p_fees_split: { paystack: paystackFee, integration: integrationShare, subaccount: organizerShare },
         p_subaccount_code: subaccount.subaccount_code,
-        p_subaccount_percentage_charge: subaccount.percentage_charge == null ? null : Number(subaccount.percentage_charge),
+        p_subaccount_percentage_charge: subaccountPercentageCharge,
       });
       if (splitError || !splitResult) {
         return json(409, { error: "PAYSTACK_SPLIT_VERIFICATION_FAILED", message: "Payment remains unfulfilled pending split reconciliation." }, cors);
