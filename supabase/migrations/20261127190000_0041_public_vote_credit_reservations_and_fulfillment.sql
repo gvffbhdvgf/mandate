@@ -77,7 +77,12 @@ begin
   if found then
     if v_existing.purpose <> 'public_vote_credits'
       or v_existing.provider <> 'paystack'
-      or v_existing.expected_credits <> p_quantity then
+      or v_existing.expected_credits <> p_quantity
+      or not exists (
+        select 1 from public.elections
+        where id = v_existing.election_id
+          and public_slug = p_election_slug
+      ) then
       raise exception 'IDEMPOTENCY_CONFLICT' using errcode = '23505';
     end if;
 
