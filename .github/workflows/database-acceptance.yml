@@ -61,7 +61,7 @@ jobs:
         run: |
           db_port=$((55000 + GITHUB_RUN_NUMBER % 1000))
           shadow_port=$((db_port + 1))
-          printf '\\n[db]\\nport = %s\\nshadow_port = %s\\n' "$db_port" "$shadow_port" >> supabase/config.toml
+          printf '\n[db]\nport = %s\nshadow_port = %s\n' "$db_port" "$shadow_port" >> supabase/config.toml
           echo "Using disposable database port $db_port"
 
       - name: Start one disposable local Supabase stack (retry registry throttling)
