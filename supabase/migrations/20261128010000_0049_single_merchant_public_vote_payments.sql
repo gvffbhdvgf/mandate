@@ -1,0 +1,139 @@
+-- Public paid voting is a Mandate single-merchant product.
+-- Full participant charges are collected into Mandate's Paystack merchant account.
+-- Processor fees are recorded separately when Paystack reports them. No organizer
+-- subaccount, split settlement, organizer proceeds or later organizer payout is used.
+-- This does not enable the feature or bypass platform/legal/provider release gates.
+
+alter table public.payment_intents
+  add column provider_fee_minor bigint check (provider_fee_minor is null or provider_fee_minor >= 0),
+  add column provider_fee_verified_at timestamptz;
+
+alter table public.payment_intents
+  add constraint payment_intents_provider_fee_complete check (
+    (provider_fee_minor is null and provider_fee_verified_at is null)
+    or (provider_fee_minor is not null and provider_fee_verified_at is not null)
+  );
+
+create or replace function mandate_private.guard_provider_fee_facts()
+returns trigger language plpgsql security definer set search_path = pg_catalog, pg_temp
+as $$
+begin
+  if old.provider_fee_verified_at is not null and (
+    new.provider_fee_minor is distinct from old.provider_fee_minor
+    or new.provider_fee_verified_at is distinct from old.provider_fee_verified_at
+  ) then
+    raise exception 'VERIFIED_PROVIDER_FEE_FACTS_IMMUTABLE' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function mandate_private.guard_provider_fee_facts() from public, anon, authenticated;
+create trigger payment_intents_guard_provider_fee_facts
+before update of provider_fee_minor, provider_fee_verified_at on public.payment_intents
+for each row execute function mandate_private.guard_provider_fee_facts();
+grant execute on function mandate_private.guard_provider_fee_facts() to service_role;
+
+drop trigger if exists payment_intents_require_verified_public_vote_split on public.payment_intents;
+
+create or replace function mandate_private.apply_verified_paystack_public_vote_payment(
+  p_event_id uuid, p_provider_reference text, p_provider_transaction_id text,
+  p_provider_status text, p_amount_minor bigint, p_currency text, p_provider_fee_minor bigint
+)
+returns jsonb language plpgsql security definer set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_event public.payment_events%rowtype;
+  v_intent public.payment_intents%rowtype;
+  v_matches boolean;
+  v_next_status public.payment_status;
+begin
+  if p_provider_reference is null or p_provider_transaction_id is null or p_provider_status is null
+    or p_amount_minor is null or p_amount_minor <= 0 or p_currency is null
+    or (p_provider_fee_minor is not null and p_provider_fee_minor < 0) then
+    raise exception 'PUBLIC_VOTE_PAYMENT_VERIFICATION_FACTS_INVALID' using errcode = '22023';
+  end if;
+
+  if p_event_id is not null then
+    select * into v_event from public.payment_events where id = p_event_id for update;
+    if not found or v_event.provider <> 'paystack'
+      or v_event.signature_verified is distinct from true
+      or v_event.event_type <> 'charge.success'
+      or v_event.provider_reference is distinct from p_provider_reference then
+      raise exception 'INVALID_VERIFIED_PAYSTACK_EVENT' using errcode = '22023';
+    end if;
+    if v_event.processing_status = 'processed' then
+      return jsonb_build_object('duplicate', true, 'processed', true, 'status', 'success');
+    end if;
+  end if;
+
+  select * into v_intent from public.payment_intents
+  where provider = 'paystack' and provider_reference = p_provider_reference for update;
+
+  if not found or v_intent.purpose <> 'public_vote_credits'
+    or v_intent.election_id is null or v_intent.participant_id is null
+    or v_intent.organization_id is not null or v_intent.split_status <> 'not_configured' then
+    raise exception 'SINGLE_MERCHANT_PUBLIC_VOTE_INTENT_REQUIRED' using errcode = '23514';
+  end if;
+
+  if v_intent.status = 'success' and v_intent.provider_transaction_id = p_provider_transaction_id
+    and v_intent.provider_status = 'success'
+    and v_intent.provider_amount_minor = p_amount_minor
+    and v_intent.provider_currency = p_currency then
+    if p_event_id is not null then
+      update public.payment_events set processing_status = 'processed', processed_at = pg_catalog.now()
+      where id = p_event_id;
+    end if;
+    return jsonb_build_object('duplicate', true, 'processed', true, 'matched', true, 'status', 'success');
+  end if;
+
+  if v_intent.status not in ('initialized','pending') then
+    raise exception 'PAYMENT_STATE_TERMINAL' using errcode = '23514';
+  end if;
+
+  v_matches := p_provider_status = 'success'
+    and p_provider_reference = v_intent.provider_reference
+    and p_amount_minor = v_intent.amount_minor
+    and p_currency = v_intent.currency;
+  v_next_status := case when v_matches then 'success'::public.payment_status else 'exception'::public.payment_status end;
+
+  update public.payment_intents
+  set status = v_next_status, provider_transaction_id = p_provider_transaction_id,
+      provider_status = p_provider_status, provider_amount_minor = p_amount_minor,
+      provider_currency = p_currency, provider_fee_minor = p_provider_fee_minor,
+      provider_fee_verified_at = case when p_provider_fee_minor is null then null else pg_catalog.now() end,
+      verified_at = pg_catalog.now()
+  where id = v_intent.id;
+
+  if p_event_id is not null then
+    update public.payment_events set processing_status = 'processed', processed_at = pg_catalog.now()
+    where id = p_event_id;
+  end if;
+
+  return jsonb_build_object('duplicate', false, 'processed', true, 'matched', v_matches,
+    'status', v_next_status,
+    'reason', case when v_matches then null else 'PAYMENT_AMOUNT_CURRENCY_OR_STATUS_MISMATCH' end);
+end;
+$$;
+
+revoke all on function mandate_private.apply_verified_paystack_public_vote_payment(uuid,text,text,text,bigint,text,bigint)
+  from public, anon, authenticated;
+grant execute on function mandate_private.apply_verified_paystack_public_vote_payment(uuid,text,text,text,bigint,text,bigint)
+  to service_role;
+
+create or replace function public.apply_verified_paystack_public_vote_payment(
+  p_event_id uuid, p_provider_reference text, p_provider_transaction_id text,
+  p_provider_status text, p_amount_minor bigint, p_currency text, p_provider_fee_minor bigint
+)
+returns jsonb language sql security invoker set search_path = pg_catalog
+as $$ select mandate_private.apply_verified_paystack_public_vote_payment($1,$2,$3,$4,$5,$6,$7); $$;
+
+revoke all on function public.apply_verified_paystack_public_vote_payment(uuid,text,text,text,bigint,text,bigint)
+  from public, anon, authenticated;
+grant execute on function public.apply_verified_paystack_public_vote_payment(uuid,text,text,text,bigint,text,bigint)
+  to service_role;
+
+comment on column public.payment_intents.provider_fee_minor is
+  'Provider-reported processing fee in minor currency units, captured only from a server-verified Paystack transaction response; nullable when provider does not report it.';
+comment on function mandate_private.apply_verified_paystack_public_vote_payment(uuid,text,text,text,bigint,text,bigint) is
+  'Atomically verifies a single-merchant public vote-credit payment, records provider amount/currency/fee facts, posts the existing suspense receipt and triggers idempotent credit fulfillment. Does not allocate revenue or bypass the global feature release gate.';
