@@ -109,6 +109,13 @@ Deno.serve(async (request: Request) => {
       return json(500, { error: "PARTICIPANT_STATE_UNAVAILABLE" }, cors);
     }
 
+    const { data: releaseFlags, error: releaseFlagsError } = await admin
+      .from("platform_payment_feature_flags")
+      .select("public_vote_credits_enabled")
+      .eq("singleton", true)
+      .maybeSingle();
+    const checkoutEnabled = !releaseFlagsError && releaseFlags?.public_vote_credits_enabled === true;
+
     const { data: activeLots, error: lotsError } = await admin
       .from("vote_credit_lots")
       .select("credits_remaining")
@@ -132,6 +139,7 @@ Deno.serve(async (request: Request) => {
         endsAt: election.ends_at,
         timezone: election.timezone,
         creditsRemaining,
+        checkoutEnabled,
       },
     }, cors);
   } catch (error) {
