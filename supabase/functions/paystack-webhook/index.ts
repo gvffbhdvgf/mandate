@@ -12,6 +12,8 @@ type PaystackEvent = {
     amount?: number | string;
     currency?: string;
     status?: string;
+    fees_split?: { paystack?: number | string; integration?: number | string; subaccount?: number | string };
+    subaccount?: { subaccount_code?: string; percentage_charge?: number | string };
   };
 };
 type PaystackVerifyResponse = {
@@ -214,6 +216,42 @@ Deno.serve(async (request: Request) => {
     }).eq("id", eventId);
     if (error) return json(500, { error: "WEBHOOK_RECONCILIATION_STATE_PERSIST_FAILED" });
     return json(200, { received: true, processed: false, reconciliationRequired: true, reason: "PAYSTACK_REFERENCE_MISMATCH" });
+  }
+
+  if (intent.purpose === "public_vote_credits") {
+    const feesSplit = verified.data.fees_split;
+    const subaccount = verified.data.subaccount;
+    const paystackFee = Number(feesSplit?.paystack);
+    const integrationShare = Number(feesSplit?.integration);
+    const organizerShare = Number(feesSplit?.subaccount);
+    if (!feesSplit || !Number.isSafeInteger(paystackFee) || paystackFee < 0
+      || !Number.isSafeInteger(integrationShare) || integrationShare < 0
+      || !Number.isSafeInteger(organizerShare) || organizerShare < 0
+      || !subaccount?.subaccount_code) {
+      const { error } = await admin.from("payment_events").update({ processing_status: "failed", processed_at: null }).eq("id", eventId);
+      if (error) return json(500, { error: "WEBHOOK_RETRY_STATE_PERSIST_FAILED" });
+      return json(503, { error: "PAYSTACK_SPLIT_FACTS_UNAVAILABLE" });
+    }
+    const { data: splitResult, error: splitError } = await admin.rpc("apply_verified_paystack_public_vote_split", {
+      p_event_id: eventId,
+      p_provider_reference: reference,
+      p_provider_transaction_id: String(verified.data.id),
+      p_provider_status: verified.data.status,
+      p_amount_minor: amountMinor,
+      p_currency: verified.data.currency,
+      p_fees_split: { paystack: paystackFee, integration: integrationShare, subaccount: organizerShare },
+      p_subaccount_code: subaccount.subaccount_code,
+      p_subaccount_percentage_charge: subaccount.percentage_charge == null ? null : Number(subaccount.percentage_charge),
+    });
+    if (splitError || !splitResult) return json(500, { error: "PUBLIC_VOTE_SPLIT_PROCESSING_FAILED" });
+    return json(200, {
+      received: true,
+      processed: splitResult.processed === true,
+      duplicate: splitResult.duplicate === true,
+      matched: splitResult.matched === true,
+      status: typeof splitResult.status === "string" ? splitResult.status : undefined,
+      reason: typeof splitResult.reason === "string" ? splitResult.reason : undefined,
+    });
   }
 
   const { data: result, error: applyError } = await admin.rpc("apply_verified_paystack_webhook_event", {
