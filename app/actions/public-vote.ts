@@ -77,7 +77,10 @@ export async function verifyPublicParticipantOtp(emailValue: string, tokenValue:
     if (error || data?.verified !== true) {
       return { error: "Your email is verified, but this election is not currently accepting participant sessions." };
     }
-    return { verified: true, election: data.election };
+    const { data: ballotContext } = await supabase.rpc("get_public_paid_ballot_context", {
+      p_election_slug: slug,
+    });
+    return { verified: true, election: data.election, ballotContext: ballotContext ?? null };
   } catch {
     return { error: "We could not complete verification. Please try again." };
   }
@@ -113,5 +116,75 @@ export async function initializePublicVoteCreditCheckout(slug: string, quantity:
     return { authorizationUrl: checkout.authorizationUrl };
   } catch {
     return { error: "Checkout is temporarily unavailable. Please try again." };
+  }
+}
+
+
+export async function getPublicParticipantSession(slug: string) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80) return null;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.functions.invoke("public-participant-session", {
+      body: { slug },
+    });
+    if (error || data?.verified !== true) return null;
+    return data.election;
+  } catch {
+    return null;
+  }
+}
+
+export async function getPublicPaidBallotContext(slug: string) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80) return null;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("get_public_paid_ballot_context", {
+      p_election_slug: slug,
+    });
+    if (error || !data) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export async function castPublicPaidBallot(
+  slug: string,
+  contestId: string,
+  optionId: string,
+  credits: number,
+  idempotencyKey: string,
+) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80
+    || !/^[0-9a-f-]{36}$/i.test(contestId)
+    || !/^[0-9a-f-]{36}$/i.test(optionId)
+    || !Number.isSafeInteger(credits) || credits < 1
+    || !/^[A-Za-z0-9._:-]{16,200}$/.test(idempotencyKey)) {
+    return { error: "Review your selection and try again." };
+  }
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.rpc("cast_public_paid_ballot", {
+      p_election_slug: slug,
+      p_contest_id: contestId,
+      p_option_id: optionId,
+      p_credits: credits,
+      p_confirmation: true,
+      p_idempotency_key: idempotencyKey,
+    });
+    if (error || !data) {
+      const message = error?.message ?? "";
+      if (message.includes("INSUFFICIENT_VOTE_CREDITS")) return { error: "You do not have enough available voting credits for this selection." };
+      if (message.includes("ELECTION_NOT_OPEN")) return { error: "This election is no longer accepting ballots." };
+      return { error: "Your ballot could not be recorded. Please check your balance and try again." };
+    }
+
+    const { data: context } = await supabase.rpc("get_public_paid_ballot_context", {
+      p_election_slug: slug,
+    });
+    return { receiptCode: data.receiptCode, duplicate: data.duplicate === true, context: context ?? null };
+  } catch {
+    return { error: "Your ballot could not be recorded. Please try again." };
   }
 }
