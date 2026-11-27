@@ -1,4 +1,4 @@
-import { paymentPurposeEnabled, paymentsModeEnabled, verifyPaystackWebhookSignature } from "./paystack.ts";
+import { paymentCallbackUrl, paymentPurposeEnabled, paymentsModeEnabled, verifyPaystackWebhookSignature } from "./paystack.ts";
 
 const hex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -36,6 +36,9 @@ function clearPaystackEnv() {
     "PAYSTACK_LIVE_PUBLIC_VOTE_CREDITS_ENABLED",
     "PAYSTACK_SECRET_KEY",
     "PAYSTACK_WEBHOOK_SECRET",
+    "MANDATE_SITE_URL",
+    "MANDATE_ALLOWED_ORIGINS",
+    "MANDATE_PAYMENT_CALLBACK_URL",
   ]) Deno.env.delete(key);
 }
 
@@ -107,4 +110,33 @@ Deno.test("Paystack webhook signatures reject tampering, stale timestamps and mi
   } finally {
     clearPaystackEnv();
   }
+});
+
+
+Deno.test("Paystack callback URL is HTTPS, path- and origin-allowlisted", () => {
+  clearPaystackEnv();
+  Deno.env.set("MANDATE_SITE_URL", "https://mandate.example");
+  if (paymentCallbackUrl() !== "https://mandate.example/payments/paystack/callback") {
+    throw new Error("Expected callback URL to derive from the configured site origin");
+  }
+
+  Deno.env.set("MANDATE_PAYMENT_CALLBACK_URL", "https://evil.example/payments/paystack/callback");
+  let rejectedOrigin = false;
+  try { paymentCallbackUrl(); } catch (error) {
+    rejectedOrigin = error instanceof Error && error.message === "PAYMENT_CALLBACK_URL_INVALID";
+  }
+  if (!rejectedOrigin) throw new Error("Callback on an untrusted origin must be rejected");
+
+  Deno.env.set("MANDATE_ALLOWED_ORIGINS", "https://evil.example");
+  if (paymentCallbackUrl() !== "https://evil.example/payments/paystack/callback") {
+    throw new Error("Explicitly allowlisted callback origin should be accepted");
+  }
+
+  Deno.env.set("MANDATE_PAYMENT_CALLBACK_URL", "https://evil.example/redirect");
+  let rejectedPath = false;
+  try { paymentCallbackUrl(); } catch (error) {
+    rejectedPath = error instanceof Error && error.message === "PAYMENT_CALLBACK_URL_INVALID";
+  }
+  if (!rejectedPath) throw new Error("Callback path must be exact");
+  clearPaystackEnv();
 });
