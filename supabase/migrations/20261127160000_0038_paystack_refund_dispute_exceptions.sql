@@ -30,7 +30,7 @@ begin
     or v_event.provider_reference is distinct from p_provider_reference
     or not (
       left(v_event.event_type, 7) = 'refund.'
-      or left(v_event.event_type, 14) = 'charge.dispute.'
+      or left(v_event.event_type, 15) = 'charge.dispute.'
     ) then
     raise exception 'INVALID_PAYSTACK_EXCEPTION_EVENT' using errcode = '22023';
   end if;
