@@ -57,7 +57,7 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 
 1. Provision separate test API and webhook signing secrets in Supabase Edge Function secrets; do not send them through chat or store them in Notion.
 2. Enable only the required test-purpose flags and verify signed test delivery and provider test transactions.
-3. Implement server-created purpose-specific intents, scoped authorization, callback handling, idempotent settlement postings, credit issuance/consumption, refunds/reversals, and reconciliation for all three purposes.
+3. Implement server-created purpose-specific intents, scoped authorization, a verified-status callback route, idempotent settlement postings, credit issuance/consumption, refunds/reversals, and reconciliation for all three purposes.
 4. Obtain approved pricing, tax, fee allocation, merchant-of-record, custody, settlement, chargeback, paid-voting eligibility and payout policies. Do not infer these from the existence of database enums or accounts.
 5. Only after legal/provider/security/operational approval, install separate live secrets and enable an individual live-purpose flag. Live mode also requires the master switch.
 6. A controlled real-money payment requires separate explicit approval of the exact KES amount, payer and purpose. No configuration change or scope decision authorizes a real charge by itself.
