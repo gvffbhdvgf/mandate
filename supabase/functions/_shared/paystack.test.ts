@@ -57,11 +57,24 @@ Deno.test("Paystack mode config fails closed for missing, mixed or mismatched cr
   Deno.env.set("PAYSTACK_MODE", "live");
   Deno.env.set("PAYSTACK_LIVE_SECRET_KEY", "sk_live_unit_test_key");
   Deno.env.set("PAYSTACK_LIVE_WEBHOOK_SECRET", "live-webhook-secret");
-  if (paymentsModeEnabled()) throw new Error("Live mode must remain disabled without explicit master switch");
+  if (!paymentsModeEnabled()) {
+    throw new Error("Valid live credentials must remain available for verification and webhook processing");
+  }
+  if (paymentPurposeEnabled("platform_fee")) {
+    throw new Error("New live charges must remain disabled without explicit master switches");
+  }
   Deno.env.set("PAYSTACK_LIVE_TRANSACTIONS_ENABLED", "true");
-  if (paymentsModeEnabled()) throw new Error("Live mode must remain disabled until settlement processing is ready");
+  if (paymentPurposeEnabled("platform_fee")) {
+    throw new Error("New live charges must remain disabled until settlement processing is ready");
+  }
   Deno.env.set("PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED", "true");
-  if (!paymentsModeEnabled()) throw new Error("Live mode should require and accept explicit settlement readiness");
+  if (paymentPurposeEnabled("platform_fee")) {
+    throw new Error("Live charge readiness must still require a separate purpose flag");
+  }
+  Deno.env.set("PAYSTACK_LIVE_PLATFORM_FEE_ENABLED", "true");
+  if (!paymentPurposeEnabled("platform_fee")) {
+    throw new Error("Live platform fee checkout should require all three explicit gates");
+  }
   clearPaystackEnv();
 });
 
