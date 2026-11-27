@@ -283,6 +283,22 @@ test("Paystack initialization, verification and webhooks enforce explicit mode a
 
 
 
+
+test("ledger posting is balanced, append-only and idempotent under concurrent retries", async () => {
+  const migration = await read("../supabase/migrations/20261127120000_0034_idempotent_ledger_posting.sql");
+  const smoke = await read("../supabase/tests/ledger_posting_smoke.sql");
+  assert.match(migration, /auth\.role\(\) is distinct from 'service_role'/);
+  assert.match(migration, /on conflict \(idempotency_key\) do nothing/);
+  assert.match(migration, /LEDGER_IDEMPOTENCY_CONFLICT/);
+  assert.match(migration, /LEDGER_TRANSACTION_UNBALANCED/);
+  assert.match(migration, /ledger_entries_append_only/);
+  assert.match(migration, /ledger_transactions_append_only/);
+  assert.match(migration, /grant execute[\s\S]*to service_role/);
+  assert.match(smoke, /LEDGER_DUPLICATE_NOT_IDEMPOTENT/);
+  assert.match(smoke, /UNBALANCED_LEDGER_POST_MUST_FAIL/);
+  assert.match(smoke, /POSTED_LEDGER_ENTRY_MUTATION_MUST_FAIL/);
+});
+
 test("concurrency fixtures record authority confirmation before opening", async () => {
   const concurrency = await read("../scripts/concurrency.acceptance.mjs");
   assert.match(concurrency, /public[.]confirm_election_setup/);
