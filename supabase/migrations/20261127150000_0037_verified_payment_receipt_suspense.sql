@@ -88,5 +88,10 @@ for each row
 when (new.status = 'success' and old.status is distinct from new.status)
 execute function mandate_private.capture_verified_payment_receipt();
 
+-- The payment Edge Functions use the service-role client for narrowly scoped
+-- server-side reads and state transitions. Browser roles remain fully revoked.
+grant select, update on public.payment_intents to service_role;
+grant select, insert, update on public.payment_events to service_role;
+
 comment on function mandate_private.capture_verified_payment_receipt()
   is 'Atomically posts verified Paystack receipts to provider clearing and unallocated suspense. Does not classify revenue, organization funds, vote-credit liabilities or processor fees.';
