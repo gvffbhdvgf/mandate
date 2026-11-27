@@ -1,0 +1,60 @@
+# Mandate payment release runbook
+
+**Status:** Prepared for a separately approved production release. This document is operational guidance, not authorization to merge, deploy, change production, or process real money.
+
+## Release prerequisites
+
+Do not start the production sequence until all are evidenced:
+
+- [ ] PR #19 is approved, current with `main`, and all required CI, Paystack Edge and database acceptance workflows pass on the exact head.
+- [ ] Written Paystack approval covers the precise Mandate public paid-voting product, merchant-of-record model, organizer proceeds arrangement, permitted election types, KYC and settlement mechanism. The published Kenya terms restrict merchants from acting as payment service providers or providing payment aggregation; generic API availability is not approval.
+- [ ] Kenyan legal/privacy review approves supported election categories, organizer/controller/processor roles, lawful bases, notices, retention, DPIA/ODPC registration applicability, consumer disclosures, tax, refunds and chargeback allocation.
+- [ ] Public paid-voting platform fee policy is explicitly approved and versioned. The registered-election service fee (KES 20 per eligible voter, KES 500 minimum) is separate and must not be reused as the public-voting split.
+- [ ] Prepaid-credit revenue recognition, processor-fee allocation, merchant of record, tax and chargeback responsibility are documented.
+- [ ] Settlement-to-bank reconciliation, reviewed exception resolution, partial/full refunds and reversal handling, operator authorization, dual control and audit trail are implemented and tested. No payout is enabled merely because a settlement row says success.
+- [ ] Supabase Auth OTP template renders the six-digit token; SMTP delivery, expiry and rate limits are verified with synthetic users.
+- [ ] Paystack test and live callback URLs, webhook URL, event subscriptions and dedicated `whsec_` signing secrets are verified in the dashboard without disclosing secrets.
+- [ ] Production secret names and mode configuration are verified without printing secret values. Live mode and all purpose switches remain off until the separate go/no-go.
+- [ ] Backup/PITR availability, restore procedure, incident owner, support contact and rollback owner are confirmed.
+
+## Required release order
+
+The repository's current `.github/workflows/production-deploy.yml` deploys the Cloudflare Worker automatically on every push to `main`. There is no automatic Supabase migration workflow. Therefore, never merge payment code before the database and required Edge Functions are ready.
+
+1. **Freeze and verify.** Record the exact approved PR head, current `main` SHA, workflow URLs and production baseline. Keep all payment purpose flags and live mode disabled.
+2. **Back up production.** Confirm a recent recoverable backup/PITR point and document the restore owner and recovery procedure. Do not rely on a database dump as the only backup.
+3. **Review migration plan.** Confirm production migration history ends at `0033_election_setup_confirmation_index`. Review the exact pending migration list `0034–0046`, dependency order, lock behavior, data impact, grants/RLS and rollback implications. Reconcile any migration-history mismatch before applying anything.
+4. **Apply database migrations first.** In an approved maintenance window, apply the exact PR migrations to the production Supabase project in order. Verify every migration is recorded and run read-only schema/security assertions. Do not use ad hoc SQL to mark migrations applied.
+5. **Deploy Edge Functions.** Deploy the exact tested function sources from the approved commit. Verify function versions, JWT settings and non-secret configuration. Do not enable settlement import or any payment purpose merely because the function is deployed.
+6. **Verify Auth and provider configuration.** Complete the OTP delivery test and Paystack dashboard callback/webhook checks. Send a signed test event and run controlled test-mode checkout/verification/reconciliation. Do not use a real charge.
+7. **Merge PR #19.** Only after steps 1–6 are verified and the production release is explicitly approved. The merge triggers the current automatic Cloudflare Worker deployment.
+8. **Verify Worker deployment.** Confirm the deployed commit matches the approved merge commit; run home, login, signup, organization/election and payment callback smoke checks. Confirm no private response is cached and no secrets are exposed.
+9. **Post-deploy verification.** Check migration history, Edge Function versions, webhook delivery/idempotency, payment exception queue, ledger balance and application error logs. Keep all live payment and purpose flags disabled pending the separately authorized live go/no-go.
+10. **Live activation is a separate release.** Only after Paystack/legal/accounting/operations sign-off, enable the agreed purpose(s) in the correct order, run the controlled real-money transaction with explicit approval, reconcile provider and bank evidence, and then decide whether any organizer payout is allowed.
+
+## Rollback and incident rules
+
+- Prefer rolling back the Cloudflare Worker to the last known-good deployment while leaving additive database migrations in place. Do not blindly reverse payment/ledger migrations after real events exist.
+- Keep live mode and all purpose flags disabled during rollback.
+- Never delete provider events, payment intents, ledger postings or ballot/credit evidence to make reconciliation appear clean.
+- For any amount/reference/currency mismatch, refund/dispute, duplicate fulfillment or ledger imbalance: stop new checkout/credit issuance for the affected purpose, preserve evidence, keep funds/credits held, and route to an authorized reviewer.
+- Do not initiate transfers or payouts as a rollback action.
+- Record incident timeline, owner, provider references (redacted), affected elections and corrective action in the implementation register.
+
+## Current verified baseline (27 November 2026)
+
+- Production Supabase project: `yhdosrhtzcsfqfuuqhsk`, status `ACTIVE_HEALTHY`, PostgreSQL 17.12.
+- Production migration history ends at `20261127100000` (`0033_election_setup_confirmation_index`). PR #19 migrations `0034–0046` are not applied.
+- Production Paystack Edge Functions are older versions than PR #19: initialize v7, verify v7, webhook v8. Settlement importer and public participant/credit functions are not deployed.
+- PR #19 head `059ecdf62dc1829d53c4732afa4f1144fce2ee26` passed Mandate CI, Paystack Edge integration and disposable Supabase database acceptance, including independent-session concurrency.
+- No production migration, function, secret, Auth template, Paystack setting, release flag, charge, refund, transfer or payout was changed during preparation of this runbook.
+
+## Evidence links
+
+- [PR #19](https://github.com/gvffbhdvgf/mandate/pull/19)
+- [Mandate CI](https://github.com/gvffbhdvgf/mandate/actions/runs/46051478091)
+- [Paystack Edge integration](https://github.com/gvffbhdvgf/mandate/actions/runs/46051478092)
+- [Database acceptance](https://github.com/gvffbhdvgf/mandate/actions/runs/46051478172)
+- [Shared-revenue accounting design](./shared-revenue-accounting.md)
+- [Paystack Kenya Merchant Services Agreement](https://paystack.com/ke/terms)
+- [ODPC Guidance Notes for Electoral Purposes](https://www.odpc.go.ke/wp-content/uploads/2024/02/ODPC-Guidance-Notes-for-Electoral-Purposes.pdf)
