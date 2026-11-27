@@ -146,11 +146,16 @@ begin
       and m.role in ('owner','admin','finance_manager')
   ) then raise exception 'FORBIDDEN' using errcode='42501'; end if;
 
-  select * into v_policy
-  from public.platform_fee_policies
-  where active=true and effective_from<=now()
-  order by version desc
-  limit 1;
+  if v_e.platform_fee_quoted_at is not null then
+    select * into v_policy from public.platform_fee_policies
+    where version=v_e.platform_fee_policy_version;
+  else
+    select * into v_policy
+    from public.platform_fee_policies
+    where active=true and effective_from<=now()
+    order by version desc
+    limit 1;
+  end if;
   if not found then raise exception 'PLATFORM_FEE_POLICY_UNAVAILABLE' using errcode='55000'; end if;
 
   select count(*)::integer into v_count
@@ -198,8 +203,6 @@ begin
     -- A failed/abandoned provider attempt may be retried with a fresh unique reference.
     -- An exception, reversal or refund is deliberately not retryable here.
     if v_intent.status in ('failed','abandoned') then
-      select * into v_policy from public.platform_fee_policies where version=v_e.platform_fee_policy_version;
-      if not found then raise exception 'PLATFORM_FEE_POLICY_SNAPSHOT_MISSING' using errcode='55000'; end if;
       v_count := v_e.platform_fee_eligible_voter_count;
       v_amount := v_e.platform_fee_amount_minor;
       v_attempt := v_e.platform_fee_payment_attempt + 1;
