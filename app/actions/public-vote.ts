@@ -82,3 +82,36 @@ export async function verifyPublicParticipantOtp(emailValue: string, tokenValue:
     return { error: "We could not complete verification. Please try again." };
   }
 }
+
+
+export async function initializePublicVoteCreditCheckout(slug: string, quantity: number, idempotencyKey: string) {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80
+    || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 100000
+    || !/^[A-Za-z0-9._:-]{16,200}$/.test(idempotencyKey)) {
+    return { error: "Review the quantity and try again." };
+  }
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: intent, error: intentError } = await supabase.functions.invoke("public-vote-credit-intent", {
+      body: { slug, quantity },
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
+    if (intentError || !intent?.paymentIntentId) {
+      const code = intent?.error;
+      if (code === "PARTICIPANT_CREDIT_CAP_EXCEEDED") return { error: "This purchase would exceed the election's participant credit limit." };
+      if (code === "PAYMENT_PURPOSE_DISABLED" || code === "PUBLIC_PAID_ELECTION_NOT_READY") return { error: "Paid checkout is not enabled for this election yet." };
+      return { error: "We could not prepare checkout. Please try again." };
+    }
+
+    const { data: checkout, error: checkoutError } = await supabase.functions.invoke("paystack-initialize", {
+      body: { paymentIntentId: intent.paymentIntentId },
+    });
+    if (checkoutError || !checkout?.authorizationUrl) {
+      return { error: "Checkout could not be opened. Do not start another payment; retry this checkout or contact support." };
+    }
+    return { authorizationUrl: checkout.authorizationUrl };
+  } catch {
+    return { error: "Checkout is temporarily unavailable. Please try again." };
+  }
+}
