@@ -80,6 +80,16 @@ begin
     and v_intent.provider_status = 'success'
     and v_intent.provider_amount_minor = p_amount_minor
     and v_intent.provider_currency = p_currency then
+    if p_provider_fee_minor is not null then
+      if v_intent.provider_fee_verified_at is null then
+        update public.payment_intents
+        set provider_fee_minor = p_provider_fee_minor,
+            provider_fee_verified_at = pg_catalog.now()
+        where id = v_intent.id;
+      elsif v_intent.provider_fee_minor is distinct from p_provider_fee_minor then
+        raise exception 'PROVIDER_FEE_FACTS_MISMATCH' using errcode = '23514';
+      end if;
+    end if;
     if p_event_id is not null then
       update public.payment_events set processing_status = 'processed', processed_at = pg_catalog.now()
       where id = p_event_id;
@@ -137,3 +147,149 @@ comment on column public.payment_intents.provider_fee_minor is
   'Provider-reported processing fee in minor currency units, captured only from a server-verified Paystack transaction response; nullable when provider does not report it.';
 comment on function mandate_private.apply_verified_paystack_public_vote_payment(uuid,text,text,text,bigint,text,bigint) is
   'Atomically verifies a single-merchant public vote-credit payment, records provider amount/currency/fee facts, posts the existing suspense receipt and triggers idempotent credit fulfillment. Does not allocate revenue or bypass the global feature release gate.';
+
+
+-- Mandate is the merchant and revenue owner for public vote-credit purchases.
+-- Registered-election receipts retain their existing suspense allocation workflow.
+create or replace function mandate_private.capture_verified_payment_receipt()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_clearing_account uuid;
+  v_destination_account uuid;
+  v_destination_owner public.ledger_owner_type;
+  v_destination_code text;
+  v_posting jsonb;
+begin
+  if new.status = 'success' and old.status is distinct from new.status then
+    if new.provider <> 'paystack'
+      or new.provider_transaction_id is null
+      or new.verified_at is null
+      or new.amount_minor <= 0
+      or new.currency <> 'KES' then
+      raise exception 'VERIFIED_PAYMENT_RECEIPT_FIELDS_REQUIRED' using errcode = '23514';
+    end if;
+
+    insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
+    values ('provider_clearing', null, new.currency, 'paystack-receivable')
+    on conflict (owner_type, currency, account_code) where organization_id is null do nothing;
+
+    select id into strict v_clearing_account
+    from public.ledger_accounts
+    where owner_type = 'provider_clearing' and organization_id is null
+      and currency = new.currency and account_code = 'paystack-receivable';
+
+    if new.purpose = 'public_vote_credits' then
+      v_destination_owner := 'platform_revenue';
+      v_destination_code := 'mandate-public-vote-revenue';
+    else
+      v_destination_owner := 'suspense';
+      v_destination_code := 'unallocated-payment-receipts';
+    end if;
+
+    insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
+    values (v_destination_owner, null, new.currency, v_destination_code)
+    on conflict (owner_type, currency, account_code) where organization_id is null do nothing;
+
+    select id into strict v_destination_account
+    from public.ledger_accounts
+    where owner_type = v_destination_owner and organization_id is null
+      and currency = new.currency and account_code = v_destination_code;
+
+    v_posting := mandate_private.post_ledger_transaction(
+      case when new.purpose = 'public_vote_credits'
+        then 'mandate_public_vote_revenue' else 'payment_receipt_pending_allocation' end,
+      'payment_intent',
+      new.id,
+      'paystack-payment-receipt:' || new.id::text,
+      case when new.purpose = 'public_vote_credits'
+        then 'Mandate public vote-credit gross revenue'
+        else 'Verified Paystack receipt pending purpose allocation' end,
+      jsonb_build_array(
+        jsonb_build_object('account_id', v_clearing_account, 'direction', 'debit',
+          'amount_minor', new.amount_minor, 'currency', new.currency),
+        jsonb_build_object('account_id', v_destination_account, 'direction', 'credit',
+          'amount_minor', new.amount_minor, 'currency', new.currency)
+      )
+    );
+
+    if v_posting->>'status' <> 'posted' then
+      raise exception 'VERIFIED_PAYMENT_RECEIPT_LEDGER_POST_FAILED' using errcode = '23514';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function mandate_private.capture_verified_public_vote_provider_fee()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_clearing_account uuid;
+  v_fee_account uuid;
+  v_posting jsonb;
+begin
+  if new.purpose <> 'public_vote_credits' or new.provider_fee_minor is null
+    or new.provider_fee_minor = 0 then
+    return new;
+  end if;
+  if new.status <> 'success' or new.provider_fee_verified_at is null
+    or new.provider_fee_minor < 0 or new.currency <> 'KES' then
+    raise exception 'VERIFIED_PUBLIC_VOTE_PROVIDER_FEE_FIELDS_REQUIRED' using errcode = '23514';
+  end if;
+
+  insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
+  values ('provider_clearing', null, new.currency, 'paystack-receivable')
+  on conflict (owner_type, currency, account_code) where organization_id is null do nothing;
+  insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
+  values ('processor_fee', null, new.currency, 'paystack-processing-fees')
+  on conflict (owner_type, currency, account_code) where organization_id is null do nothing;
+
+  select id into strict v_clearing_account from public.ledger_accounts
+  where owner_type = 'provider_clearing' and organization_id is null
+    and currency = new.currency and account_code = 'paystack-receivable';
+  select id into strict v_fee_account from public.ledger_accounts
+  where owner_type = 'processor_fee' and organization_id is null
+    and currency = new.currency and account_code = 'paystack-processing-fees';
+
+  v_posting := mandate_private.post_ledger_transaction(
+    'public_vote_provider_processing_fee',
+    'payment_intent',
+    new.id,
+    'paystack-public-vote-fee:' || new.id::text,
+    'Verified Paystack processing fee for Mandate public vote-credit revenue',
+    jsonb_build_array(
+      jsonb_build_object('account_id', v_fee_account, 'direction', 'debit',
+        'amount_minor', new.provider_fee_minor, 'currency', new.currency),
+      jsonb_build_object('account_id', v_clearing_account, 'direction', 'credit',
+        'amount_minor', new.provider_fee_minor, 'currency', new.currency)
+    )
+  );
+  if v_posting->>'status' <> 'posted' then
+    raise exception 'PUBLIC_VOTE_PROVIDER_FEE_LEDGER_POST_FAILED' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function mandate_private.capture_verified_public_vote_provider_fee()
+  from public, anon, authenticated;
+create trigger payment_intents_capture_public_vote_provider_fee
+after update of provider_fee_minor, provider_fee_verified_at
+on public.payment_intents
+for each row
+when (new.purpose = 'public_vote_credits'
+  and new.provider_fee_verified_at is not null
+  and old.provider_fee_verified_at is null)
+execute function mandate_private.capture_verified_public_vote_provider_fee();
+
+comment on function mandate_private.capture_verified_payment_receipt() is
+  'Posts verified public vote-credit gross collections to Mandate platform revenue; other purposes remain in suspense pending allocation.';
+comment on function mandate_private.capture_verified_public_vote_provider_fee() is
+  'Posts a provider-verified Paystack fee as Mandate processing expense against provider clearing, once per payment intent.';
