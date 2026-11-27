@@ -1,4 +1,6 @@
 -- Rollback-only acceptance: exception queue exposes evidence without PII or mutations.
+-- Model the real refund/dispute path: a verified successful receipt is first posted,
+-- then a signed refund event freezes the intent for reconciliation.
 begin;
 
 insert into public.payment_intents(
@@ -13,7 +15,7 @@ set local role service_role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 
 update public.payment_intents
-set status = 'exception',
+set status = 'success',
     provider_transaction_id = 'paystack-exception-queue-transaction',
     provider_status = 'success',
     provider_amount_minor = 8400,
@@ -27,7 +29,13 @@ insert into public.payment_events(
 ) values (
   'paystack', 'paystack:refund.processed:exception-queue-smoke',
   'mandate-exception-queue-smoke-20261127', 'refund.processed',
-  true, '{"status":"processed","amount":"8400","currency":"KES"}'::jsonb, 'processed'
+  true, '{"status":"processed","amount":"8400","currency":"KES"}'::jsonb, 'received'
+);
+
+select public.apply_paystack_payment_exception_event(
+  (select id from public.payment_events
+   where provider_event_key = 'paystack:refund.processed:exception-queue-smoke'),
+  'mandate-exception-queue-smoke-20261127'
 );
 
 reset role;
