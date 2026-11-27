@@ -11,7 +11,7 @@ const rowSchema = z.object({
   voter_ref: z.string().trim().min(1).max(200),
   name: z.string().trim().min(1).max(200),
   email: z.union([z.literal(""), z.string().email()]).optional().default(""),
-  phone_e164: z.union([z.literal(""), z.string().regex(/^\+[1-9][0-9]{7,14}$/)]).optional().default(""),
+  phone_e164: z.union([z.literal(""), z.string().regex(/^\\+[1-9][0-9]{7,14}$/)]).optional().default(""),
   weight: z.coerce.number().int().min(1).max(1_000_000).optional().default(1),
 });
 
@@ -127,6 +127,80 @@ export async function stageVoterImportAction(
     if (error?.message.includes("VOTER_ALREADY_REGISTERED")) return { error: "One or more voters are already in this election register." };
     if (error?.message.includes("DUPLICATE_VOTER")) return { error: "The file contains duplicate voter references or email addresses." };
     return { error: "The voter import could not be validated. Check the CSV and try again." };
+  }
+
+  redirect(`/organizations/${organizationId}/elections/${electionId}?batchId=${data.batchId}`);
+}
+
+export async function stageManualVoterAction(
+  _previousState: VoterImportActionState,
+  formData: FormData,
+): Promise<VoterImportActionState> {
+  const organizationId = String(formData.get("organizationId") ?? "");
+  const electionId = String(formData.get("electionId") ?? "");
+  const parsed = rowSchema.safeParse({
+    voter_ref: formData.get("voterRef"),
+    name: formData.get("name"),
+    email: String(formData.get("email") ?? "").trim(),
+    phone_e164: String(formData.get("phone") ?? "").trim(),
+    weight: formData.get("weight") ?? "1",
+  });
+
+  if (!z.string().uuid().safeParse(organizationId).success || !z.string().uuid().safeParse(electionId).success) {
+    return { error: "The election reference is invalid. Refresh and try again." };
+  }
+  if (!parsed.success) return { error: "Check the voter reference, name, contact details and voting weight." };
+
+  const email = parsed.data.email.trim().toLowerCase() || null;
+  const phone = parsed.data.phone_e164.trim() || null;
+  if (!email && !phone) return { error: "Add an email address or an international phone number." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) redirect("/login");
+
+  const { data: election, error: electionError } = await supabase
+    .from("elections")
+    .select("id,organization_id,status,voting_mode")
+    .eq("id", electionId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (electionError || !election) return { error: "You cannot access this election." };
+  if (election.status !== "draft") return { error: "The voter register is locked after the election opens." };
+  if (election.voting_mode === "public_paid") return { error: "Manual voter registration is not used for public paid elections." };
+  if (election.voting_mode === "registered_single" && parsed.data.weight !== 1) {
+    return { error: "One-person-one-vote elections require a voting weight of 1." };
+  }
+
+  const csvCell = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  const csv = [
+    "voter_ref,name,email,phone_e164,weight",
+    [parsed.data.voter_ref, parsed.data.name, email ?? "", phone ?? "", String(parsed.data.weight)].map(csvCell).join(","),
+  ].join("\n");
+  const batchFileId = crypto.randomUUID();
+  const objectPath = `${organizationId}/${electionId}/${batchFileId}.csv`;
+  const { error: uploadError } = await supabase.storage
+    .from("mandate-voter-imports")
+    .upload(objectPath, new Blob([csv], { type: "text/csv" }), { contentType: "text/csv", upsert: false });
+  if (uploadError) return { error: "The private voter record could not be staged. Check your election permissions and try again." };
+
+  const { data, error } = await supabase.rpc("stage_voter_import", {
+    p_election_id: electionId,
+    p_private_object_path: objectPath,
+    p_original_filename: "manual-voter-entry.csv",
+    p_rows: [{
+      external_voter_ref: parsed.data.voter_ref,
+      display_name: parsed.data.name,
+      normalized_email: email,
+      phone_e164: phone,
+      weight_units: parsed.data.weight,
+    }],
+  });
+  if (error || !data?.batchId) {
+    await supabase.storage.from("mandate-voter-imports").remove([objectPath]);
+    if (error?.message.includes("VOTER_ALREADY_REGISTERED")) return { error: "This voter reference or email address is already registered in the election." };
+    if (error?.message.includes("DUPLICATE_VOTER")) return { error: "This voter duplicates another record in the register." };
+    return { error: "The voter could not be validated. Check the details and try again." };
   }
 
   redirect(`/organizations/${organizationId}/elections/${electionId}?batchId=${data.batchId}`);
