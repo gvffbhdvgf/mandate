@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <main id="main-content" className="shell">
+    <main id="main-content" tabIndex={-1} className="shell">
       <header className="topbar">
         <Link className="brand" href="/" aria-label="Mandate home">
           <span className="brand-mark">M</span><span>mandate</span>
