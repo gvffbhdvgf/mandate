@@ -52,7 +52,14 @@ export async function finalizeAndConfirmElectionSetupAction(input: {
     p_election_id: electionId,
   });
   if (confirmationError) {
-    return { electionId: electionId as string, error: "The draft was finalized, but authority confirmation did not complete. Open the election and retry confirmation." };
+    const message = confirmationError.message ?? "";
+    if (message.includes("PAID_VOTING_FEATURE_GATED") || message.includes("PAID_VOTING_AUTHORIZATION_REQUIRED")) {
+      return {
+        electionId: electionId as string,
+        error: "Your public paid election draft is saved. Mandate platform release authorization and legal/provider checks are still required before it can be confirmed or opened.",
+      };
+    }
+    return { electionId: electionId as string, error: "The draft was finalized, but authority confirmation did not complete. Review the election setup and retry confirmation." };
   }
   return { electionId: electionId as string };
 }
