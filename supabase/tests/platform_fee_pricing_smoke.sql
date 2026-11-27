@@ -87,7 +87,11 @@ begin
   end;
   if not v_rejected then raise exception 'CLIENT_MUST_NOT_WRITE_PLATFORM_FEE_STATUS'; end if;
 end;
-$$;
+$;
+
+-- Run the register-freeze assertion with table privileges so the immutable trigger is exercised;
+-- JWT claims remain set and the RPCs below still validate the finance-manager identity.
+reset role;
 
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111146',true);
 select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111146","role":"authenticated"}',true);
