@@ -115,6 +115,7 @@ export function ElectionLifecycleControls({
           <form action={closeAction} className="form-stack lifecycle-form">
             {hiddenFields}
             <label>Reason for closing<textarea name="reason" minLength={10} maxLength={1000} required placeholder="Record why the election is being closed." /></label>
+            <label className="ballot-confirmation"><input type="checkbox" name="confirmClose" value="true" required /> I understand that closing voting prevents further ballot submissions.</label>
             {closeState.error && <p className="form-error" role="alert">{closeState.error}</p>}
             <button className="danger-button" disabled={closePending}>{closePending ? "Closing election…" : "Close election"}</button>
           </form>
@@ -155,6 +156,7 @@ export function ElectionLifecycleControls({
           ) : canPublish ? (
             <form action={publishAction} className="form-stack lifecycle-form">
               {hiddenFields}
+              <label className="ballot-confirmation"><input type="checkbox" name="confirmPublish" value="true" required /> I have reviewed the reconciliation and confirm these results are ready to publish.</label>
               {publishState.error && <p className="form-error" role="alert">{publishState.error}</p>}
               <button className="primary-button" disabled={publishPending}>{publishPending ? "Publishing results…" : "Publish results"}</button>
             </form>
