@@ -45,10 +45,13 @@ begin
     'resultVisibility',v_e.result_visibility,
     'rulesVersion',v_e.rules_version
   ) || case when v_e.voting_mode = 'public_paid' then jsonb_build_object(
+    'publicSlug',v_e.public_slug,
     'currency',v_e.currency,
     'pricePerCreditMinor',v_e.price_per_credit_minor,
     'maxCreditsPerParticipant',v_e.max_credits_per_participant,
-    'contactVerificationRequired',v_e.contact_verification_required
+    'contactVerificationRequired',v_e.contact_verification_required,
+    'paidVotingAuthorizedAt',v_e.paid_voting_authorized_at,
+    'paidVotingAuthorizedBy',v_e.paid_voting_authorized_by
   ) else '{}'::jsonb end
   into v_rules;
 
@@ -228,10 +231,13 @@ begin
     'resultVisibility',v_e.result_visibility,
     'rulesVersion',v_e.rules_version
   ) || case when v_e.voting_mode = 'public_paid' then jsonb_build_object(
+    'publicSlug',v_e.public_slug,
     'currency',v_e.currency,
     'pricePerCreditMinor',v_e.price_per_credit_minor,
     'maxCreditsPerParticipant',v_e.max_credits_per_participant,
-    'contactVerificationRequired',v_e.contact_verification_required
+    'contactVerificationRequired',v_e.contact_verification_required,
+    'paidVotingAuthorizedAt',v_e.paid_voting_authorized_at,
+    'paidVotingAuthorizedBy',v_e.paid_voting_authorized_by
   ) else '{}'::jsonb end
   into v_rules;
 
@@ -461,6 +467,33 @@ begin
   return v_election_id;
 end;
 $$;
+
+create or replace function mandate_private.guard_election_snapshot()
+returns trigger
+language plpgsql
+set search_path = pg_catalog
+as $
+begin
+  if old.status <> 'draft' and (
+    new.rules_snapshot is distinct from old.rules_snapshot
+    or new.candidate_snapshot is distinct from old.candidate_snapshot
+    or new.rules_hash is distinct from old.rules_hash
+    or new.voting_mode is distinct from old.voting_mode
+    or new.starts_at is distinct from old.starts_at
+    or new.ends_at is distinct from old.ends_at
+    or new.public_slug is distinct from old.public_slug
+    or new.currency is distinct from old.currency
+    or new.price_per_credit_minor is distinct from old.price_per_credit_minor
+    or new.max_credits_per_participant is distinct from old.max_credits_per_participant
+    or new.contact_verification_required is distinct from old.contact_verification_required
+    or new.paid_voting_authorized_at is distinct from old.paid_voting_authorized_at
+    or new.paid_voting_authorized_by is distinct from old.paid_voting_authorized_by
+  ) then
+    raise exception 'ELECTION_RULES_FROZEN' using errcode='55000';
+  end if;
+  return new;
+end;
+$;
 
 -- Public-paid tallies count verified participant records as the available participant
 -- base and distinct participants who submitted ballots as turnout. Ballot choices remain
