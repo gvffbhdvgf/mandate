@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { castPublicPaidBallot } from "../../actions/public-vote";
 
@@ -86,7 +87,10 @@ function PaidContest({
       <h2>{contest.title}</h2>
       <p className="muted">Previously cast: {contest.ballotsCast}</p>
       {maxCredits < 1 ? (
-        <p className="form-hint">No voting credits remain. Purchase additional credits if the election is still accepting payments.</p>
+        <div className="form-stack">
+          <p className="form-hint">No voting credits remain.</p>
+          <Link className="primary-button" href={`/public-vote/${slug}`}>Purchase more credits</Link>
+        </div>
       ) : (
         <form className="form-stack" onSubmit={submit}>
           <fieldset className="form-stack">
