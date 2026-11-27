@@ -88,7 +88,14 @@ export const paymentPurposeEnabled = (purpose: PaymentPurpose) => {
 export function paymentCallbackUrl(): string | undefined {
   const configured = env("MANDATE_PAYMENT_CALLBACK_URL");
   const siteUrl = env("MANDATE_SITE_URL");
-  const candidate = configured || (siteUrl ? new URL("/payments/paystack/callback", siteUrl).toString() : "");
+  let candidate = configured;
+  if (!candidate && siteUrl) {
+    try {
+      candidate = new URL("/payments/paystack/callback", siteUrl).toString();
+    } catch {
+      throw new Error("PAYMENT_CALLBACK_URL_INVALID");
+    }
+  }
   if (!candidate) return undefined;
 
   let callback: URL;
