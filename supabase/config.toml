@@ -9,3 +9,9 @@ verify_jwt = true
 
 [functions.paystack-webhook]
 verify_jwt = false
+
+[functions.public-election-details]
+verify_jwt = false
+
+[functions.public-participant-session]
+verify_jwt = true
