@@ -35,6 +35,14 @@ Deno.serve(async (request: Request) => {
       return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);
     }
     if (intent.purpose === "public_vote_credits") {
+      const { data: releaseFlags, error: releaseFlagsError } = await admin
+        .from("platform_payment_feature_flags")
+        .select("public_vote_credits_enabled")
+        .eq("singleton", true)
+        .maybeSingle();
+      if (releaseFlagsError || releaseFlags?.public_vote_credits_enabled !== true) {
+        return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);
+      }
       if (intent.organization_id || !intent.election_id || !intent.participant_id) {
         return json(409, { error: "PUBLIC_PARTICIPANT_PAYMENT_SCOPE_INVALID" }, cors);
       }
