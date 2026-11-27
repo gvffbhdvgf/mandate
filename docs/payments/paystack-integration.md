@@ -12,6 +12,17 @@ The supported product scope is three distinct purposes:
 
 Each purpose has an independent mode-specific flag. A flag only permits the corresponding technical path to proceed; it does not establish pricing, accounting classification, legal eligibility, custody, settlement or payout authority. Organization payment intents require an active owner/admin/finance-manager; public-vote-credit intents use a separate verified, election-scoped participant-token path. No purpose is live-enabled by default.
 
+## Platform service-fee policy — version 1
+
+- **Accepted initial price:** KSh 20 per eligible registered voter per election, with a KSh 500 minimum. Currency is KES; all database values use integer minor units (KES 2,000 per eligible voter and KES 50,000 minimum).
+- **Scope:** Applies to registered single-vote and registered weighted elections. Public paid-voting credits are a separate purpose and are not charged this service fee by this policy.
+- **Source of truth:** Migration `0046_platform_fee_pricing_policy` seeds immutable-by-client policy version 1 in `platform_fee_policies`. The active policy is versioned; application clients cannot read or write the policy table directly.
+- **Quote:** Finance-authorized owner/admin/finance-manager requests a server quote. The server counts only rows with `eligibility_status = 'eligible'`, calculates `max(count × 2,000, 50,000)` in KES minor units, and returns count, amount and policy version. The checkout action sends the displayed quote back only as an expected-value comparison; the server recalculates and rejects stale quotes.
+- **Invoice and freeze:** The server creates an idempotent `platform_fee` payment intent and snapshots policy version, eligible-voter count and amount on the election. A fresh provider reference is created only for a new/retryable attempt. Once quoted, the voter register's identity, eligibility, weight and membership rows are frozen; invitation delivery and election opening require verified payment.
+- **Payment:** Checkout uses the existing mode-specific Paystack initialization and verification paths. Only exact server-verified successful payment marks the platform fee paid. Failed/abandoned attempts can be retried with a new reference; uncertain, reversed, refunded or exception states require reconciliation and are not blindly retried.
+- **Accounting boundary:** Verified receipts still post to provider clearing and unallocated suspense under the existing receipt foundation. This pricing implementation does not claim final revenue recognition, processor-fee, tax or net-to-bank allocation. Those remain settlement/accounting release gates.
+- **No live switch:** Adding this policy does not enable test or live Paystack flags, deploy migrations/functions, or authorize a real charge. Payment purpose gates remain fail-closed.
+
 ## Mode configuration
 
 Set exactly one `PAYSTACK_MODE` value: `test` or `live`.
@@ -62,7 +73,7 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 
 ## Important boundaries
 
-- Never accept client-supplied amount, fee, currency, purpose, payment status or provider reference as authoritative.
+- Never accept client-supplied amount, fee, currency, purpose, payment status or provider reference as authoritative. The platform-fee checkout's submitted quote fields are comparison-only; server policy and committed eligible-voter rows determine the amount.
 - A browser callback is an untrusted navigation signal, not proof of payment. The callback route performs authenticated server-side verification; the signed webhook remains the independent provider notification path.
 - On a server-verified Paystack success, the actual provider-reported amount and currency are stored separately from the expected intent amount. Migration `0039_verified_provider_amount_capture` posts the actual KES amount to provider clearing and unallocated suspense—even when the amount mismatches and the intent is set to `exception`. This prevents the ledger from recording an expected amount that was not actually received. Non-KES or invalid provider amounts remain exceptions and are not forced into the KES ledger. This is not purpose allocation, revenue recognition, processor-fee accounting, organization-balance settlement or vote-credit issuance.
 - The webhook RPC atomically updates payment/event state; the payment-intent success trigger posts the interim suspense receipt in the same database transaction. Neither path performs final purpose allocation or vote-credit fulfillment. Migration `0035_paystack_terminal_state_guard` prevents late `charge.success` events from resurrecting terminal intents. Migration `0038_paystack_refund_dispute_exceptions` freezes signed refund/dispute notifications for explicit reconciliation without treating webhook status as final settlement.
