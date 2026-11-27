@@ -343,3 +343,22 @@ test("Paystack webhook processing cannot resurrect refunded or reversed payment 
   assert.match(smoke, /set local role service_role/);
   assert.match(smoke, /rollback;/);
 });
+
+
+test("Paystack initialization is one-shot, idempotent and fails closed on uncertain outcomes", async () => {
+  const migration = await read("../supabase/migrations/20261127140000_0036_paystack_initialization_claims.sql");
+  const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
+  const smoke = await read("../supabase/tests/payment_initialization_claim_smoke.sql");
+  assert.match(migration, /payment_initialization_attempts/);
+  assert.match(migration, /payment_intent_id uuid not null unique/);
+  assert.match(migration, /'initializing', 'unknown', 'initialized'/);
+  assert.match(migration, /revoke all[\s\S]*from public, anon, authenticated/);
+  assert.match(initialize, /payment_initialization_attempts/);
+  assert.match(initialize, /PAYMENT_INITIALIZATION_OUTCOME_UNKNOWN/);
+  assert.match(initialize, /Reconcile it before retrying/);
+  assert.match(initialize, /duplicate: true/);
+  assert.match(initialize, /result\.data\.reference !== intent\.provider_reference/);
+  assert.match(smoke, /DUPLICATE_INITIALIZATION_CLAIM_MUST_FAIL/);
+  assert.match(smoke, /INITIALIZATION_ATTEMPTS_MUST_BE_PRIVATE/);
+  assert.match(smoke, /rollback;/);
+});
