@@ -6,7 +6,7 @@ do $$
 declare
   v_clearing uuid;
   v_revenue uuid;
-  v_source uuid := extensions.gen_random_uuid();
+  v_source uuid := gen_random_uuid();
   v_result jsonb;
   v_duplicate jsonb;
   v_entries bigint;
@@ -61,7 +61,7 @@ begin
     perform public.post_ledger_transaction(
       'acceptance_payment',
       'acceptance_test',
-      extensions.gen_random_uuid(),
+      gen_random_uuid(),
       'ledger-acceptance-unbalanced-0001',
       'Unbalanced fixture must roll back',
       jsonb_build_array(
