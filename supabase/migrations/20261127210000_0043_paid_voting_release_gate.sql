@@ -472,7 +472,7 @@ create or replace function mandate_private.guard_election_snapshot()
 returns trigger
 language plpgsql
 set search_path = pg_catalog
-as $
+as $election_guard$
 begin
   if old.status <> 'draft' and (
     new.rules_snapshot is distinct from old.rules_snapshot
@@ -493,7 +493,7 @@ begin
   end if;
   return new;
 end;
-$;
+$election_guard$;
 
 -- Public-paid tallies count verified participant records as the available participant
 -- base and distinct participants who submitted ballots as turnout. Ballot choices remain
