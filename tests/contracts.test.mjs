@@ -450,3 +450,35 @@ test("public participant verification uses email OTP and keeps identity out of b
   assert.match(config, /\[functions\.public-election-details\]\nverify_jwt = false/);
   assert.match(config, /\[functions\.public-participant-session\]\nverify_jwt = true/);
 });
+
+
+test("public vote credits reserve quantities, fulfill only verified payments and cast anonymous ballots", async () => {
+  const reservations = await read("../supabase/migrations/20261127190000_0041_public_vote_credit_reservations_and_fulfillment.sql");
+  const ballot = await read("../supabase/migrations/20261127200000_0042_public_paid_ballot_casting.sql");
+  const smoke = await read("../supabase/tests/public_vote_credit_lifecycle_smoke.sql");
+  const intent = await read("../supabase/functions/public-vote-credit-intent/index.ts");
+  const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  const actions = await read("../app/actions/public-vote.ts");
+  const form = await read("../app/public-vote/[slug]/participant-verification-form.tsx");
+  assert.match(reservations, /create_public_vote_credit_payment_intent/);
+  assert.match(reservations, /PARTICIPANT_CREDIT_CAP_EXCEEDED/);
+  assert.match(reservations, /status in \('reserved','exception'\)/);
+  assert.match(reservations, /provider_amount_minor is distinct from new.amount_minor/);
+  assert.match(reservations, /insert into public.vote_credit_lots/);
+  assert.match(reservations, /entitlement_status = 'suspended'/);
+  assert.match(ballot, /cast_public_paid_ballot/);
+  assert.match(ballot, /submission_key_hash/);
+  assert.match(ballot, /INSUFFICIENT_VOTE_CREDITS/);
+  assert.match(ballot, /vote_credit_consumptions/);
+  assert.match(intent, /paymentPurposeEnabled\("public_vote_credits"\)/);
+  assert.match(intent, /Idempotency-Key/);
+  assert.match(initialize, /VERIFIED_PARTICIPANT_REQUIRED/);
+  assert.match(verify, /VERIFIED_PARTICIPANT_REQUIRED/);
+  assert.match(actions, /public-vote-credit-intent/);
+  assert.match(actions, /paystack-initialize/);
+  assert.match(form, /Continue to Paystack/);
+  assert.match(smoke, /ACTIVE_CREDIT_RESERVATIONS_MUST_ENFORCE_PARTICIPANT_CAP/);
+  assert.match(smoke, /PUBLIC_PAID_BALLOT_RETRY_MUST_RETURN_SAME_RECEIPT/);
+  assert.match(smoke, /PUBLIC_PAID_BALLOT_MUST_CONSUME_CREDITS_ONCE_AND_KEEP_BALLOT_ANONYMOUS/);
+});
