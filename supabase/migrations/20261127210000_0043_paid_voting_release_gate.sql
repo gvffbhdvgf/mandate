@@ -520,7 +520,7 @@ begin
   if v_e.voting_mode='public_paid' then
     select count(*) into v_eligible
     from public.public_participants
-    where election_id=v_e.id and verification_status='verified';
+    where election_id=v_e.id and verification_status in ('verified','blocked');
 
     select count(distinct participant_id) into v_participating
     from public.ballot_submission_controls
@@ -549,7 +549,18 @@ begin
     where c.election_id=v_e.id
       and (
         b.id is null or b.election_id<>c.election_id or b.contest_id<>c.contest_id
-        or (v_e.voting_mode='public_paid' and (c.participant_id is null or c.voter_id is not null))
+        or (v_e.voting_mode='public_paid' and (
+          c.participant_id is null
+          or c.voter_id is not null
+          or not exists(
+            select 1 from public.public_participants participant
+            where participant.id=c.participant_id
+              and participant.election_id=c.election_id
+          )
+          or (select coalesce(sum(consumption.credits_consumed),0)
+              from public.vote_credit_consumptions consumption
+              where consumption.ballot_id=b.id) <> b.vote_units
+        ))
         or (v_e.voting_mode<>'public_paid' and (c.voter_id is null or c.participant_id is not null))
       )
   ) then
