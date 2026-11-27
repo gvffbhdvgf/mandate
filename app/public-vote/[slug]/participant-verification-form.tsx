@@ -2,19 +2,44 @@
 
 import { useState, useTransition } from "react";
 import { initializePublicVoteCreditCheckout, requestPublicParticipantOtp, verifyPublicParticipantOtp } from "../../actions/public-vote";
+import { PublicPaidBallot } from "./public-paid-ballot";
 
-export function ParticipantVerificationForm({ slug }: { slug: string }) {
+type ParticipantElection = {
+  title: string;
+  currency: string;
+  pricePerCreditMinor: number;
+  maxCreditsPerParticipant: number;
+  endsAt: string;
+  timezone: string;
+  creditsRemaining: number;
+};
+
+type BallotContext = {
+  election: { title: string; slug: string; endsAt: string; timezone: string };
+  creditsRemaining: number;
+  contests: Array<{
+    id: string;
+    title: string;
+    required: boolean;
+    ballotsCast: number;
+    options: Array<{ id: string; displayName: string }>;
+  }>;
+};
+
+export function ParticipantVerificationForm({
+  slug,
+  initialSession = null,
+  initialBallotContext = null,
+}: {
+  slug: string;
+  initialSession?: ParticipantElection | null;
+  initialBallotContext?: BallotContext | null;
+}) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
-  const [participantElection, setParticipantElection] = useState<{
-    title: string;
-    currency: string;
-    pricePerCreditMinor: number;
-    maxCreditsPerParticipant: number;
-    endsAt: string;
-    timezone: string;
-  } | null>(null);
+  const [participantElection, setParticipantElection] = useState<ParticipantElection | null>(initialSession);
+  const [ballotContext, setBallotContext] = useState<BallotContext | null>(initialBallotContext);
   const [quantity, setQuantity] = useState(1);
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [message, setMessage] = useState("");
@@ -40,10 +65,20 @@ export function ParticipantVerificationForm({ slug }: { slug: string }) {
       const result = await verifyPublicParticipantOtp(email, code, slug);
       if (result.error) setMessage(result.error);
       else if (result.election) {
-        setParticipantElection(result.election);
+        setParticipantElection(result.election as ParticipantElection);
+        setBallotContext((result.ballotContext as BallotContext | null) ?? null);
         setQuantity(1);
       }
     });
+  }
+
+  if (participantElection && ballotContext && ballotContext.creditsRemaining > 0) {
+    return (
+      <section className="form-stack">
+        <p className="form-hint" role="status">Your email is verified. You can now cast a ballot using your purchased credits.</p>
+        <PublicPaidBallot slug={slug} initialContext={ballotContext} />
+      </section>
+    );
   }
 
   if (participantElection) {
