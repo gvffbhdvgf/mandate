@@ -711,3 +711,21 @@ test("closing elections, publishing results and sending voter invitations requir
   assert.match(invitations, /confirmInvitations/);
   assert.match(invitationForm, /name="confirmInvitations"/);
 });
+
+
+test("registered-election fees and public vote credits share the same Paystack checkout and callback pipeline", async () => {
+  const platformFee = await read("../app/actions/payments.ts");
+  const publicVote = await read("../app/actions/public-vote.ts");
+  const callback = await read("../app/payments/paystack/callback/route.ts");
+  const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  assert.match(platformFee, /functions\.invoke\("paystack-initialize"/);
+  assert.match(publicVote, /functions\.invoke\("paystack-initialize"/);
+  assert.match(platformFee, /authorizationUrl/);
+  assert.match(publicVote, /authorizationUrl/);
+  assert.match(callback, /functions\.invoke\("paystack-verify"/);
+  assert.match(initialize, /public_vote_credits/);
+  assert.match(verify, /intent\.purpose === "platform_fee"/);
+  assert.match(verify, /intent\.purpose === "public_vote_credits"/);
+  assert.match(verify, /apply_verified_paystack_public_vote_payment/);
+});
