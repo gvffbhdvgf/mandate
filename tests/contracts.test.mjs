@@ -414,7 +414,7 @@ test("verified provider amounts are captured even when they mismatch the intent"
   const verify = await read("../supabase/functions/paystack-verify/index.ts");
   assert.match(migration, /provider_amount_minor bigint/);
   assert.match(migration, /provider_currency text/);
-  assert.match(migration, /new\.provider_status = 'success'/);
+  assert.match(migration, /new\.provider_status in \('success', 'reversal pending', 'reversed'\)/);
   assert.match(migration, /new\.provider_amount_minor/);
   assert.match(migration, /payment_receipt_pending_allocation/);
   assert.match(smoke, /MISMATCHED_PROVIDER_SUCCESS_MUST_CAPTURE_ACTUAL_AMOUNT_ONCE/);
