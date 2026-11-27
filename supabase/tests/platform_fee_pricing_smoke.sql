@@ -57,14 +57,33 @@ select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-11111111
 
 do $$
 declare
+  v_min_quote jsonb;
+  v_scale_quote jsonb;
   v_min jsonb;
   v_scale jsonb;
   v_duplicate jsonb;
   v_rejected boolean := false;
 begin
-  v_min := public.create_platform_fee_payment_intent('33333333-3333-4333-8333-333333333346');
-  v_scale := public.create_platform_fee_payment_intent('33333333-3333-4333-8333-333333333347');
-  v_duplicate := public.create_platform_fee_payment_intent('33333333-3333-4333-8333-333333333346');
+  v_min_quote := public.get_platform_fee_quote('33333333-3333-4333-8333-333333333346');
+  v_scale_quote := public.get_platform_fee_quote('33333333-3333-4333-8333-333333333347');
+  v_min := public.create_platform_fee_payment_intent(
+    '33333333-3333-4333-8333-333333333346',
+    (v_min_quote->>'eligibleVoterCount')::integer,
+    (v_min_quote->>'amountMinor')::bigint,
+    (v_min_quote->>'policyVersion')::integer
+  );
+  v_scale := public.create_platform_fee_payment_intent(
+    '33333333-3333-4333-8333-333333333347',
+    (v_scale_quote->>'eligibleVoterCount')::integer,
+    (v_scale_quote->>'amountMinor')::bigint,
+    (v_scale_quote->>'policyVersion')::integer
+  );
+  v_duplicate := public.create_platform_fee_payment_intent(
+    '33333333-3333-4333-8333-333333333346',
+    (v_min_quote->>'eligibleVoterCount')::integer,
+    (v_min_quote->>'amountMinor')::bigint,
+    (v_min_quote->>'policyVersion')::integer
+  );
 
   if (v_min->>'amountMinor')::bigint <> 50000
     or (v_min->>'eligibleVoterCount')::integer <> 10
