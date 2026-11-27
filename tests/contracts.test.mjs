@@ -697,3 +697,17 @@ test("organization member actions confirm revocations and explain successful acc
   assert.match(panel, /can no longer access this organization/);
   assert.match(panel, /role="status"/);
 });
+
+
+test("closing elections, publishing results and sending voter invitations require explicit confirmation", async () => {
+  const lifecycle = await read("../app/actions/lifecycle.ts");
+  const lifecycleForm = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
+  const invitations = await read("../app/actions/invitations.ts");
+  const invitationForm = await read("../app/organizations/[organizationId]/elections/[electionId]/dispatch-invitations-form.tsx");
+  assert.match(lifecycle, /confirmClose/);
+  assert.match(lifecycle, /confirmPublish/);
+  assert.match(lifecycleForm, /name="confirmClose"/);
+  assert.match(lifecycleForm, /name="confirmPublish"/);
+  assert.match(invitations, /confirmInvitations/);
+  assert.match(invitationForm, /name="confirmInvitations"/);
+});
