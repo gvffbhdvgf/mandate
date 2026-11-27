@@ -54,6 +54,20 @@ Deno.serve(async (request: Request) => {
       await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
     }
 
+    let returnPath = "/dashboard";
+    if (intent.purpose === "public_vote_credits" && intent.election_id) {
+      const { data: election, error: electionError } = await admin
+        .from("elections")
+        .select("public_slug")
+        .eq("id", intent.election_id)
+        .maybeSingle();
+      if (electionError || !election?.public_slug
+        || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(election.public_slug)) {
+        return json(409, { error: "PUBLIC_ELECTION_RETURN_PATH_UNAVAILABLE" }, cors);
+      }
+      returnPath = `/public-vote/${election.public_slug}`;
+    }
+
     const result = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(body.reference)}`);
     const payment = result.data;
     const providerAmountMinor = Number(payment.amount);
@@ -86,7 +100,7 @@ Deno.serve(async (request: Request) => {
           .maybeSingle();
         if (refreshError) return json(500, { error: "PAYMENT_VERIFICATION_PERSIST_FAILED" }, cors);
         if (!refreshed) return json(409, { error: "PAYMENT_STATE_TERMINAL" }, cors);
-        return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true }, cors);
+        return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true, returnPath }, cors);
       }
       return json(409, { error: "PAYMENT_STATE_TERMINAL", status: intent.status }, cors);
     }
@@ -135,7 +149,7 @@ Deno.serve(async (request: Request) => {
     if (payment.status === "success" && !isSuccess) {
       return json(409, { error: "PAYMENT_MISMATCH", status: nextStatus }, cors);
     }
-    return json(200, { status: nextStatus, reference: payment.reference, verified: isSuccess }, cors);
+    return json(200, { status: nextStatus, reference: payment.reference, verified: isSuccess, returnPath }, cors);
   } catch (error) {
     const code = error instanceof Error ? error.message : "PAYMENT_VERIFICATION_FAILED";
     const status = code === "AUTHENTICATION_REQUIRED" || code === "INVALID_SESSION" ? 401
