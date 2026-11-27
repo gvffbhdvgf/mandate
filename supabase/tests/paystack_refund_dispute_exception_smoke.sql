@@ -10,6 +10,9 @@ insert into public.payment_intents(
   8400, 'KES', 'pending', 'mandate-refund-exception-smoke-20261127'
 );
 
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+
 update public.payment_intents
 set status = 'success',
     provider_transaction_id = 'paystack-refund-exception-transaction',
@@ -26,9 +29,6 @@ insert into public.payment_events(
   true, '{"status":"pending","amount":"8400","currency":"KES","resource_id":"refund-exception-smoke"}'::jsonb,
   'received'
 );
-
-set local role service_role;
-select set_config('request.jwt.claim.role', 'service_role', true);
 
 select public.apply_paystack_payment_exception_event(
   '22222222-2222-4222-8222-222222222239',
