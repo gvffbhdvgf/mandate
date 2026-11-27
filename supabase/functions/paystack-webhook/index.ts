@@ -1,4 +1,4 @@
-import { adminClient, env, json, paystackRequest, paymentsModeEnabled, verifyPaystackWebhookSignature } from "../_shared/paystack.ts";
+import { adminClient, json, paystackRequest, paymentPurposeEnabled, paymentsModeEnabled, verifyPaystackWebhookSignature } from "../_shared/paystack.ts";
 
 type PaystackEvent = {
   event?: string;
@@ -85,7 +85,7 @@ Deno.serve(async (request: Request) => {
     return json(200, { received: true, processed: false });
   }
 
-  let verified: PaystackVerifyResponse;
+  const { data: intent, error: intentError } = await admin\n    .from("payment_intents")\n    .select("purpose")\n    .eq("provider_reference", reference)\n    .maybeSingle();\n  if (intentError) return json(500, { error: "PAYMENT_INTENT_LOOKUP_FAILED" });\n  if (!intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" });\n  if (!paymentPurposeEnabled(intent.purpose)) return json(503, { error: "PAYMENT_PURPOSE_DISABLED" });\n\n  let verified: PaystackVerifyResponse;
   try {
     verified = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(reference)}`);
   } catch {
