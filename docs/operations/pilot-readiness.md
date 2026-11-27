@@ -7,12 +7,12 @@ This runbook is an operator checklist. A checkbox is complete only when the link
 
 ## Current known state
 
-- Release work is on [PR #10](https://github.com/gvffbhdvgf/mandate/pull/10), branch `feat/m2-election-setup-lifecycle-next`. The recorded application, database acceptance/concurrency and Edge Function checks passed on head `5c4fff0d459cc9c1b380ca17232d9c8e74f7089d`; the latest runbook update must also pass CI before it is treated as verified.
+- Release work is on [PR #10](https://github.com/gvffbhdvgf/mandate/pull/10), branch `feat/m2-election-setup-lifecycle-next`. The application, database acceptance/concurrency and Edge Function workflows passed on head `ad4db2897d30fe8623bcb1a8f03946cf443472c0`; rerun them for any subsequent branch update.
 - Hosted Supabase migrations are applied through `0033_election_setup_confirmation_index`.
 - Supabase security advisors have no WARN findings. RLS-enabled tables without policies are intentional private/default-deny tables; verify their access only through approved RPCs. Performance INFO findings currently include unused indexes because there is no production workload.
 - Paystack initialize/verify/webhook functions are active with test-only checks. Paid voting and payouts are disabled.
 - Organization invitation delivery is deployed fail-closed. The Supabase Edge Function secret `MANDATE_SITE_URL` is set to `https://mandate.markmachukhu97.workers.dev`; `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are not set.
-- Resend has one domain entry, `poptraworld.digital`, in `not_started` status with its DNS records unconfigured. It is not referenced in Mandate project records. Cloudflare currently has no DNS zones, so this domain has not been attached to Mandate.
+- Resend has one domain entry, `poptraworld.digital`, in `not_started` status with its DNS records unconfigured. It is not referenced in Mandate project records. The Resend dashboard reports it is in use by another Resend team; verifying ownership would transfer it and revoke that team's access. Cloudflare currently has no DNS zones, so this domain has not been attached to Mandate.
 - Cloudflare account has an active workers.dev subdomain but no production Worker or Pages project.
 - Supabase Auth Site URL and signup callback allowlist have been verified in the hosted dashboard. Production signup, confirmation, login and password-reset flows are still untested because no Worker is deployed.
 
@@ -22,7 +22,7 @@ This runbook is an operator checklist. A checkbox is complete only when the link
 
 - [x] Set Supabase Auth Site URL to `https://mandate.markmachukhu97.workers.dev`.
 - [x] Confirm the signup callback allowlist includes `https://mandate.markmachukhu97.workers.dev/auth/callback?next=*`. Email confirmation remains enabled.
-- [ ] Confirm a project-controlled sending domain. Configure and verify its DNS in Resend, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Supabase function secrets. The current Resend domain entry is unverified and is not yet confirmed as project-controlled. Do not put secrets in GitHub source or browser-visible settings.
+- [ ] Confirm a project-controlled sending domain. Configure and verify its DNS in Resend, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Supabase function secrets. The current Resend domain is unverified, is not confirmed as project-controlled, and is reported in use by another Resend team. Do not claim or verify it without explicit ownership and transfer authorization.
 - [ ] Rotate the Paystack test secret previously exposed. Confirm Paystack mode remains test-only and live transactions remain disabled.
 - [ ] Confirm required GitHub branch protection/review policy and deployment credentials are available. Never paste credential values into issues, logs or this document.
 - [ ] Obtain the external legal, provider, custody and operational approvals required before enabling any paid-voting or payout feature. Those features remain off.
