@@ -2,7 +2,11 @@ import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 
 const referencePattern = /^[A-Za-z0-9.=-]{8,100}$/;
 
-function statusPage(status: number, title: string, message: string) {
+function statusPage(status: number, title: string, message: string, returnPath = "/dashboard") {
+  const safeReturnPath = /^\\/public-vote\\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(returnPath)
+    ? returnPath
+    : "/dashboard";
+  const returnLabel = safeReturnPath === "/dashboard" ? "Return to Mandate" : "Continue to your election";
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -16,7 +20,7 @@ main{background:white;border:1px solid #e5e7eb;border-radius:16px;padding:32px;m
 h1{font-size:1.4rem;margin:0 0 12px}p{line-height:1.6;color:#4b5563}a{color:#155eef;font-weight:600}
 </style>
 </head>
-<body><main><h1>${title}</h1><p>${message}</p><p><a href="/dashboard">Return to Mandate</a></p></main></body>
+<body><main><h1>${title}</h1><p>${message}</p><p><a href="${safeReturnPath}">${returnLabel}</a></p></main></body>
 </html>`;
   return new Response(html, {
     status,
@@ -53,10 +57,20 @@ export async function GET(request: Request) {
       return statusPage(503, "Payment verification pending", "Mandate could not confirm the payment with Paystack just now. Do not pay again. Return to Mandate and check the payment status shortly.");
     }
     if (data?.status === "success" && data?.verified === true) {
-      return statusPage(200, "Payment verified", "Paystack confirmed this payment. Your organization payment record is updated. If a balance or service has not updated yet, it may still require settlement processing.");
+      return statusPage(
+        200,
+        "Payment verified",
+        data.returnPath ? "Paystack confirmed your payment and your voting credits are ready. Continue to your election to cast your ballot." : "Paystack confirmed this payment. Your organization payment record is updated. If a balance or service has not updated yet, it may still require settlement processing.",
+        typeof data.returnPath === "string" ? data.returnPath : "/dashboard",
+      );
     }
     if (data?.status === "pending") {
-      return statusPage(202, "Payment is still processing", "Paystack has not reported a final successful payment yet. Do not pay again; check the payment status again shortly.");
+      return statusPage(
+        202,
+        "Payment is still processing",
+        "Paystack has not reported a final successful payment yet. Do not pay again; check the payment status again shortly.",
+        typeof data.returnPath === "string" ? data.returnPath : "/dashboard",
+      );
     }
     return statusPage(409, "Payment needs review", "Mandate could not confirm a matching successful payment. No credit or balance is issued by this callback. Contact your organization finance administrator if the payment was debited.");
   } catch {
