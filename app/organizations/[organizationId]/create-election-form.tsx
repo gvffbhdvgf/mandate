@@ -360,7 +360,9 @@ export function CreateElectionForm({
           {election.voting_mode === "public_paid" && (
             <div className="form-hint">
               <p>Public URL: /public-vote/{election.public_slug || "slug-required"}</p>
-              <p>Price per credit: KSh {election.price_per_credit_minor || "not set"}</p>
+              <p>Price per credit: {election.price_per_credit_minor
+                ? `KSh ${(Number(election.price_per_credit_minor) / 100).toFixed(2)}`
+                : "Not set"}</p>
               <p>Maximum credits per participant: {election.max_credits_per_participant || "not set"}</p>
               <p>Email OTP verification: required</p>
               <p>Platform release authorization: pending</p>
