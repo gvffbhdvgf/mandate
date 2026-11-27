@@ -11,7 +11,8 @@ alter table public.payment_intents
 alter table public.payment_intents
   add constraint payment_intents_provider_fee_complete check (
     (provider_fee_minor is null and provider_fee_verified_at is null)
-    or (provider_fee_minor is not null and provider_fee_verified_at is not null)
+    or (provider_fee_minor is not null and provider_fee_verified_at is not null
+      and provider_fee_minor <= amount_minor)
   );
 
 create or replace function mandate_private.guard_provider_fee_facts()
@@ -50,7 +51,7 @@ declare
 begin
   if p_provider_reference is null or p_provider_transaction_id is null or p_provider_status is null
     or p_amount_minor is null or p_amount_minor <= 0 or p_currency is null
-    or (p_provider_fee_minor is not null and p_provider_fee_minor < 0) then
+    or (p_provider_fee_minor is not null and (p_provider_fee_minor < 0 or p_provider_fee_minor > p_amount_minor)) then
     raise exception 'PUBLIC_VOTE_PAYMENT_VERIFICATION_FACTS_INVALID' using errcode = '22023';
   end if;
 
