@@ -16,6 +16,9 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 update public.payment_intents
 set status = 'success',
     provider_transaction_id = 'paystack-suspense-ledger-transaction',
+    provider_status = 'success',
+    provider_amount_minor = 7200,
+    provider_currency = 'KES',
     verified_at = now()
 where id = '11111111-1111-4111-8111-111111111138';
 
