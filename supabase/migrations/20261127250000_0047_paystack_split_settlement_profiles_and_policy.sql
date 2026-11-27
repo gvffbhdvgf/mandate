@@ -130,10 +130,11 @@ alter table public.payment_intents
       and split_fee_bearer is not null
       and split_snapshot_at is not null
       and (
-        (split_fee_type = 'fixed' and split_fixed_fee_minor > 0
+        (split_fee_type = 'fixed' and split_fixed_fee_minor is not null and split_fixed_fee_minor > 0
           and split_percentage_basis_points is null)
         or
-        (split_fee_type = 'percentage' and split_percentage_basis_points between 1 and 9999
+        (split_fee_type = 'percentage' and split_percentage_basis_points is not null
+          and split_percentage_basis_points between 1 and 9999
           and split_fixed_fee_minor is null)
       )
       and (
