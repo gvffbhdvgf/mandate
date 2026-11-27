@@ -67,6 +67,35 @@ async function createFixture() {
       values ($1,$2,$3,$4,$5,$6,now()) returning id`, [organizationId, electionId, `RACE-${i}`, `Race Voter ${i}`, `race-${i}-${suffix}@example.invalid`, digest(tokens[i])]);
     voterIds.push(voter.rows[0].id);
   }
+  // Registered elections require a server-priced platform-fee invoice before opening.
+  // Settle this fixture invoice directly as the disposable database owner; no provider
+  // request or real payment is involved in the concurrency acceptance test.
+  const feeIntentResult = await withAuthenticated(admin, async () => {
+    const quote = await admin.query(
+      'select public.get_platform_fee_quote($1) as quote', [electionId],
+    );
+    const feeQuote = quote.rows[0].quote;
+    return admin.query(
+      'select public.create_platform_fee_payment_intent($1,$2,$3,$4) as result',
+      [electionId, feeQuote.eligibleVoterCount, feeQuote.amountMinor, feeQuote.policyVersion],
+    );
+  });
+  const feeIntent = feeIntentResult.rows[0].result;
+  await admin.query(`update public.payment_intents
+    set status='success',
+        provider_transaction_id=$2,
+        provider_status='success',
+        provider_amount_minor=$3,
+        provider_currency='KES',
+        verified_at=now()
+    where id=$1 and purpose='platform_fee' and status='initialized'`,
+    [feeIntent.paymentIntentId, `test-fee-${suffix}`, feeIntent.amountMinor],
+  );
+  const feeState = await admin.query(
+    'select platform_fee_status from public.elections where id=$1', [electionId],
+  );
+  assert.equal(feeState.rows[0].platform_fee_status, 'paid', 'test-only verified fee payment must unlock election opening');
+
   const confirmation = await withAuthenticated(admin, async () => admin.query(
     'select public.confirm_election_setup($1) as result', [electionId],
   ));
