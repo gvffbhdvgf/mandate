@@ -66,7 +66,8 @@ function paystackModeConfig(): PaystackModeConfig | null {
     return { mode: "test", secretKey, webhookSecret };
   }
   if (mode === "live") {
-    if (env("PAYSTACK_LIVE_TRANSACTIONS_ENABLED").toLowerCase() !== "true") return null;
+    if (env("PAYSTACK_LIVE_TRANSACTIONS_ENABLED").toLowerCase() !== "true"
+      || env("PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED").toLowerCase() !== "true") return null;
     const secretKey = env("PAYSTACK_LIVE_SECRET_KEY");
     const webhookSecret = env("PAYSTACK_LIVE_WEBHOOK_SECRET");
     if (!secretKey.startsWith("sk_live_") || !webhookSecret) return null;
