@@ -677,3 +677,23 @@ test("election lifecycle actions explain successful transitions and the next ste
   assert.match(controls, /lifecycleStatusLabels/);
   assert.match(controls, /role="status"/);
 });
+
+
+test("organization member actions confirm revocations and explain successful access changes", async () => {
+  const actions = await read("../app/actions/organization-members.ts");
+  const page = await read("../app/organizations/[organizationId]/page.tsx");
+  const panel = await read("../app/organizations/[organizationId]/members-panel.tsx");
+  assert.match(actions, /confirmRevokeMember/);
+  assert.match(actions, /confirmRevokeInvitation/);
+  assert.match(actions, /memberNotice=role-updated/);
+  assert.match(actions, /memberNotice=member-revoked/);
+  assert.match(actions, /memberNotice=invitation-revoked/);
+  assert.match(actions, /role-update-failed/);
+  assert.match(page, /memberNotice\?:/);
+  assert.match(page, /memberError\?:/);
+  assert.match(panel, /Confirm revoke access/);
+  assert.match(panel, /Confirm revoke invitation/);
+  assert.match(panel, /Their new permissions are now active/);
+  assert.match(panel, /can no longer access this organization/);
+  assert.match(panel, /role="status"/);
+});
