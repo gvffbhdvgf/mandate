@@ -25,10 +25,11 @@ where id = '11111111-1111-4111-8111-111111111144';
 with settlement as (
   insert into public.paystack_settlements(
     environment, provider_settlement_id, status, currency,
-    settlement_amount_minor, gross_amount_minor, fee_amount_minor, settled_at
+    provider_total_amount_minor, provider_effective_amount_minor,
+    provider_total_processed_minor, provider_total_fees_minor, settled_at
   ) values (
     'test', 'mandate-settlement-recon-smoke-20261127', 'success', 'KES',
-    12138, 12500, 362, now()
+    12138, 12138, 12500, 362, now()
   )
   returning id
 )
