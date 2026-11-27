@@ -12,7 +12,11 @@ export function LoginForm({ next, notice }: { next: string; notice?: string }) {
 
   return (
     <>
-      {notice === "confirm" && <p className="form-hint" role="status">Check your email to confirm your account, then sign in to accept the invitation.</p>}
+      {notice === "confirm" && (
+        <p className="form-hint" role="status">
+          Check your email to confirm your account, then sign in {next === "/invitations/accept" ? "to accept the invitation." : "to continue."}
+        </p>
+      )}
       {notice === "confirmation_failed" && <p className="form-error" role="alert">We could not complete email confirmation. Request a fresh confirmation email and try again.</p>}
       {state.error && <p className="form-error" role="alert">{state.error}</p>}
       <form action={action} className="form-stack">
