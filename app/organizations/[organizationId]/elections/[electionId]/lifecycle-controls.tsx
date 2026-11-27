@@ -68,13 +68,13 @@ export function ElectionLifecycleControls({
     <section className="panel lifecycle-panel">
       <div className="panel-heading"><div><p className="kicker">ELECTION CONTROL</p><h2>Lifecycle and results</h2></div><span className="status-pill">{status.replaceAll("_", " ")}</span></div>
 
-      {votingMode === "public_paid" ? (
-        <p className="form-hint">Public paid voting is feature-gated pending legal, provider and operational approval. This election cannot be opened in this mode yet.</p>
-      ) : status === "draft" || status === "scheduled" ? (
+      {status === "draft" || status === "scheduled" ? (
         canOpen ? (
           <form action={openAction} className="form-stack lifecycle-form">
             {hiddenFields}
-            <p className="muted">Opening freezes the rules and candidate snapshot. The voter register must be complete and every eligible voter must have an invitation issued.</p>
+            <p className="muted">{votingMode === "public_paid"
+              ? "Opening freezes the public price, participant cap, rules and candidate snapshot. Platform payment release and paid-voting authorization must be active; the database enforces these gates."
+              : "Opening freezes the rules and candidate snapshot. The voter register must be complete and every eligible voter must have an invitation issued."}</p>
             {openState.error && <p className="form-error" role="alert">{openState.error}</p>}
             <label className="ballot-confirmation"><input type="checkbox" name="confirmRules" value="true" required /> I have reviewed the election rules, options and eligible voter register.</label>
             <button className="primary-button" disabled={openPending}>{openPending ? "Checking opening requirements…" : "Open election"}</button>
@@ -128,15 +128,15 @@ export function ElectionLifecycleControls({
           <p className="kicker">RECONCILIATION SUMMARY</p>
           {tallySummary ? (
             <div className="summary-grid">
-              <div><span>Eligible voters</span><strong>{tallySummary.eligibleVoters ?? 0}</strong></div>
-              <div><span>Participating voters</span><strong>{tallySummary.participatingVoters ?? 0}</strong></div>
+              <div><span>{votingMode === "public_paid" ? "Verified participants" : "Eligible voters"}</span><strong>{tallySummary.eligibleVoters ?? 0}</strong></div>
+              <div><span>{votingMode === "public_paid" ? "Participants who cast ballots" : "Participating voters"}</span><strong>{tallySummary.participatingVoters ?? 0}</strong></div>
               <div><span>Accepted ballots</span><strong>{tallySummary.acceptedBallots ?? 0}</strong></div>
               <div><span>Invalidated ballots</span><strong>{tallySummary.invalidatedBallots ?? 0}</strong></div>
             </div>
           ) : tallyState.counts ? (
             <div className="summary-grid">
-              <div><span>Eligible voters</span><strong>{tallyState.counts.eligibleVoters}</strong></div>
-              <div><span>Participating voters</span><strong>{tallyState.counts.participatingVoters}</strong></div>
+              <div><span>{votingMode === "public_paid" ? "Verified participants" : "Eligible voters"}</span><strong>{tallyState.counts.eligibleVoters}</strong></div>
+              <div><span>{votingMode === "public_paid" ? "Participants who cast ballots" : "Participating voters"}</span><strong>{tallyState.counts.participatingVoters}</strong></div>
               <div><span>Accepted ballots</span><strong>{tallyState.counts.acceptedBallots}</strong></div>
               <div><span>Invalidated ballots</span><strong>{tallyState.counts.invalidatedBallots}</strong></div>
             </div>
