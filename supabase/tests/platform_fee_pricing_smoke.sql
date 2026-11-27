@@ -81,7 +81,8 @@ begin
   begin
     update public.elections set platform_fee_status='paid'
     where id='33333333-3333-4333-8333-333333333346';
-  exception when sqlstate '55000' then
+  exception when sqlstate '55000' or insufficient_privilege then
+    -- Either the immutable-state trigger or the revoked table UPDATE grant must block clients.
     v_rejected := true;
   end;
   if not v_rejected then raise exception 'CLIENT_MUST_NOT_WRITE_PLATFORM_FEE_STATUS'; end if;
