@@ -321,7 +321,7 @@ test("manual Paystack verification cannot overwrite terminal payment states or r
   assert.match(verify, /if \(intent\.status === "success"\)/);
   assert.match(verify, /PAYMENT_STATE_TERMINAL/);
   assert.match(verify, /\.in\("status", \["initialized", "pending"\]\)/);
-  assert.match(verify, /\.select\("id"\)\.maybeSingle\(\)/);
+  assert.match(verify, /\.select\("id"\)\s*\.maybeSingle\(\)/);
   assert.match(verify, /PAYMENT_STATE_CHANGED/);
   assert.match(verify, /current\.status === "success" && isSuccess/);
 });
