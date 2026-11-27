@@ -43,6 +43,16 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 - `paystack-webhook`: verifies the timestamped `Paystack-Signature` HMAC over the exact raw body and deduplicates provider events. `charge.success` is verified with Paystack and applied through the row-locked payment RPC. Signed `refund.*` and `charge.dispute.*` events trigger a server-side verification of the original Paystack transaction, persist its actual provider status/amount/currency, and freeze the related payment in `exception` for reconciliation. If a refund/dispute event arrives before `charge.success`, the verified original KES receipt is still captured to suspense. These events do not automatically reverse ledger entries or revoke credits because refunds may be partial and disputes may resolve without a refund. Public vote-credit fulfillment remains blocked until atomic participant-scoped issuance is implemented.
 - `/payments/paystack/callback`: authenticates the returning user, invokes the server-side verification function and displays only a verified, pending or review-needed status. It does not trust the redirect query or issue credits/settle balances.
 
+## Settlement reconciliation foundation — migration 0044
+
+- Migration `0044_paystack_settlement_reconciliation` adds server-only storage for Paystack settlement batches and their provider transaction rows. Imports are scoped to the explicit `test` or `live` environment; a provider transaction can appear only once per environment.
+- The read-only `paystack_settlement_reconciliation` view compares each imported settlement transaction with the server-verified payment intent, provider transaction ID, actual provider amount/currency, and the idempotent suspense receipt posting.
+- Reconciliation outcomes distinguish non-successful settlements, unknown or ambiguous references, unsuccessful provider transactions, transaction-ID/amount/currency mismatches, missing ledger receipts, and `matched_to_receipt`.
+- `matched_to_receipt` means only that a successful Paystack settlement row agrees with the verified provider receipt and its interim clearing/suspense posting. It does **not** prove the bank payout arrived, validate net settlement totals, book processor fees, allocate payment purposes, or authorize a payout.
+- Imported settlement batches and transaction rows are private to server-side service-role workflows. No browser role can read or write them. The migration/test add no production data or settings changes.
+- Paystack exposes settlement listing and settlement transaction listing; large settlements must be paged until `meta.pageCount` is exhausted. The export URL is short-lived, so do not persist it as a durable import source. See [Settlement API](https://paystack.com/docs/api/settlement/) and [Settlement Transactions](https://paystack.com/docs/payments/settlement-transactions/).
+- **Still outstanding:** secure operator authorization and ingestion workflow, pagination/retry/idempotency for provider imports, aggregate gross/fees/net-to-bank reconciliation, exception review and resolution workflow, and accounting-approved fee/refund/chargeback/purpose allocation. The settlement-ready live switch remains off.
+
 ## Important boundaries
 
 - Never accept client-supplied amount, fee, currency, purpose, payment status or provider reference as authoritative.
