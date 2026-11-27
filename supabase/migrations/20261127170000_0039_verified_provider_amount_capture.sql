@@ -259,7 +259,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = pg_catalog, pg_temp
-as $
+as $exception$
 declare
   v_event public.payment_events%rowtype;
   v_intent public.payment_intents%rowtype;
@@ -327,7 +327,7 @@ begin
     'provider_status', p_provider_status
   );
 end;
-$;
+$exception$;
 
 revoke all on function mandate_private.apply_verified_paystack_payment_exception_event(uuid,text,text,text,bigint,text)
   from public, anon, authenticated;
@@ -346,9 +346,9 @@ returns jsonb
 language sql
 security invoker
 set search_path = pg_catalog
-as $
+as $wrapper$
   select mandate_private.apply_verified_paystack_payment_exception_event($1, $2, $3, $4, $5, $6);
-$;
+$wrapper$;
 
 revoke all on function public.apply_verified_paystack_payment_exception_event(uuid,text,text,text,bigint,text)
   from public, anon, authenticated;
