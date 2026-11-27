@@ -165,6 +165,9 @@ declare
   v_destination_account uuid;
   v_destination_owner public.ledger_owner_type;
   v_destination_code text;
+  v_receipt_amount bigint;
+  v_transaction_type text;
+  v_description text;
   v_posting jsonb;
 begin
   if new.status = 'success' and old.status is distinct from new.status then
@@ -176,14 +179,12 @@ begin
       raise exception 'VERIFIED_PAYMENT_RECEIPT_FIELDS_REQUIRED' using errcode = '23514';
     end if;
 
-    insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
-    values ('provider_clearing', null, new.currency, 'paystack-receivable')
-    on conflict (owner_type, currency, account_code) where organization_id is null do nothing;
-
-    select id into strict v_clearing_account
-    from public.ledger_accounts
-    where owner_type = 'provider_clearing' and organization_id is null
-      and currency = new.currency and account_code = 'paystack-receivable';
+    v_receipt_amount := new.amount_minor;
+    v_transaction_type := case when new.purpose = 'public_vote_credits'
+      then 'mandate_public_vote_revenue' else 'payment_receipt_pending_allocation' end;
+    v_description := case when new.purpose = 'public_vote_credits'
+      then 'Mandate public vote-credit gross revenue'
+      else 'Verified Paystack receipt pending purpose allocation' end;
 
     if new.purpose = 'public_vote_credits' then
       v_destination_owner := 'platform_revenue';
@@ -193,39 +194,71 @@ begin
       v_destination_code := 'unallocated-payment-receipts';
     end if;
 
-    insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
-    values (v_destination_owner, null, new.currency, v_destination_code)
-    on conflict (owner_type, currency, account_code) where organization_id is null do nothing;
+  elsif new.status = 'exception'
+    and old.status is distinct from new.status
+    and new.provider = 'paystack'
+    and new.provider_status = 'success'
+    and new.provider_transaction_id is not null
+    and new.provider_amount_minor > 0
+    and new.provider_currency = new.currency
+    and new.verified_at is not null then
+    -- Provider confirmed receipt but the payment did not match the intent.
+    -- Record the actual amount in suspense without recognizing revenue or
+    -- fulfilling entitlements; reconciliation can resolve the exception.
+    v_receipt_amount := new.provider_amount_minor;
+    v_transaction_type := 'payment_receipt_pending_allocation';
+    v_description := 'Verified Paystack amount mismatch held in suspense';
+    v_destination_owner := 'suspense';
+    v_destination_code := 'unallocated-payment-receipts';
+  else
+    return new;
+  end if;
 
-    select id into strict v_destination_account
-    from public.ledger_accounts
-    where owner_type = v_destination_owner and organization_id is null
-      and currency = new.currency and account_code = v_destination_code;
+  insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
+  values ('provider_clearing', null, new.currency, 'paystack-receivable')
+  on conflict (owner_type, currency, account_code) where organization_id is null do nothing;
 
-    v_posting := mandate_private.post_ledger_transaction(
-      case when new.purpose = 'public_vote_credits'
-        then 'mandate_public_vote_revenue' else 'payment_receipt_pending_allocation' end,
-      'payment_intent',
-      new.id,
-      'paystack-payment-receipt:' || new.id::text,
-      case when new.purpose = 'public_vote_credits'
-        then 'Mandate public vote-credit gross revenue'
-        else 'Verified Paystack receipt pending purpose allocation' end,
-      jsonb_build_array(
-        jsonb_build_object('account_id', v_clearing_account, 'direction', 'debit',
-          'amount_minor', new.amount_minor, 'currency', new.currency),
-        jsonb_build_object('account_id', v_destination_account, 'direction', 'credit',
-          'amount_minor', new.amount_minor, 'currency', new.currency)
-      )
-    );
+  select id into strict v_clearing_account
+  from public.ledger_accounts
+  where owner_type = 'provider_clearing' and organization_id is null
+    and currency = new.currency and account_code = 'paystack-receivable';
 
-    if v_posting->>'status' <> 'posted' then
-      raise exception 'VERIFIED_PAYMENT_RECEIPT_LEDGER_POST_FAILED' using errcode = '23514';
-    end if;
+  insert into public.ledger_accounts(owner_type, organization_id, currency, account_code)
+  values (v_destination_owner, null, new.currency, v_destination_code)
+  on conflict (owner_type, currency, account_code) where organization_id is null do nothing;
+
+  select id into strict v_destination_account
+  from public.ledger_accounts
+  where owner_type = v_destination_owner and organization_id is null
+    and currency = new.currency and account_code = v_destination_code;
+
+  v_posting := mandate_private.post_ledger_transaction(
+    v_transaction_type,
+    'payment_intent',
+    new.id,
+    'paystack-payment-receipt:' || new.id::text,
+    v_description,
+    jsonb_build_array(
+      jsonb_build_object('account_id', v_clearing_account, 'direction', 'debit',
+        'amount_minor', v_receipt_amount, 'currency', new.currency),
+      jsonb_build_object('account_id', v_destination_account, 'direction', 'credit',
+        'amount_minor', v_receipt_amount, 'currency', new.currency)
+    )
+  );
+
+  if v_posting->>'status' <> 'posted' then
+    raise exception 'VERIFIED_PAYMENT_RECEIPT_LEDGER_POST_FAILED' using errcode = '23514';
   end if;
   return new;
 end;
 $$;
+
+drop trigger if exists payment_intents_capture_verified_receipt on public.payment_intents;
+create trigger payment_intents_capture_verified_receipt
+after update of status on public.payment_intents
+for each row
+when (new.status in ('success','exception') and old.status is distinct from new.status)
+execute function mandate_private.capture_verified_payment_receipt();
 
 create or replace function mandate_private.capture_verified_public_vote_provider_fee()
 returns trigger
