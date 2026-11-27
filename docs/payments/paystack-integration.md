@@ -23,7 +23,8 @@ Set exactly one `PAYSTACK_MODE` value: `test` or `live`.
 | `PAYSTACK_TEST_WEBHOOK_SECRET` | Test webhook signing secret |
 | `PAYSTACK_LIVE_SECRET_KEY` | Live API key; must begin `sk_live_` |
 | `PAYSTACK_LIVE_WEBHOOK_SECRET` | Live webhook signing secret |
-| `PAYSTACK_LIVE_TRANSACTIONS_ENABLED` | Additional live-mode master switch; must be exactly `true` |
+| `PAYSTACK_LIVE_TRANSACTIONS_ENABLED` | Live-mode transaction master switch; must be exactly `true` |
+| `PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED` | Additional live-mode settlement-readiness switch; must be exactly `true` only after the complete payment-to-ledger and reconciliation path is implemented and verified |
 | `PAYSTACK_TEST_PLATFORM_FEE_ENABLED` | Test-mode platform fee gate |
 | `PAYSTACK_TEST_ORGANIZATION_TOPUP_ENABLED` | Test-mode organization top-up gate |
 | `PAYSTACK_TEST_PUBLIC_VOTE_CREDITS_ENABLED` | Test-mode public vote credits gate |
@@ -33,13 +34,13 @@ Set exactly one `PAYSTACK_MODE` value: `test` or `live`.
 | `MANDATE_PAYMENT_CALLBACK_URL` | Optional HTTPS callback URL; callback is never proof of payment |
 | `MANDATE_ALLOWED_ORIGINS` | Optional comma-separated browser origins |
 
-A purpose flag is enabled only when its mode-specific value is exactly `true`; missing flags are disabled. Live mode additionally requires the live master switch, a matching live key prefix and a live webhook secret. The adapter never falls back from a missing mode-specific key to a shared/other-mode key.
+A purpose flag is enabled only when its mode-specific value is exactly `true`; missing flags are disabled. Live mode additionally requires both live master switches, a matching live key prefix and a live webhook secret. The settlement-readiness switch must remain unset until payment-to-ledger posting and reconciliation are actually wired and tested. The adapter never falls back from a missing mode-specific key to a shared/other-mode key.
 
 ## Edge Function behavior
 
 - `paystack-initialize`: loads an existing server-created intent; amount, currency and reference come from the database. Requires the matching mode and purpose gates. Public vote-credit initialization remains blocked until a scoped participant-token checkout path is implemented.
 - `paystack-verify`: verifies the provider transaction server-side and compares exact reference, amount and KES currency. Organization intents require active organization-manager authorization.
-- `paystack-webhook`: verifies the timestamped `Paystack-Signature` HMAC over the exact raw body, deduplicates provider events, checks the associated intent's purpose gate, verifies with Paystack and calls the row-locked database RPC. Webhook events for a disabled purpose are not applied.
+- `paystack-webhook`: verifies the timestamped `Paystack-Signature` HMAC over the exact raw body, deduplicates provider events, checks the associated intent's purpose gate, verifies with Paystack and calls the row-locked database RPC. Webhook events for a disabled purpose are not applied. Public vote-credit webhook fulfillment is explicitly blocked until the atomic credit-issuance path is implemented, even if its purpose flag is accidentally enabled.
 
 ## Important boundaries
 
