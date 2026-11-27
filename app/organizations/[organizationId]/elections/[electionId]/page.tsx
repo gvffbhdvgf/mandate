@@ -29,8 +29,8 @@ export default async function ElectionPage({ params, searchParams }: {
   const role = membership?.status === "active" ? membership.role : "viewer";
   const canManageRegister = ["owner", "admin", "election_manager"].includes(role);
   const canViewRegister = ["owner", "admin", "election_manager", "returning_officer"].includes(role);
-  const canViewAudit = canViewRegister || canManagePayments;
   const canManagePayments = ["owner", "admin", "finance_manager"].includes(role);
+  const canViewAudit = canViewRegister || canManagePayments;
   const canOpen = ["owner", "admin", "election_manager"].includes(role);
   const canClose = ["owner", "admin", "election_manager", "returning_officer"].includes(role);
   const canTally = canClose;
