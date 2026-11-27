@@ -1,4 +1,4 @@
-import { adminClient, assertOrganizationFinanceManager, authenticate, corsHeaders, json, paystackRequest, paymentPurposeEnabled, paymentsModeEnabled } from "../_shared/paystack.ts";
+import { adminClient, assertOrganizationFinanceManager, authenticate, corsHeaders, json, paystackRequest, paymentCallbackUrl, paymentPurposeEnabled, paymentsModeEnabled } from "../_shared/paystack.ts";
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -43,6 +43,7 @@ Deno.serve(async (request: Request) => {
     await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
     if (!user.email) return json(400, { error: "ACCOUNT_EMAIL_REQUIRED" }, cors);
 
+    const callbackUrl = paymentCallbackUrl();
     const result = await paystackRequest<PaystackInitializeResponse>("/transaction/initialize", {
       method: "POST",
       body: JSON.stringify({
@@ -50,6 +51,7 @@ Deno.serve(async (request: Request) => {
         amount: String(intent.amount_minor),
         currency: intent.currency,
         reference: intent.provider_reference,
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
         metadata: {
           payment_intent_id: intent.id,
           organization_id: intent.organization_id,
@@ -74,7 +76,7 @@ Deno.serve(async (request: Request) => {
     const code = error instanceof Error ? error.message : "PAYMENT_INITIALIZATION_FAILED";
     const status = code === "AUTHENTICATION_REQUIRED" || code === "INVALID_SESSION" ? 401
       : code === "FORBIDDEN" ? 403
-      : code === "PAYSTACK_MODE_CONFIG_INVALID" || code === "SUPABASE_FUNCTION_CONFIG_MISSING" ? 503
+      : code === "PAYMENT_CALLBACK_URL_INVALID" || code === "PAYSTACK_MODE_CONFIG_INVALID" || code === "SUPABASE_FUNCTION_CONFIG_MISSING" ? 503
       : 500;
     return json(status, { error: code }, cors);
   }
