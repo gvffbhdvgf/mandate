@@ -155,9 +155,9 @@ begin
   where id=(v_first->>'paymentIntentId')::uuid;
   perform set_config('test.public_credit_intent_id',v_first->>'paymentIntentId',true);
 end;
-$;
+$$;
 
-do $
+do $$
 declare
   v_reference text;
 begin
@@ -170,7 +170,7 @@ begin
     'ACCT_TEST_PUBLIC_CREDIT',null
   );
 end;
-$;
+$$;
 
 -- A repeated verified success cannot issue a second lot or receipt posting.
 update public.payment_intents
@@ -225,6 +225,20 @@ begin
   );
   perform set_config('test.public_credit_failed_intent_id',v_failed->>'paymentIntentId',true);
 
+  begin
+    update public.payment_intents
+    set status='success',
+        provider_status='success',
+        provider_transaction_id='paystack-public-credit-unverified-141',
+        provider_amount_minor=250,
+        provider_currency='KES',
+        verified_at=now()
+    where id=(v_failed->>'paymentIntentId')::uuid;
+    raise exception 'UNVERIFIED_PUBLIC_VOTE_PAYMENT_MUST_NOT_SUCCEED';
+  exception when check_violation then
+    null;
+  end;
+
   v_exception := public.create_public_vote_credit_payment_intent(
     '11111111-1111-4111-8111-111111111141',
     'public-credit-acceptance',
@@ -254,7 +268,7 @@ set status='failed',
     verified_at=now()
 where id=current_setting('test.public_credit_failed_intent_id')::uuid;
 
-do $
+do $$
 declare
   v_reference text;
 begin
@@ -267,7 +281,7 @@ begin
     'ACCT_TEST_PUBLIC_CREDIT',null
   );
 end;
-$;
+$$;
 
 update public.payment_intents
 set status='exception',
