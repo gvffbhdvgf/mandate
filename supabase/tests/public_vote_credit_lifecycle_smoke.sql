@@ -77,6 +77,25 @@ insert into public.public_participants(
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
 
+insert into public.organization_paystack_subaccounts(
+  id,organization_id,provider_subaccount_code,currency,
+  provider_percentage_charge_basis_points,status,provider_verified_at,verified_by,created_by
+) values (
+  '77777777-7777-4777-8777-777777777741',
+  '22222222-2222-4222-8222-222222222241',
+  'ACCT_TEST_PUBLIC_CREDIT','KES',0,'verified',now(),
+  '11111111-1111-4111-8111-111111111141',
+  '11111111-1111-4111-8111-111111111141'
+);
+
+insert into public.public_vote_platform_fee_policies(
+  version,currency,fee_type,fixed_fee_minor,fee_bearer,status,
+  effective_from,approved_at,approved_by,approval_reference
+) values (
+  9001,'KES','fixed',50,'mandate','approved',now()-interval '1 minute',now(),
+  '11111111-1111-4111-8111-111111111141','acceptance-fixture-only'
+);
+
 select public.create_public_vote_credit_payment_intent(
   '11111111-1111-4111-8111-111111111141',
   'public-credit-acceptance',
@@ -125,18 +144,33 @@ begin
   end;
   if not v_rejected then raise exception 'ACTIVE_CREDIT_RESERVATIONS_MUST_ENFORCE_PARTICIPANT_CAP'; end if;
 
+  update public.payment_intents
+  set split_status='pending',
+      split_policy_version=9001,
+      split_subaccount_profile_id='77777777-7777-4777-8777-777777777741',
+      split_fee_type='fixed',
+      split_fixed_fee_minor=50,
+      split_fee_bearer='mandate',
+      split_snapshot_at=now()
+  where id=(v_first->>'paymentIntentId')::uuid;
   perform set_config('test.public_credit_intent_id',v_first->>'paymentIntentId',true);
 end;
-$$;
+$;
 
-update public.payment_intents
-set status='success',
-    provider_transaction_id='paystack-public-credit-transaction-141',
-    provider_status='success',
-    provider_amount_minor=500,
-    provider_currency='KES',
-    verified_at=now()
-where id=current_setting('test.public_credit_intent_id')::uuid;
+do $
+declare
+  v_reference text;
+begin
+  select provider_reference into v_reference
+  from public.payment_intents
+  where id=current_setting('test.public_credit_intent_id')::uuid;
+  perform public.apply_verified_paystack_public_vote_split(
+    null,v_reference,'paystack-public-credit-transaction-141','success',500,'KES',
+    '{"paystack":15,"integration":35,"subaccount":450}'::jsonb,
+    'ACCT_TEST_PUBLIC_CREDIT',null
+  );
+end;
+$;
 
 -- A repeated verified success cannot issue a second lot or receipt posting.
 update public.payment_intents
@@ -198,6 +232,15 @@ begin
     'public-credit-acceptance-idempotency-004',
     'mandate_66666666666646668666666666666666'
   );
+  update public.payment_intents
+  set split_status='pending',
+      split_policy_version=9001,
+      split_subaccount_profile_id='77777777-7777-4777-8777-777777777741',
+      split_fee_type='fixed',
+      split_fixed_fee_minor=50,
+      split_fee_bearer='mandate',
+      split_snapshot_at=now()
+  where id=(v_exception->>'paymentIntentId')::uuid;
   perform set_config('test.public_credit_exception_intent_id',v_exception->>'paymentIntentId',true);
 end;
 $$;
@@ -211,14 +254,20 @@ set status='failed',
     verified_at=now()
 where id=current_setting('test.public_credit_failed_intent_id')::uuid;
 
-update public.payment_intents
-set status='success',
-    provider_status='success',
-    provider_transaction_id='paystack-public-credit-exception-141',
-    provider_amount_minor=250,
-    provider_currency='KES',
-    verified_at=now()
-where id=current_setting('test.public_credit_exception_intent_id')::uuid;
+do $
+declare
+  v_reference text;
+begin
+  select provider_reference into v_reference
+  from public.payment_intents
+  where id=current_setting('test.public_credit_exception_intent_id')::uuid;
+  perform public.apply_verified_paystack_public_vote_split(
+    null,v_reference,'paystack-public-credit-exception-141','success',250,'KES',
+    '{"paystack":15,"integration":35,"subaccount":200}'::jsonb,
+    'ACCT_TEST_PUBLIC_CREDIT',null
+  );
+end;
+$;
 
 update public.payment_intents
 set status='exception',
