@@ -2,7 +2,13 @@ import { createClient, type SupabaseClient, type User } from "npm:@supabase/supa
 
 export type PaymentPurpose = "platform_fee" | "organization_topup" | "public_vote_credits";
 
-type PaystackModeConfig = { mode: "test" | "live"; secretKey: string; webhookSecret: string };
+type PaystackModeConfig = {
+  mode: "test" | "live";
+  secretKey: string;
+  webhookSecret: string;
+  liveTransactionsEnabled: boolean;
+  settlementReady: boolean;
+};
 
 export const json = (status: number, body: Record<string, unknown>, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), {
@@ -63,15 +69,19 @@ function paystackModeConfig(): PaystackModeConfig | null {
     const secretKey = env("PAYSTACK_TEST_SECRET_KEY");
     const webhookSecret = env("PAYSTACK_TEST_WEBHOOK_SECRET");
     if (!secretKey.startsWith("sk_test_") || !webhookSecret) return null;
-    return { mode: "test", secretKey, webhookSecret };
+    return { mode: "test", secretKey, webhookSecret, liveTransactionsEnabled: true, settlementReady: true };
   }
   if (mode === "live") {
-    if (env("PAYSTACK_LIVE_TRANSACTIONS_ENABLED").toLowerCase() !== "true"
-      || env("PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED").toLowerCase() !== "true") return null;
     const secretKey = env("PAYSTACK_LIVE_SECRET_KEY");
     const webhookSecret = env("PAYSTACK_LIVE_WEBHOOK_SECRET");
     if (!secretKey.startsWith("sk_live_") || !webhookSecret) return null;
-    return { mode: "live", secretKey, webhookSecret };
+    return {
+      mode: "live",
+      secretKey,
+      webhookSecret,
+      liveTransactionsEnabled: env("PAYSTACK_LIVE_TRANSACTIONS_ENABLED").toLowerCase() === "true",
+      settlementReady: env("PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED").toLowerCase() === "true",
+    };
   }
   return null;
 }
@@ -81,6 +91,7 @@ export const paymentsModeEnabled = () => paystackModeConfig() !== null;
 export const paymentPurposeEnabled = (purpose: PaymentPurpose) => {
   const config = paystackModeConfig();
   if (!config) return false;
+  if (config.mode === "live" && (!config.liveTransactionsEnabled || !config.settlementReady)) return false;
   const purposeKey = purpose.toUpperCase();
   return env(`PAYSTACK_${config.mode.toUpperCase()}_${purposeKey}_ENABLED`).toLowerCase() === "true";
 };
