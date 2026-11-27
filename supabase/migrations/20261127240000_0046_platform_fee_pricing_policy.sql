@@ -213,13 +213,6 @@ begin
      and v_intent.status in ('failed','abandoned') then
     -- The quoted voter count and policy are immutable once the first invoice is created.
     v_amount := v_e.platform_fee_amount_minor;
-  else
-    update public.elections
-    set platform_fee_policy_version=v_policy.version,
-        platform_fee_eligible_voter_count=v_count,
-        platform_fee_amount_minor=v_amount,
-        platform_fee_quoted_at=coalesce(platform_fee_quoted_at,now())
-    where id=v_e.id;
   end if;
 
   v_reference := 'mandate-fee-' || replace(gen_random_uuid()::text,'-','');
@@ -234,7 +227,11 @@ begin
   ) returning * into v_intent;
 
   update public.elections
-  set platform_fee_payment_intent_id=v_intent.id,
+  set platform_fee_policy_version=coalesce(platform_fee_policy_version,v_policy.version),
+      platform_fee_eligible_voter_count=coalesce(platform_fee_eligible_voter_count,v_count),
+      platform_fee_amount_minor=coalesce(platform_fee_amount_minor,v_amount),
+      platform_fee_quoted_at=coalesce(platform_fee_quoted_at,now()),
+      platform_fee_payment_intent_id=v_intent.id,
       platform_fee_payment_attempt=v_attempt,
       platform_fee_status='unpaid'
   where id=v_e.id;
