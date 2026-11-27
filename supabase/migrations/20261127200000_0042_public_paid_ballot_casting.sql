@@ -593,7 +593,7 @@ exception when unique_violation then
 end;
 $$;
 
-revoke all on function mandate_private.cast_public_paid_ballot(text,uuid,uuid,integer,boolean)
+revoke all on function mandate_private.cast_public_paid_ballot(text,uuid,uuid,integer,boolean,text)
   from public, anon, authenticated;
 
 create or replace function public.cast_public_paid_ballot(
@@ -601,18 +601,19 @@ create or replace function public.cast_public_paid_ballot(
   p_contest_id uuid,
   p_option_id uuid,
   p_credits integer,
-  p_confirmation boolean
+  p_confirmation boolean,
+  p_idempotency_key text
 )
 returns jsonb
 language sql
 security invoker
 set search_path = pg_catalog
 as $$
-  select mandate_private.cast_public_paid_ballot($1,$2,$3,$4,$5);
+  select mandate_private.cast_public_paid_ballot($1,$2,$3,$4,$5,$6);
 $$;
 
-revoke all on function public.cast_public_paid_ballot(text,uuid,uuid,integer,boolean) from public, anon;
-grant execute on function public.cast_public_paid_ballot(text,uuid,uuid,integer,boolean) to authenticated;
+revoke all on function public.cast_public_paid_ballot(text,uuid,uuid,integer,boolean,text) from public, anon;
+grant execute on function public.cast_public_paid_ballot(text,uuid,uuid,integer,boolean,text) to authenticated;
 
-comment on function mandate_private.cast_public_paid_ballot(text,uuid,uuid,integer,boolean)
+comment on function mandate_private.cast_public_paid_ballot(text,uuid,uuid,integer,boolean,text)
   is 'Atomically consumes verified active vote credits and inserts an anonymous ballot; participant identity is written only to the restricted submission-control mapping.';
