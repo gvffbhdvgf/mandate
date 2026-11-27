@@ -61,7 +61,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = pg_catalog, pg_temp
-as $
+as $$
 declare
   v_user uuid := auth.uid();
   v_e public.elections%rowtype;
@@ -99,7 +99,7 @@ begin
     'policyVersion',v_policy.version,'status',case when v_count=0 then 'awaiting_voter_register' else 'quote_available' end
   );
 end;
-$;
+$$;
 
 revoke all on function mandate_private.get_platform_fee_quote(uuid) from public,anon;
 grant execute on function mandate_private.get_platform_fee_quote(uuid) to authenticated;
@@ -308,7 +308,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path=pg_catalog,pg_temp
-as $
+as $$
 begin
   if (
     new.platform_fee_policy_version is distinct from old.platform_fee_policy_version
@@ -323,7 +323,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 revoke all on function mandate_private.guard_platform_fee_election_fields() from public,anon,authenticated;
 create trigger elections_platform_fee_fields_server_managed
