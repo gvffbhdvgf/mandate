@@ -1,12 +1,21 @@
 import Link from "next/link";
-import { getPublicElectionDetails } from "../../actions/public-vote";
+import {
+  getPublicElectionDetails,
+  getPublicParticipantSession,
+  getPublicPaidBallotContext,
+} from "../../actions/public-vote";
 import { ParticipantVerificationForm } from "./participant-verification-form";
+import { PublicPaidBallot } from "./public-paid-ballot";
 
 export const dynamic = "force-dynamic";
 
 export default async function PublicVotePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const election = await getPublicElectionDetails(slug);
+  const participantSession = election ? await getPublicParticipantSession(slug) : null;
+  const ballotContext = participantSession?.creditsRemaining
+    ? await getPublicPaidBallotContext(slug)
+    : null;
 
   return (
     <main className="auth-shell">
@@ -22,7 +31,17 @@ export default async function PublicVotePage({ params }: { params: Promise<{ slu
               <p className="form-hint">Price per credit: KSh {(election.pricePerCreditMinor / 100).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Maximum credits per participant: {election.maxCreditsPerParticipant}.</p>
             )}
             {election.status === "open" && election.contactVerificationRequired ? (
-              <ParticipantVerificationForm slug={slug} />
+              participantSession?.creditsRemaining && !ballotContext ? (
+                <p className="form-error" role="alert">Your verified credit balance is available, but the ballot could not be loaded. Reload this page before purchasing or casting anything else.</p>
+              ) : ballotContext && ballotContext.creditsRemaining > 0 ? (
+                <PublicPaidBallot slug={slug} initialContext={ballotContext} />
+              ) : (
+                <ParticipantVerificationForm
+                  slug={slug}
+                  initialSession={participantSession}
+                  initialBallotContext={ballotContext}
+                />
+              )
             ) : (
               <p className="form-hint" role="status">This election is not currently accepting public participant verification.</p>
             )}
