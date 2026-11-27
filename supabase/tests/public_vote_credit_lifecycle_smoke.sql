@@ -1,6 +1,11 @@
 -- Rollback-only end-to-end acceptance for participant-scoped public vote credits.
 begin;
 
+-- Enable only inside this rollback-only fixture; the platform release flag defaults off.
+update public.platform_payment_feature_flags
+set public_vote_credits_enabled=true
+where singleton;
+
 insert into auth.users(
   id,aud,role,email,encrypted_password,email_confirmed_at,confirmed_at,
   raw_app_meta_data,raw_user_meta_data,created_at,updated_at
