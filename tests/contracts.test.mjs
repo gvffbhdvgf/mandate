@@ -525,6 +525,9 @@ test("Paystack settlement importer is service-role-only and safely paginated", a
   const smoke = await read("../supabase/tests/paystack_settlement_reconciliation_smoke.sql");
   assert.match(importer, /SERVICE_ROLE_REQUIRED/);
   assert.match(importer, /PAYSTACK_MODE/);
+  assert.match(importer, /settlementModeEnabled\(\)/);
+  assert.match(importer, /PAYSTACK_SETTLEMENT_PIPELINE_DISABLED/);
+  assert.match(await read("../supabase/functions/_shared/paystack.ts"), /config\.mode === "test" \|\| config\.settlementReady/);
   assert.match(importer, /MAX_SETTLEMENT_PAGES/);
   assert.match(importer, /nextTransactionPage/);
   assert.match(importer, /onConflict: "environment,provider_transaction_id"/);
