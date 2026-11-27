@@ -7,12 +7,12 @@ set public_vote_credits_enabled=true
 where singleton;
 
 insert into auth.users(
-  id,aud,role,email,encrypted_password,email_confirmed_at,confirmed_at,
+  id,aud,role,email,encrypted_password,email_confirmed_at,
   raw_app_meta_data,raw_user_meta_data,created_at,updated_at
 ) values (
   '11111111-1111-4111-8111-111111111141',
   'authenticated','authenticated','mandate-public-credit-smoke@example.invalid','',
-  now(),now(),'{"provider":"email","providers":["email"]}'::jsonb,
+  now(),'{"provider":"email","providers":["email"]}'::jsonb,
   '{"display_name":"Acceptance participant"}'::jsonb,now(),now()
 );
 
