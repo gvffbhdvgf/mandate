@@ -120,21 +120,31 @@ begin
     where event_data->>'action'='election.setup_confirmed') then
     raise exception 'AUTHORITY_CONFIRMATION_NOT_AUDITED';
   end if;
-  insert into public.election_voters(
-    organization_id,election_id,external_voter_ref,display_name,eligibility_status,weight_units
-  ) values (
-    v_org,v_election,'m2-fee-voter-1','M2 Fee Voter','eligible',1
-  );
-  v_fee_quote:=public.get_platform_fee_quote(v_election);
-  v_fee_intent:=public.create_platform_fee_payment_intent(
-    v_election,
-    (v_fee_quote->>'eligibleVoterCount')::integer,
-    (v_fee_quote->>'amountMinor')::bigint,
-    (v_fee_quote->>'policyVersion')::integer
-  );
-  insert into m2_test_ids(election_id,payment_intent_id)
-  values(v_election,(v_fee_intent->>'paymentIntentId')::uuid);
+  insert into m2_test_ids(election_id) values(v_election);
 end $$;
+
+reset role;
+insert into public.election_voters(
+  organization_id,election_id,external_voter_ref,display_name,eligibility_status,weight_units
+)
+select e.organization_id,e.id,'m2-fee-voter-1','M2 Fee Voter','eligible',1
+from public.elections e where e.id=(select election_id from m2_test_ids);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','77777777-7777-4777-8777-777777777777',true);
+do $
+declare v_quote jsonb; v_intent jsonb; v_election uuid;
+begin
+  select election_id into v_election from m2_test_ids;
+  v_quote:=public.get_platform_fee_quote(v_election);
+  v_intent:=public.create_platform_fee_payment_intent(
+    v_election,
+    (v_quote->>'eligibleVoterCount')::integer,
+    (v_quote->>'amountMinor')::bigint,
+    (v_quote->>'policyVersion')::integer
+  );
+  update m2_test_ids set payment_intent_id=(v_intent->>'paymentIntentId')::uuid;
+end $;
 
 reset role;
 set local role service_role;
