@@ -105,7 +105,7 @@ revoke all on function mandate_private.get_platform_fee_quote(uuid) from public,
 grant execute on function mandate_private.get_platform_fee_quote(uuid) to authenticated;
 create or replace function public.get_platform_fee_quote(p_election_id uuid)
 returns jsonb language sql security invoker set search_path=pg_catalog
-as $ select mandate_private.get_platform_fee_quote($1); $;
+as $$ select mandate_private.get_platform_fee_quote($1); $$;
 revoke all on function public.get_platform_fee_quote(uuid) from public,anon;
 grant execute on function public.get_platform_fee_quote(uuid) to authenticated;
 
