@@ -40,4 +40,4 @@ jobs:
           deno check --node-modules-dir=none supabase/functions/paystack-webhook/index.ts
 
       - name: Test Paystack webhook signature verification
-        run: deno test --node-modules-dir=none --allow-env=PAYSTACK_WEBHOOK_SECRET supabase/functions/_shared/paystack.test.ts
+        run: deno test --node-modules-dir=none --allow-env supabase/functions/_shared/paystack.test.ts
