@@ -6,7 +6,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   const next = safeInternalPath(params.next);
   return (
-    <main className="auth-shell">
+    <main id="main-content" className="auth-shell">
       <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
       <section className="auth-card">
         <p className="kicker">GET STARTED</p>
