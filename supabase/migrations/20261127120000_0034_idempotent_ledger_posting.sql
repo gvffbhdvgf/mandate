@@ -142,13 +142,22 @@ begin
     raise exception 'LEDGER_ACCOUNT_OR_CURRENCY_MISMATCH' using errcode = '23503';
   end if;
 
-  select * into v_existing
-  from public.ledger_transactions
-  where idempotency_key = p_idempotency_key
-  for update;
+  insert into public.ledger_transactions(
+    transaction_type, source_type, source_id, idempotency_key, status, description
+  ) values (
+    btrim(p_transaction_type), btrim(p_source_type), p_source_id, p_idempotency_key, 'pending', p_description
+  )
+  on conflict (idempotency_key) do nothing
+  returning id into v_transaction_id;
 
-  if found then
-    if v_existing.transaction_type <> p_transaction_type
+  if v_transaction_id is null then
+    select * into v_existing
+    from public.ledger_transactions
+    where idempotency_key = p_idempotency_key
+    for update;
+
+    if not found
+      or v_existing.transaction_type <> p_transaction_type
       or v_existing.source_type <> p_source_type
       or v_existing.source_id is distinct from p_source_id then
       raise exception 'LEDGER_IDEMPOTENCY_CONFLICT' using errcode = '23505';
@@ -170,12 +179,6 @@ begin
 
     return jsonb_build_object('id', v_existing.id, 'status', v_existing.status, 'duplicate', true);
   end if;
-
-  insert into public.ledger_transactions(
-    transaction_type, source_type, source_id, idempotency_key, status, description
-  ) values (
-    btrim(p_transaction_type), btrim(p_source_type), p_source_id, p_idempotency_key, 'pending', p_description
-  ) returning id into v_transaction_id;
 
   insert into public.ledger_entries(transaction_id, account_id, direction, amount_minor, currency)
   select v_transaction_id, e.account_id, e.direction, e.amount_minor, e.currency
