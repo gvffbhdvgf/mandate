@@ -103,9 +103,52 @@ Deno.serve(async (request: Request) => {
       return json(503, { error: "PAYSTACK_EXCEPTION_REFERENCE_MISSING" });
     }
 
-    const { data: result, error } = await admin.rpc("apply_paystack_payment_exception_event", {
+    let verifiedException: PaystackVerifyResponse;
+    try {
+      verifiedException = await paystackRequest<PaystackVerifyResponse>(
+        `/transaction/verify/${encodeURIComponent(reference)}`,
+      );
+    } catch {
+      await admin.from("payment_events").update({
+        processing_status: "failed",
+        processed_at: null,
+      }).eq("id", eventId);
+      return json(503, { error: "PAYSTACK_EXCEPTION_VERIFICATION_UNAVAILABLE" });
+    }
+
+    const exceptionAmountMinor = Number(verifiedException.data.amount);
+    if (!Number.isSafeInteger(exceptionAmountMinor) || exceptionAmountMinor <= 0) {
+      await admin.from("payment_events").update({
+        processing_status: "failed",
+        processed_at: null,
+      }).eq("id", eventId);
+      return json(503, { error: "PAYSTACK_EXCEPTION_AMOUNT_INVALID" });
+    }
+
+    if (verifiedException.data.reference !== reference) {
+      const { error } = await admin.from("payment_events").update({
+        processing_status: "failed",
+        processed_at: null,
+        redacted_payload: {
+          status: verifiedException.data.status,
+          amount: String(verifiedException.data.amount),
+          currency: verifiedException.data.currency,
+          transaction_id: String(verifiedException.data.id),
+          verified_reference: verifiedException.data.reference,
+          reason: "PAYSTACK_REFERENCE_MISMATCH",
+        },
+      }).eq("id", eventId);
+      if (error) return json(500, { error: "PAYMENT_EXCEPTION_RECONCILIATION_PERSIST_FAILED" });
+      return json(200, { received: true, processed: false, reconciliationRequired: true, reason: "PAYSTACK_REFERENCE_MISMATCH" });
+    }
+
+    const { data: result, error } = await admin.rpc("apply_verified_paystack_payment_exception_event", {
       p_event_id: eventId,
       p_provider_reference: reference,
+      p_provider_transaction_id: String(verifiedException.data.id),
+      p_provider_status: verifiedException.data.status,
+      p_amount_minor: exceptionAmountMinor,
+      p_currency: verifiedException.data.currency,
     });
     if (error || !result) return json(500, { error: "PAYMENT_EXCEPTION_PROCESSING_FAILED" });
     if (result.processed !== true) return json(503, { error: "PAYMENT_EXCEPTION_RECONCILIATION_REQUIRED" });
@@ -114,6 +157,7 @@ Deno.serve(async (request: Request) => {
       processed: true,
       duplicate: result.duplicate === true,
       status: typeof result.status === "string" ? result.status : "exception",
+      providerStatus: typeof result.provider_status === "string" ? result.provider_status : undefined,
       reconciliationRequired: true,
     });
   }
