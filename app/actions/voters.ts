@@ -11,7 +11,7 @@ const rowSchema = z.object({
   voter_ref: z.string().trim().min(1).max(200),
   name: z.string().trim().min(1).max(200),
   email: z.union([z.literal(""), z.string().email()]).optional().default(""),
-  phone_e164: z.union([z.literal(""), z.string().regex(/^\\+[1-9][0-9]{7,14}$/)]).optional().default(""),
+  phone_e164: z.union([z.literal(""), z.string().regex(/^\+[1-9][0-9]{7,14}$/)]).optional().default(""),
   weight: z.coerce.number().int().min(1).max(1_000_000).optional().default(1),
 });
 
