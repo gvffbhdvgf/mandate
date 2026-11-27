@@ -45,14 +45,14 @@ export async function authenticate(request: Request): Promise<{ user: User; call
   return { user: data.user, caller };
 }
 
-export async function assertOrganizationManager(caller: SupabaseClient, organizationId: string, userId: string) {
+export async function assertOrganizationFinanceManager(caller: SupabaseClient, organizationId: string, userId: string) {
   const { data, error } = await caller
     .from("organization_members")
     .select("role,status")
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
     .maybeSingle();
-  if (error || !data || data.status !== "active" || !["owner", "admin", "election_manager"].includes(data.role)) {
+  if (error || !data || data.status !== "active" || !["owner", "admin", "finance_manager"].includes(data.role)) {
     throw new Error("FORBIDDEN");
   }
 }
