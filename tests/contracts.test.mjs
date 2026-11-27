@@ -267,6 +267,9 @@ test("Paystack initialization, verification and webhooks enforce explicit mode a
   const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
   const verify = await read("../supabase/functions/paystack-verify/index.ts");
   const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
+  assert.match(shared, /assertOrganizationFinanceManager/);
+  assert.match(shared, /\["owner", "admin", "finance_manager"\]/);
+  assert.doesNotMatch(shared, /\["owner", "admin", "election_manager"\]/);
   assert.match(shared, /PAYSTACK_TEST_SECRET_KEY/);
   assert.match(shared, /PAYSTACK_LIVE_SECRET_KEY/);
   assert.match(shared, /PAYSTACK_LIVE_TRANSACTIONS_ENABLED/);
