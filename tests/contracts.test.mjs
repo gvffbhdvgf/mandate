@@ -502,7 +502,8 @@ test("public paid elections require platform release and freeze pricing before o
   assert.match(release, /new\.public_slug is distinct from old\.public_slug/);
   assert.match(release, /public_paid/);
   assert.match(release, /verified_participants/);
-  assert.match(release, /ballots_public_paid_feature_guard/);
+  assert.doesNotMatch(release, /create trigger ballots_public_paid_feature_guard/);
+  assert.match(lifecycle, /set public_vote_credits_enabled=false/);
   assert.match(releaseSmoke, /PUBLIC_VOTE_CREDITS_MUST_DEFAULT_DISABLED/);
   assert.match(lifecycle, /public-credit-acceptance/);
   assert.match(setupForm, /public_paid/);
