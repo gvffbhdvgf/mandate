@@ -62,3 +62,13 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 4. Obtain approved pricing, tax, fee allocation, merchant-of-record, custody, settlement, chargeback, paid-voting eligibility and payout policies. Do not infer these from the existence of database enums or accounts.
 5. Only after legal/provider/security/operational approval, install separate live secrets and enable an individual live-purpose flag. Live mode also requires the master switch.
 6. A controlled real-money payment requires separate explicit approval of the exact KES amount, payer and purpose. No configuration change or scope decision authorizes a real charge by itself.
+
+
+## Public participant email verification — implementation in progress
+
+- Public participant access uses Supabase Auth email OTP. The user requests a six-digit code, verifies it, then a server-side Edge Function links the verified Auth user to one election-scoped `public_participants` row.
+- Migration `0040_public_participant_email_identity` adds a nullable Auth-user foreign key and a unique election/user constraint. The participant table remains server-only; the ballot schema has no participant, Auth-user, email, contact-hash or payment identifiers.
+- The public election details Edge Function returns only approved public election fields by public slug. The participant session endpoint requires a verified email, an open `public_paid` election, KES price/cap configuration and an explicit election authorization timestamp.
+- The Auth UUID is pseudonymous in the participant table; no email is copied to participant/payment/ballot tables. Payment references, provider metadata, ballot receipts and ballot rows remain free of participant contact information.
+- Supabase Auth's **Magic link or OTP** email template must contain `{{ .Token }}` (and not `{{ .ConfirmationURL }}`) to deliver a code rather than a magic link. The existing custom SMTP sender should be reused. The dashboard template has not yet been changed; that setting must be inspected and validated before this flow is considered usable.
+- The participant session is only the identity/verification slice. It does not yet create payment intents, reserve credits, initialize Paystack, fulfill credit lots or enable paid voting. Existing legal/provider/accounting gates remain in force.
