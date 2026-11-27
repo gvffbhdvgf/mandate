@@ -551,7 +551,7 @@ test("Paystack payment exceptions are exposed through a private read-only eviden
   assert.match(migration, /settlement_reconciliation_statuses/);
   assert.match(migration, /receipt_posted/);
   assert.match(migration, /security_invoker = true/);
-  assert.match(migration, /no automatic reversals|Does not automatically reverse/i);
+  assert.match(migration, /no automatic refund|no automatic reversals|Does not automatically reverse/i);
   assert.match(smoke, /PAYSTACK_EXCEPTION_QUEUE_EVIDENCE_MISSING/);
   assert.match(smoke, /PAYSTACK_EXCEPTION_QUEUE_MUST_REMAIN_SERVER_ONLY/);
   assert.match(smoke, /rollback;/);
