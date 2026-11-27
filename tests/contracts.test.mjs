@@ -482,3 +482,27 @@ test("public vote credits reserve quantities, fulfill only verified payments and
   assert.match(smoke, /PUBLIC_PAID_BALLOT_RETRY_MUST_RETURN_SAME_RECEIPT/);
   assert.match(smoke, /PUBLIC_PAID_BALLOT_MUST_CONSUME_CREDITS_ONCE_AND_KEEP_BALLOT_ANONYMOUS/);
 });
+
+
+test("public paid elections require platform release and freeze pricing before opening", async () => {
+  const release = await read("../supabase/migrations/20261127210000_0043_paid_voting_release_gate.sql");
+  const releaseSmoke = await read("../supabase/tests/paid_voting_release_gate_smoke.sql");
+  const lifecycle = await read("../supabase/tests/public_vote_credit_lifecycle_smoke.sql");
+  const setupForm = await read("../app/organizations/[organizationId]/create-election-form.tsx");
+  const electionPage = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
+  const lifecycleControls = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
+  assert.match(release, /public_vote_credits_enabled boolean not null default false/);
+  assert.match(release, /PAID_VOTING_AUTHORIZATION_REQUIRED/);
+  assert.match(release, /pricePerCreditMinor/);
+  assert.match(release, /maxCreditsPerParticipant/);
+  assert.match(release, /public_paid/);
+  assert.match(release, /verified_participants/);
+  assert.match(release, /ballots_public_paid_feature_guard/);
+  assert.match(releaseSmoke, /PUBLIC_VOTE_CREDITS_MUST_DEFAULT_DISABLED/);
+  assert.match(lifecycle, /public_payment/);
+  assert.match(setupForm, /public_paid/);
+  assert.match(setupForm, /price_per_credit_minor/);
+  assert.match(setupForm, /max_credits_per_participant/);
+  assert.match(electionPage, /PLATFORM AUTHORIZATION PENDING/);
+  assert.match(lifecycleControls, /public price, participant cap/);
+});
