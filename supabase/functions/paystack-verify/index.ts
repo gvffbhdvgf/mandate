@@ -1,4 +1,4 @@
-import { adminClient, assertOrganizationFinanceManager, authenticate, corsHeaders, json, paystackRequest, paymentPurposeEnabled, paymentsModeEnabled } from "../_shared/paystack.ts";
+import { adminClient, assertOrganizationFinanceManager, authenticate, corsHeaders, json, paystackRequest, paymentsModeEnabled } from "../_shared/paystack.ts";
 
 type PaystackVerifyResponse = {
   status: boolean;
