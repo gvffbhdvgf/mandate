@@ -4,9 +4,9 @@ export function safeInternalPath(value: string | null | undefined): string {
   }
   try {
     const resolved = new URL(value, "https://mandate.invalid");
-    if (resolved.origin !== "https://mandate.invalid") return "/dashboard";
-    if (resolved.pathname !== "/invitations/accept") return "/dashboard";
-    if (resolved.pathname !== "/invitations/accept" || resolved.search !== "" || resolved.hash !== "") return "/dashboard";
+    const allowedPaths = new Set(["/dashboard", "/invitations/accept"]);
+    if (resolved.origin !== "https://mandate.invalid" || !allowedPaths.has(resolved.pathname)) return "/dashboard";
+    if (resolved.search !== "" || resolved.hash !== "") return "/dashboard";
     return resolved.pathname;
   } catch {
     return "/dashboard";
