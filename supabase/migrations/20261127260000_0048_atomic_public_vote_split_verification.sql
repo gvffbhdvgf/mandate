@@ -220,7 +220,7 @@ begin
   v_subaccount_net := (p_fees_split->>'subaccount')::bigint;
 
   if v_paystack_fee < 0 or v_integration_net < 0 or v_subaccount_net < 0
-    or v_paystack_fee + v_integration_net + v_subaccount_net <> p_amount_minor then
+    or v_paystack_fee::numeric + v_integration_net::numeric + v_subaccount_net::numeric <> p_amount_minor::numeric then
     raise exception 'PAYSTACK_SPLIT_TOTAL_MISMATCH' using errcode = '23514';
   end if;
 
