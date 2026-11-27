@@ -87,3 +87,25 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 - A signed `charge.success` webhook is always verified against Paystack regardless of the current per-purpose checkout switch. The database only issues the reserved credit lot after exact provider facts are persisted; the same transaction rolls back receipt and entitlement writes together on mismatch.
 - **Not released:** No payment feature flag has been enabled; no public-paid election has been opened; no production migrations or Edge Functions have been deployed; no Paystack credentials/configuration or live transaction settings have changed. The Auth OTP template still needs to be verified/configured to use `{{ .Token }}`.
 - **Accounting boundary:** Verified receipts are still captured to provider clearing and unallocated suspense. Credit issuance is an entitlement event; final vote-credit liability/revenue classification, processor fees, taxes, custody, settlement, refunds and chargeback accounting remain unresolved and must be approved before live mode.
+
+
+## Paystack Kenya commercial and settlement constraints — release research
+
+These are published provider terms and pricing references, not confirmation of Mandate's account-specific agreement or written approval of Mandate's product use case.
+
+- Paystack's public Kenya pricing lists 2.9% for local cards, 1.5% for M-PESA and 3.8% for international cards. Public guidance describes ordinary KES settlement as T+2 working days. Verify the actual account's negotiated fees and payout schedule in the dashboard/merchant agreement before booking processor fees or settlement dates.
+- The Kenya Merchant Services Agreement says the standard payout account is a bank account in the merchant's name. The optional Payout Service may pay designated third-party recipients, but its stated restrictions require a direct business relationship and payments for services rendered, activities performed or refunds. Do not assume that organization top-ups can be held as a Mandate wallet balance or paid out to arbitrary organizations.
+- Paystack supports subaccount/split payments; each beneficiary needs a subaccount, and the split configuration can determine who bears processing fees. This is a possible provider-supported route for organization proceeds, not evidence that Mandate's exact use case or account is approved.
+- The Kenya Acceptable Use Policy restricts certain games of skill with entry fees and prizes unless prior approval is obtained. Public paid voting must receive written Paystack confirmation for the actual election types, prize arrangements and commercial model before launch.
+- Paystack's published refund guidance says processing fees are non-refundable. Partial refunds are supported, and the customer refund timeline may be 3–10 working days. Refunds may be funded from pending payouts or an eligible Paystack balance; account type and available funds matter.
+- The Kenya Merchant Services Agreement places tax determination/reporting/remittance responsibility on the merchant and makes the merchant liable for chargeback/dispute-related costs. Reserves and payout deductions may also apply.
+
+Official references:
+- https://paystack.com/ke/pricing
+- https://paystack.com/ke/terms (Sections D and Acceptable Use Policy)
+- https://paystack.com/docs/v2/ke/payments/split-payments
+- https://support.paystack.com/en/articles/2132802
+- https://support.paystack.com/en/articles/2127106
+- https://support.paystack.com/en/articles/2125314
+
+**Release consequence:** Do not enable `platform_fee`, `organization_topup` or `public_vote_credits` in live mode until the merchant-of-record, custody, fee bearer, settlement, tax, refund, chargeback and paid-voting eligibility model is documented and approved by the appropriate business/legal/provider owners. No dashboard setting, subaccount, payout destination, fee, secret or transaction was changed during this research.
