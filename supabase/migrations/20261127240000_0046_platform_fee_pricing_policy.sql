@@ -12,6 +12,8 @@ create table public.platform_fee_policies (
   check (amount_per_eligible_voter_minor <= 1000000000 and minimum_fee_minor <= 1000000000)
 );
 
+create unique index platform_fee_policies_one_active_uq on public.platform_fee_policies(active) where active=true;
+
 insert into public.platform_fee_policies(
   version,currency,amount_per_eligible_voter_minor,minimum_fee_minor,active
 ) values (1,'KES',2000,50000,true);
@@ -125,8 +127,8 @@ begin
     -- A failed/abandoned provider attempt may be retried with a fresh unique reference.
     -- An exception, reversal or refund is deliberately not retryable here.
     if v_intent.status in ('failed','abandoned') then
-      v_policy.version := v_e.platform_fee_policy_version;
       select * into v_policy from public.platform_fee_policies where version=v_e.platform_fee_policy_version;
+      if not found then raise exception 'PLATFORM_FEE_POLICY_SNAPSHOT_MISSING' using errcode='55000'; end if;
       v_count := v_e.platform_fee_eligible_voter_count;
       v_amount := v_e.platform_fee_amount_minor;
       v_attempt := v_e.platform_fee_payment_attempt + 1;
@@ -262,12 +264,13 @@ declare
   v_election_id uuid;
   v_locked boolean;
 begin
-  v_election_id := case when tg_op='DELETE' then old.election_id else new.election_id end;
+  if tg_op='DELETE' then v_election_id := old.election_id; else v_election_id := new.election_id; end if;
   select platform_fee_quoted_at is not null into v_locked
   from public.elections where id=v_election_id;
   if coalesce(v_locked,false) then
     if tg_op='INSERT' or tg_op='DELETE'
-      or (tg_op='UPDATE' and (
+      or (tg_op='UPDATE' and (new.election_id is distinct from old.election_id
+        or 
         new.external_voter_ref is distinct from old.external_voter_ref
         or new.display_name is distinct from old.display_name
         or new.normalized_email is distinct from old.normalized_email
@@ -278,7 +281,8 @@ begin
       raise exception 'VOTER_REGISTER_FROZEN_BY_PLATFORM_FEE_QUOTE' using errcode='55000';
     end if;
   end if;
-  return case when tg_op='DELETE' then old else new end;
+  if tg_op='DELETE' then return old; end if;
+  return new;
 end;
 $$;
 
