@@ -53,8 +53,8 @@ export async function stageVoterImportAction(
 
   const headers = Object.keys(records[0]).map((header) => header.trim().toLowerCase());
   const allowedHeaders = new Set(["voter_ref", "name", "email", "phone_e164", "weight"]);
-  if (!headers.includes("voter_ref") || !headers.includes("name") || headers.some((header) => !allowedHeaders.has(header))) {
-    return { error: "Use the supplied CSV template. Required columns: voter_ref and name; optional columns: email, phone_e164 and weight." };
+  if (!headers.includes("voter_ref") || !headers.includes("name")) {
+    return { error: "Required columns are missing. Include voter_ref and name, plus email or phone_e164 for each voter." };
   }
 
   const normalized: Array<{
