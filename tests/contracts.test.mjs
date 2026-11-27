@@ -661,3 +661,19 @@ test("unconfirmed accounts receive explicit sign-in guidance and can request a s
   assert.match(form, /state\.needsConfirmation/);
   assert.match(form, /role="status"/);
 });
+
+
+test("election lifecycle actions explain successful transitions and the next step", async () => {
+  const actions = await read("../app/actions/lifecycle.ts");
+  const controls = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
+  assert.match(actions, /eligible voters can now vote until the scheduled close/);
+  assert.match(actions, /authorized manager resumes voting/);
+  assert.match(actions, /active again until the scheduled close/);
+  assert.match(actions, /next step is to run tally reconciliation/);
+  assert.match(controls, /openState\.message/);
+  assert.match(controls, /pauseState\.message/);
+  assert.match(controls, /resumeState\.message/);
+  assert.match(controls, /closeState\.message/);
+  assert.match(controls, /lifecycleStatusLabels/);
+  assert.match(controls, /role="status"/);
+});
