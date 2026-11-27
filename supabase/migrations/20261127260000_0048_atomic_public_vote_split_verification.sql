@@ -176,9 +176,9 @@ begin
     raise exception 'PERCENTAGE_SPLIT_ROUNDING_NOT_YET_APPROVED' using errcode = '0A000';
   end if;
 
-  if jsonb_typeof(p_fees_split->'paystack') <> 'number'
-    or jsonb_typeof(p_fees_split->'integration') <> 'number'
-    or jsonb_typeof(p_fees_split->'subaccount') <> 'number' then
+  if jsonb_typeof(p_fees_split->'paystack') is distinct from 'number'
+    or jsonb_typeof(p_fees_split->'integration') is distinct from 'number'
+    or jsonb_typeof(p_fees_split->'subaccount') is distinct from 'number' then
     raise exception 'PAYSTACK_SPLIT_SHARES_INVALID' using errcode = '22023';
   end if;
 
