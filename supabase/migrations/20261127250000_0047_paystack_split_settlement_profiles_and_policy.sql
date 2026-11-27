@@ -17,12 +17,9 @@ create table public.organization_paystack_subaccounts (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (
-    (status = 'verified' and provider_verified_at is not null)
-    or (status <> 'verified' and provider_verified_at is null)
-  ),
-  check (
-    (status = 'verified' and verified_by is not null)
-    or (status <> 'verified' and verified_by is null)
+    (status = 'pending' and provider_verified_at is null and verified_by is null)
+    or (status in ('verified','suspended','revoked')
+      and provider_verified_at is not null and verified_by is not null)
   )
 );
 
@@ -292,6 +289,86 @@ grant select, insert, update on public.organization_paystack_subaccounts,
 grant usage on schema mandate_private to service_role;
 grant execute on function mandate_private.validate_payment_intent_split_profile() to service_role;
 grant execute on function mandate_private.guard_payment_intent_split_snapshot() to service_role;
+
+create or replace function mandate_private.guard_paystack_subaccount_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, pg_temp
+as $
+begin
+  if old.provider_verified_at is not null and (
+    new.organization_id is distinct from old.organization_id
+    or new.provider is distinct from old.provider
+    or new.provider_subaccount_code is distinct from old.provider_subaccount_code
+    or new.currency is distinct from old.currency
+    or new.provider_verified_at is distinct from old.provider_verified_at
+    or new.verified_by is distinct from old.verified_by
+    or new.created_by is distinct from old.created_by
+  ) then
+    raise exception 'VERIFIED_PAYSTACK_SUBACCOUNT_PROFILE_IMMUTABLE' using errcode = '23514';
+  end if;
+  return new;
+end;
+$;
+
+create or replace function mandate_private.guard_public_vote_fee_policy()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, pg_temp
+as $
+begin
+  if old.status <> 'draft' and (
+    new.version is distinct from old.version
+    or new.currency is distinct from old.currency
+    or new.fee_type is distinct from old.fee_type
+    or new.fixed_fee_minor is distinct from old.fixed_fee_minor
+    or new.percentage_basis_points is distinct from old.percentage_basis_points
+    or new.fee_bearer is distinct from old.fee_bearer
+    or new.effective_from is distinct from old.effective_from
+    or new.effective_until is distinct from old.effective_until
+    or new.approved_at is distinct from old.approved_at
+    or new.approved_by is distinct from old.approved_by
+    or new.approval_reference is distinct from old.approval_reference
+  ) then
+    raise exception 'APPROVED_PUBLIC_VOTE_FEE_POLICY_IMMUTABLE' using errcode = '23514';
+  end if;
+
+  if old.status = 'approved' and new.status not in ('approved','active','retired') then
+    raise exception 'INVALID_PUBLIC_VOTE_FEE_POLICY_TRANSITION' using errcode = '23514';
+  end if;
+  if old.status = 'active' and new.status not in ('active','retired') then
+    raise exception 'INVALID_PUBLIC_VOTE_FEE_POLICY_TRANSITION' using errcode = '23514';
+  end if;
+  if old.status = 'retired' and new.status <> 'retired' then
+    raise exception 'RETIRED_PUBLIC_VOTE_FEE_POLICY_IMMUTABLE' using errcode = '23514';
+  end if;
+  return new;
+end;
+$;
+
+revoke all on function mandate_private.guard_paystack_subaccount_profile() from public, anon, authenticated;
+revoke all on function mandate_private.guard_public_vote_fee_policy() from public, anon, authenticated;
+
+create trigger organization_paystack_subaccounts_guard
+before update on public.organization_paystack_subaccounts
+for each row execute function mandate_private.guard_paystack_subaccount_profile();
+
+create trigger public_vote_platform_fee_policies_guard
+before update on public.public_vote_platform_fee_policies
+for each row execute function mandate_private.guard_public_vote_fee_policy();
+
+create trigger organization_paystack_subaccounts_set_updated_at
+before update on public.organization_paystack_subaccounts
+for each row execute function mandate_private.set_updated_at();
+
+create trigger public_vote_platform_fee_policies_set_updated_at
+before update on public.public_vote_platform_fee_policies
+for each row execute function mandate_private.set_updated_at();
+
+grant execute on function mandate_private.guard_paystack_subaccount_profile() to service_role;
+grant execute on function mandate_private.guard_public_vote_fee_policy() to service_role;
 
 comment on column public.payment_intents.split_status is
   'Split state is not_configured by default. Public paid voting must not initialize checkout until a verified organizer subaccount and approved fee-policy snapshot are attached.';
