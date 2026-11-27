@@ -27,6 +27,7 @@ function clearPaystackEnv() {
     "PAYSTACK_LIVE_SECRET_KEY",
     "PAYSTACK_LIVE_WEBHOOK_SECRET",
     "PAYSTACK_LIVE_TRANSACTIONS_ENABLED",
+    "PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED",
     "PAYSTACK_TEST_PLATFORM_FEE_ENABLED",
     "PAYSTACK_TEST_ORGANIZATION_TOPUP_ENABLED",
     "PAYSTACK_TEST_PUBLIC_VOTE_CREDITS_ENABLED",
@@ -55,7 +56,9 @@ Deno.test("Paystack mode config fails closed for missing, mixed or mismatched cr
   Deno.env.set("PAYSTACK_LIVE_WEBHOOK_SECRET", "live-webhook-secret");
   if (paymentsModeEnabled()) throw new Error("Live mode must remain disabled without explicit master switch");
   Deno.env.set("PAYSTACK_LIVE_TRANSACTIONS_ENABLED", "true");
-  if (!paymentsModeEnabled()) throw new Error("Explicitly configured live mode should pass configuration validation");
+  if (paymentsModeEnabled()) throw new Error("Live mode must remain disabled until settlement processing is ready");
+  Deno.env.set("PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED", "true");
+  if (!paymentsModeEnabled()) throw new Error("Live mode should require and accept explicit settlement readiness");
   clearPaystackEnv();
 });
 
