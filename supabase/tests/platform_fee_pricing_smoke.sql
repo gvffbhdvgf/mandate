@@ -87,7 +87,7 @@ begin
   end;
   if not v_rejected then raise exception 'CLIENT_MUST_NOT_WRITE_PLATFORM_FEE_STATUS'; end if;
 end;
-$;
+$$;
 
 -- Run the register-freeze assertion with table privileges so the immutable trigger is exercised;
 -- JWT claims remain set and the RPCs below still validate the finance-manager identity.
