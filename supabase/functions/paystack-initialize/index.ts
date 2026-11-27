@@ -24,11 +24,10 @@ Deno.serve(async (request: Request) => {
     const admin = adminClient();
     const { data: intent, error } = await admin
       .from("payment_intents")
-      .select("id,organization_id,election_id,purpose,provider,provider_reference,amount_minor,currency,status")
+      .select("id,organization_id,election_id,participant_id,purpose,provider,provider_reference,amount_minor,currency,status")
       .eq("id", body.paymentIntentId)
       .maybeSingle();
     if (error || !intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" }, cors);
-    if (!intent.organization_id) return json(409, { error: "PAYMENT_INTENT_REQUIRES_ORGANIZATION" }, cors);
     if (intent.provider !== "paystack" || intent.currency !== "KES" || !Number.isSafeInteger(Number(intent.amount_minor)) || Number(intent.amount_minor) <= 0) {
       return json(409, { error: "PAYMENT_INTENT_INVALID" }, cors);
     }
@@ -36,9 +35,23 @@ Deno.serve(async (request: Request) => {
       return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);
     }
     if (intent.purpose === "public_vote_credits") {
-      return json(409, { error: "PAID_VOTING_FEATURE_GATED" }, cors);
+      if (intent.organization_id || !intent.election_id || !intent.participant_id) {
+        return json(409, { error: "PUBLIC_PARTICIPANT_PAYMENT_SCOPE_INVALID" }, cors);
+      }
+      const { data: participant, error: participantError } = await admin
+        .from("public_participants")
+        .select("auth_user_id,verification_status")
+        .eq("id", intent.participant_id)
+        .eq("election_id", intent.election_id)
+        .maybeSingle();
+      if (participantError || !participant || participant.auth_user_id !== user.id
+        || participant.verification_status !== "verified" || !user.email_confirmed_at) {
+        return json(403, { error: "VERIFIED_PARTICIPANT_REQUIRED" }, cors);
+      }
+    } else {
+      if (!intent.organization_id) return json(409, { error: "PAYMENT_INTENT_REQUIRES_ORGANIZATION" }, cors);
+      await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
     }
-    await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
     if (!user.email) return json(400, { error: "ACCOUNT_EMAIL_REQUIRED" }, cors);
 
     // A completed attempt is reusable even though the payment intent has moved to
