@@ -103,7 +103,7 @@ Deno.serve(async (request: Request) => {
         return json(409, { error: "PAYMENT_REFERENCE_MISMATCH", status: "exception" }, cors);
       }
       const providerFeeMinor = payment.fees == null ? null : Number(payment.fees);
-      if (providerFeeMinor !== null && (!Number.isSafeInteger(providerFeeMinor) || providerFeeMinor < 0))
+      if (providerFeeMinor !== null && (!Number.isSafeInteger(providerFeeMinor) || providerFeeMinor < 0 || providerFeeMinor > providerAmountMinor))
         return json(409, { error: "PAYMENT_PROVIDER_FEE_INVALID" }, cors);
       const { data: publicPaymentResult, error: publicPaymentError } = await admin.rpc("apply_verified_paystack_public_vote_payment", {
         p_event_id: null, p_provider_reference: body.reference,
