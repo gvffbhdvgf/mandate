@@ -19,7 +19,7 @@ export default async function PublicResultsPage({ params }: { params: Promise<{ 
   if (error || !data) notFound();
 
   return (
-    <main className="ballot-shell">
+    <main id="main-content" className="ballot-shell">
       <header className="ballot-header">
         <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
         <span className="eyebrow">PUBLISHED RESULTS</span>
