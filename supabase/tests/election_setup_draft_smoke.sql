@@ -132,7 +132,7 @@ from public.elections e where e.id=(select election_id from m2_test_ids);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','77777777-7777-4777-8777-777777777777',true);
-do $
+do $$
 declare v_quote jsonb; v_intent jsonb; v_election uuid;
 begin
   select election_id into v_election from m2_test_ids;
@@ -144,7 +144,7 @@ begin
     (v_quote->>'policyVersion')::integer
   );
   update m2_test_ids set payment_intent_id=(v_intent->>'paymentIntentId')::uuid;
-end $;
+end $$;
 
 reset role;
 set local role service_role;
