@@ -51,7 +51,14 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 - `matched_to_receipt` means only that a successful Paystack settlement row agrees with the verified provider receipt and its interim clearing/suspense posting. It does **not** prove the bank payout arrived, validate net settlement totals, book processor fees, allocate payment purposes, or authorize a payout.
 - Imported settlement batches and transaction rows are private to server-side service-role workflows. No browser role can read or write them. The migration/test add no production data or settings changes.
 - Paystack exposes settlement listing and settlement transaction listing; large settlements must be paged until `meta.pageCount` is exhausted. The export URL is short-lived, so do not persist it as a durable import source. See [Settlement API](https://paystack.com/docs/api/settlement/) and [Settlement Transactions](https://paystack.com/docs/payments/settlement-transactions/).
-- **Still outstanding:** secure operator authorization and ingestion workflow, pagination/retry/idempotency for provider imports, aggregate gross/fees/net-to-bank reconciliation, exception review and resolution workflow, and accounting-approved fee/refund/chargeback/purpose allocation. The settlement-ready live switch remains off.
+- **Still outstanding:** an approved operator UI/dispatch workflow to drive all importer pages, monitoring, aggregate gross/fees/net-to-bank reconciliation against bank evidence, reviewed exception resolution/approval/audit, and accounting-approved fee/refund/chargeback/purpose allocation. The importer is page-by-page and idempotent; the operator workflow is not deployed. The settlement-ready live switch remains off.
+
+## Payment exception queue — migration 0045
+
+- Migration `0045_paystack_payment_exception_queue` adds the private, read-only `paystack_payment_exception_queue` view.
+- It combines payment intent state and expected/provider-observed amount/currency with signed refund/dispute event types, receipt-posting presence, and imported settlement reconciliation statuses.
+- The view omits customer contact details and raw provider payloads; it is `security_invoker = true` and SELECT is granted only to `service_role`.
+- This is evidence for operator review, not an automatic resolution engine. It does not reverse ledger entries, revoke credits, decide partial-refund amounts, settle disputes, allocate fees, or authorize payouts. A reviewed operator resolution/approval/audit workflow remains outstanding.
 
 ## Important boundaries
 
