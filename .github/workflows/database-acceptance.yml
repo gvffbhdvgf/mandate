@@ -88,12 +88,34 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Run every rollback-only SQL acceptance test
+        shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          mkdir -p /tmp/mandate-db-acceptance
           for test_file in supabase/tests/*.sql; do
-            echo "Running ${test_file}"
-            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "${test_file}"
+            test_name="$(basename "${test_file}")"
+            log_file="/tmp/mandate-db-acceptance/${test_name}.log"
+            echo "::group::Running ${test_file}"
+            if psql "$DB_URL" -v ON_ERROR_STOP=1 -f "${test_file}" >"$log_file" 2>&1; then
+              cat "$log_file"
+              echo "PASS: ${test_name}" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "::endgroup::"
+            else
+              cat "$log_file"
+              echo "FAIL: ${test_name}" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "::endgroup::"
+              exit 1
+            fi
           done
+
+      - name: Preserve database acceptance diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mandate-database-acceptance-logs
+          path: /tmp/mandate-db-acceptance/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Run independent-session concurrency tests
         run: npm run test:concurrency
