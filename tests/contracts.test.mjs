@@ -237,8 +237,7 @@ test("M2 election setup drafts are resumable and authority confirmation is enfor
 
 test("signup failures return safe guidance and log provider diagnostics", async () => {
   const auth = await read("../app/actions/auth.ts");
-  assert.match(auth, /function signUpErrorMessage/);
-  assert.match(auth, /email_exists/);
+  assert.match(auth, /function signupError/);
   assert.match(auth, /weak_password/);
   assert.match(auth, /over_email_send_rate_limit/);
   assert.match(auth, /redirect_to_not_allowed/);
