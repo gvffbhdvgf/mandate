@@ -70,12 +70,15 @@ Deno.serve(async (request: Request) => {
 
   const { data: election, error: electionError } = await caller
     .from("elections")
-    .select("id,organization_id,title,status,voting_mode")
+    .select("id,organization_id,title,status,voting_mode,platform_fee_status")
     .eq("id", body.electionId)
     .maybeSingle();
   if (electionError || !election) return json(404, { error: "ELECTION_NOT_FOUND" });
   if (election.status !== "draft" || election.voting_mode === "public_paid") {
     return json(409, { error: "ELECTION_NOT_ELIGIBLE_FOR_INVITATIONS" });
+  }
+  if (election.platform_fee_status !== "paid") {
+    return json(409, { error: "PLATFORM_FEE_PAYMENT_REQUIRED", message: "The verified Mandate platform service fee is required before voter invitations can be dispatched." });
   }
 
   const { data: membership, error: membershipError } = await caller
