@@ -365,14 +365,15 @@ begin
     raise exception 'ORGANIZER_FEE_BEARER_SPLIT_MUST_RECONCILE';
   end if;
 
-  -- Keep this independent fee-bearer fixture out of the later ballot-consumption assertion.
-  update public.vote_credit_lots
-  set entitlement_status='suspended'
-  where payment_id=current_setting('test.public_credit_organizer_bearer_intent_id')::uuid;
 end;
 $$;
 
 reset role;
+
+-- Test-owner-only fixture isolation; service_role intentionally cannot mutate credit lots directly.
+update public.vote_credit_lots
+set entitlement_status='suspended'
+where payment_id=current_setting('test.public_credit_organizer_bearer_intent_id')::uuid;
 
 do $$
 declare
