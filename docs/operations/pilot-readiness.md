@@ -13,12 +13,12 @@ This runbook is an operator checklist. A checkbox is complete only when the link
 - Supabase project `yhdosrhtzcsfqfuuqhsk` (Mandate, `eu-central-1`) is `ACTIVE_HEALTHY`, with hosted migrations through `0033_election_setup_confirmation_index`.
 - Read-only schema review confirmed 27 public application tables have RLS enabled. Sixteen have no direct client policies and are protected by default-deny grants/RPC boundaries; the remaining tables have explicit organization/role policies. Sensitive election, ballot, payment and ledger tables do not grant direct anon/authenticated access. Token-based registered-ballot context/casting RPCs intentionally allow anon execution; the functions validate high-entropy access tokens, election window, frozen snapshots and duplicate-vote constraints.
 - Security-definer private functions inspected in the hosted database set a fixed `search_path=pg_catalog`; the exposed public wrappers are security-invoker functions. Invitation acceptance requires a signed-in user with a confirmed email matching the invitation, checks expiry/status, locks the invitation row and writes an audit event.
-- Supabase security advisors have no WARN findings. The 16 RLS-without-policy and 48 unused-index notices are INFO findings. Do not add broad table policies or remove indexes without evidence.
+- Supabase security advisors currently report one WARN: Supabase Auth leaked-password protection is disabled. Enable it in Auth password-security settings and recheck the advisor before pilot use. The 16 RLS-without-policy and 48 unused-index notices are INFO findings; do not add broad table policies or remove indexes without evidence.
 - Production application tables currently contain no organizations, elections, voters, ballots, invitation records or payment events. This is a clean production database, not evidence of successful end-to-end workflows. Use an isolated test database/project for lifecycle tests.
-- Active hosted Edge Functions include Paystack initialize v3, verify v3 and webhook v4, voter invitations v10, and organization invitations v2. Paystack code explicitly requires `PAYSTACK_MODE=test`, a `sk_test_` secret, and a non-true live-transaction flag. Paid voting, ledger settlement and payouts remain disabled.
+- Active hosted Edge Functions observed on 2026-11-27: `send-voter-invitations` v11, `send-organization-invitation` v3, `paystack-initialize` v4, `paystack-verify` v4 and `paystack-webhook` v5. Paystack code explicitly requires `PAYSTACK_MODE=test`, a `sk_test_` secret, and a non-true live-transaction flag. Paid voting, ledger settlement and payouts remain disabled.
 - Supabase Auth Site URL is `https://mandate.markmachukhu97.workers.dev`; the callback allowlist includes `https://mandate.markmachukhu97.workers.dev/auth/callback?next=*`. Edge Function secret `MANDATE_SITE_URL` matches the production origin.
-- Resend currently has a `mandateelections.com` domain entry, but its status is `not_started`; all four required DNS records (DKIM TXT, SPF MX, SPF TXT and tracking CNAME) are unverified. The connected Cloudflare account has no zone for `mandateelections.com`. Resend has an API key named `Onboarding`, but its secret value is not retrievable and the presence of this key does not prove it is configured in Supabase. A prior `poptraworld.digital` entry was reported as being in use by another Resend team; do not claim or transfer it without explicit ownership and transfer authorization.
-- Organization invitation delivery remains fail-closed until a verified project-controlled sender domain and the corresponding `RESEND_API_KEY` / `RESEND_FROM_EMAIL` function secrets are configured. No real voter invitation, ballot, live provider charge, transfer or payout is represented as verified.
+- Resend domain `poptraworld.digital` is verified in region `eu-west-1`; sending and receiving are enabled. Its DKIM, SPF, sending and receiving DNS checks were confirmed in Resend on 2026-11-27. A domain-scoped, sending-only API key named `Mandate production email sender` was created. The key value is not retrievable from the listing and must never be copied into source control or documentation. This confirms Resend-side readiness only; it does not prove that the corresponding Supabase function secrets persisted.
+- Organization and voter invitation delivery remain fail-closed. A Supabase secrets save attempt displayed a success toast, but after reload neither `RESEND_API_KEY` nor `RESEND_FROM_EMAIL` was visible in the saved secrets list. Treat both as unconfigured until independently confirmed. `MANDATE_SITE_URL` is already configured. No real invitation, ballot, live provider charge, transfer or payout is represented as verified.
 
 ## Release and production verification
 
@@ -30,15 +30,16 @@ This runbook is an operator checklist. A checkbox is complete only when the link
 - [x] Independent read-only browser smoke check confirmed homepage, login and signup render and unauthenticated `/dashboard` redirects to `/login`.
 - [x] Supabase Auth production Site URL and callback allowlist configured.
 - [x] Hosted Supabase migration history verified through `0033_election_setup_confirmation_index`.
-- [x] Supabase security advisors checked; no WARN findings.
+- [x] Supabase security advisors checked; one Auth leaked-password-protection WARN remains open.
 - [x] Read-only database review of RLS coverage, sensitive table grants, security-definer function search paths, ballot token checks, invitation acceptance rules and core constraints completed.
 - [x] Paystack payment-mode guard inspected in deployed shared Edge Function source; it requires test-mode credentials and rejects live-mode enablement.
 
 ### Still required before real pilot use
 
 - [ ] Using a designated test account and isolated test environment, verify signup, email confirmation, callback, login and password reset. Production browser checks have not submitted forms.
-- [ ] Confirm the organization owns/controls `mandateelections.com` and has DNS administration access. If so, publish the exact Resend DKIM/SPF records and verify the domain. Do not modify unrelated DNS or use a domain without authorization.
-- [ ] Configure the verified sender in Supabase function secrets as `RESEND_API_KEY` and `RESEND_FROM_EMAIL`. Use a restricted sending-only API key and a designated test mailbox.
+- [x] Verify the project sender domain `poptraworld.digital` in Resend and confirm sending/receiving DNS checks; use only the designated Mandate sending identity.
+- [ ] Confirm `RESEND_API_KEY` and `RESEND_FROM_EMAIL` persist in Supabase Edge Function secrets after reload. Use the restricted sending-only key and a designated test mailbox; do not enable invitations before both are confirmed.
+- [ ] Enable Supabase Auth leaked-password protection and confirm the security advisor WARN clears.
 - [ ] Test organization invitation creation, delivery, acceptance, expiry, revocation and assigned-role boundaries in isolated test data after sender setup.
 - [ ] Test the election setup and lifecycle on non-production test data: create/resume draft, confirm authority, import a test voter list, run registered voting, close/tally/publish, and verify audited aggregate CSV/PDF exports.
 - [ ] Verify lower-privilege members cannot perform operator actions or export results, and unpublished results remain private.
