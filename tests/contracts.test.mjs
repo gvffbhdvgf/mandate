@@ -512,6 +512,8 @@ test("public paid elections require platform release and freeze pricing before o
   assert.match(setupForm, /public_paid/);
   assert.match(setupForm, /price_per_credit_minor/);
   assert.match(setupForm, /max_credits_per_participant/);
+  assert.match(setupForm, /Number\.isSafeInteger\(amountMinor\)/);
+  assert.match(setupForm, /Number\(election\.price_per_credit_minor\) \/ 100/);
   assert.match(electionPage, /PLATFORM AUTHORIZATION PENDING/);
   assert.match(lifecycleControls, /public price, participant cap/);
 });
