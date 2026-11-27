@@ -41,7 +41,11 @@ Deno.serve(async (request: Request) => {
 
     const result = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(body.reference)}`);
     const payment = result.data;
-    const amountMatches = Number(payment.amount) === Number(intent.amount_minor);
+    const providerAmountMinor = Number(payment.amount);
+    if (!Number.isSafeInteger(providerAmountMinor) || providerAmountMinor <= 0) {
+      return json(409, { error: "PAYMENT_AMOUNT_INVALID" }, cors);
+    }
+    const amountMatches = providerAmountMinor === Number(intent.amount_minor);
     const currencyMatches = payment.currency === intent.currency;
     const referenceMatches = payment.reference === intent.provider_reference;
     const isSuccess = payment.status === "success" && amountMatches && currencyMatches && referenceMatches;
@@ -64,6 +68,7 @@ Deno.serve(async (request: Request) => {
       : payment.status === "success" ? "success"
       : payment.status === "failed" ? "failed"
       : payment.status === "abandoned" ? "abandoned"
+      : payment.status === "reversed" || payment.status === "reversal pending" ? "exception"
       : "pending";
 
     // Compare-and-set prevents a late manual verification response from
@@ -73,6 +78,9 @@ Deno.serve(async (request: Request) => {
       .update({
         status: nextStatus,
         provider_transaction_id: String(payment.id),
+        provider_status: payment.status,
+        provider_amount_minor: providerAmountMinor,
+        provider_currency: payment.currency,
         verified_at: new Date().toISOString(),
       })
       .eq("id", intent.id)
