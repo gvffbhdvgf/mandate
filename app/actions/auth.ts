@@ -106,6 +106,76 @@ export async function signUpAction(
   redirect(`/login?notice=confirm&next=${encodeURIComponent(next)}`);
 }
 
+
+export async function requestPasswordResetAction(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const requestedNext = safeInternalPath(String(formData.get("next") ?? ""));
+  const returnTo = requestedNext === "/update-password" ? "/dashboard" : requestedNext;
+  if (!email || !email.includes("@")) return { error: "Enter a valid email address." };
+
+  const requestHeaders = await headers();
+  const origin = requestHeaders.get("origin")
+    ?? (requestHeaders.get("host") ? `https://${requestHeaders.get("host")}` : "http://localhost:3001");
+  const callbackUrl = new URL("/auth/callback", origin);
+  callbackUrl.searchParams.set("next", "/update-password");
+  callbackUrl.searchParams.set("returnTo", returnTo);
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: callbackUrl.toString(),
+    });
+    if (error) {
+      const providerError = error as AuthProviderError;
+      console.error("[auth.password-reset] Supabase rejected reset request", {
+        code: providerError.code ?? "unknown",
+        status: providerError.status ?? null,
+      });
+    }
+  } catch (cause) {
+    console.error("[auth.password-reset] Unexpected reset exception", {
+      name: cause instanceof Error ? cause.name : "unknown",
+    });
+  }
+
+  // Always return the same response so account existence is not disclosed.
+  return { message: "If an account exists for that address, a password reset link will be sent." };
+}
+
+export async function updatePasswordAction(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const password = String(formData.get("password") ?? "");
+  const confirmation = String(formData.get("confirmPassword") ?? "");
+  const requestedNext = safeInternalPath(String(formData.get("next") ?? ""));
+  const next = requestedNext === "/update-password" ? "/dashboard" : requestedNext;
+
+  if (password.length < 10) return { error: "Choose a password of at least 10 characters." };
+  if (password !== confirmation) return { error: "The passwords do not match." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return { error: "Your reset session is missing or expired. Request a new password reset link." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    const providerError = error as AuthProviderError;
+    console.error("[auth.password-reset] Password update failed", {
+      code: providerError.code ?? "unknown",
+      status: providerError.status ?? null,
+    });
+    return { error: "We could not update your password. Request a new reset link and try again." };
+  }
+
+  redirect(next);
+}
+
 export async function signOutAction() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
