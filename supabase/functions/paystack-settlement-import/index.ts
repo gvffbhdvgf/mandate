@@ -50,7 +50,7 @@ async function findSettlement(from: string, to: string, wantedId: string): Promi
   for (let page = 1; page <= MAX_SETTLEMENT_PAGES; page++) {
     const params = new URLSearchParams({ from, to, perPage: String(PAGE_SIZE), page: String(page) });
     const response = await paystackRequest<PaystackPage<Settlement>>(`/settlement?${params.toString()}`);
-    if (!Array.isArray(response.data)) throw new Error("PAYSTACK_SETTLEMENT_RESPONSE_INVALID");
+    if (response.status !== true || !Array.isArray(response.data)) throw new Error("PAYSTACK_SETTLEMENT_RESPONSE_INVALID");
     const found = response.data.find((item) => String(item.id) === wantedId);
     if (found) return found;
     const pageCount = Number(response.meta?.pageCount ?? 1);
@@ -128,7 +128,7 @@ Deno.serve(async (request: Request) => {
     const transactionResponse = await paystackRequest<PaystackPage<SettlementTransaction>>(
       `/settlement/${encodeURIComponent(settlementId)}/transactions?${params.toString()}`,
     );
-    if (!Array.isArray(transactionResponse.data)) return json(502, { error: "PAYSTACK_SETTLEMENT_TRANSACTIONS_INVALID" });
+    if (transactionResponse.status !== true || !Array.isArray(transactionResponse.data)) return json(502, { error: "PAYSTACK_SETTLEMENT_TRANSACTIONS_INVALID" });
     const pageCount = Number(transactionResponse.meta?.pageCount ?? 1);
     if (!Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 1000 || transactionPage > pageCount) {
       return json(502, { error: "PAYSTACK_SETTLEMENT_PAGINATION_INVALID" });
