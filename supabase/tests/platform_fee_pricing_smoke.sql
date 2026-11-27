@@ -99,6 +99,7 @@ declare
   v_scale jsonb;
   v_duplicate jsonb;
   v_rejected boolean := false;
+  v_stale_rejected boolean := false;
 begin
   v_min_quote := public.get_platform_fee_quote('33333333-3333-4333-8333-333333333346');
   v_scale_quote := public.get_platform_fee_quote('33333333-3333-4333-8333-333333333347');
@@ -121,13 +122,25 @@ begin
     (v_min_quote->>'policyVersion')::integer
   );
 
+  begin
+    perform public.create_platform_fee_payment_intent(
+      '33333333-3333-4333-8333-333333333346',
+      (v_min_quote->>'eligibleVoterCount')::integer,
+      (v_min_quote->>'amountMinor')::bigint + 100,
+      (v_min_quote->>'policyVersion')::integer
+    );
+  exception when sqlstate '40001' then
+    v_stale_rejected := true;
+  end;
+
   if (v_min->>'amountMinor')::bigint <> 50000
     or (v_min->>'eligibleVoterCount')::integer <> 10
     or (v_scale->>'amountMinor')::bigint <> 60000
     or (v_scale->>'eligibleVoterCount')::integer <> 30
     or v_min->>'policyVersion' <> '1'
     or v_min->>'paymentIntentId' <> v_duplicate->>'paymentIntentId'
-    or v_duplicate->>'duplicate' <> 'true' then
+    or v_duplicate->>'duplicate' <> 'true'
+    or not v_stale_rejected then
     raise exception 'PLATFORM_FEE_SERVER_PRICING_OR_IDEMPOTENCY_FAILED';
   end if;
 
