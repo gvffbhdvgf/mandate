@@ -30,7 +30,7 @@ Deno.serve(async (request: Request) => {
     const slug = body.slug?.trim().toLowerCase() ?? "";
     const quantity = body.quantity;
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80
-      || !Number.isSafeInteger(quantity) || !quantity || quantity < 1 || quantity > 100000) {
+      || !Number.isSafeInteger(quantity) || !quantity || quantity < 1) {
       return json(400, { error: "INVALID_PUBLIC_VOTE_CREDIT_REQUEST" }, cors);
     }
 
