@@ -66,6 +66,8 @@ Deno.serve(async (request: Request) => {
         return json(409, { error: "PUBLIC_ELECTION_RETURN_PATH_UNAVAILABLE" }, cors);
       }
       returnPath = `/public-vote/${election.public_slug}`;
+    } else if (intent.purpose === "platform_fee" && intent.election_id && intent.organization_id) {
+      returnPath = `/organizations/${intent.organization_id}/elections/${intent.election_id}`;
     }
 
     const result = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(body.reference)}`);
