@@ -12,6 +12,7 @@ export async function dispatchVoterInvitationsAction(
 ): Promise<InvitationActionState> {
   const organizationId = String(formData.get("organizationId") ?? "");
   const electionId = String(formData.get("electionId") ?? "");
+  if (formData.get("confirmInvitations") !== "true") return { error: "Confirm that the voter contact details are correct before sending invitations." };
   if (![organizationId, electionId].every((value) => z.string().uuid().safeParse(value).success)) {
     return { error: "The election reference is invalid. Refresh and try again." };
   }
