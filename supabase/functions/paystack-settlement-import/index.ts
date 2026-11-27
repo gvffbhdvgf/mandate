@@ -1,4 +1,4 @@
-import { adminClient, env, json, paystackRequest } from "../_shared/paystack.ts";
+import { adminClient, env, json, paystackRequest, settlementModeEnabled } from "../_shared/paystack.ts";
 
 type PaystackPage<T> = {
   status: boolean;
@@ -69,7 +69,7 @@ Deno.serve(async (request: Request) => {
   }
 
   const mode = env("PAYSTACK_MODE");
-  if (mode !== "test" && mode !== "live") return json(503, { error: "PAYSTACK_MODE_CONFIG_INVALID" });
+  if (!settlementModeEnabled()) return json(503, { error: "PAYSTACK_SETTLEMENT_PIPELINE_DISABLED" });
 
   let input: { from?: unknown; to?: unknown; settlementId?: unknown; transactionPage?: unknown };
   try {
