@@ -226,18 +226,24 @@ export function CreateElectionForm({
           <div className="panel form-stack">
             <h3>Public participant and credit rules</h3>
             <label>Public election URL slug
-              <input value={election.public_slug} onChange={(event) => updateElection("public_slug", event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/--+/g, "-").slice(0, 80))}
+              <input value={election.public_slug} onChange={(event) => updateElection("public_slug", event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80))}
                 placeholder="e.g. annual-leadership-2027" maxLength={80} required />
             </label>
             <label>Price per voting credit (KES)
-              <input type="number" min={1} step={1} value={election.price_per_credit_minor}
-                onChange={(event) => updateElection("price_per_credit_minor", event.target.value)} required />
+              <input type="number" min="0.01" step="0.01"
+                value={election.price_per_credit_minor ? (Number(election.price_per_credit_minor) / 100).toFixed(2) : ""}
+                onChange={(event) => {
+                  const amount = Number(event.target.value);
+                  updateElection("price_per_credit_minor", Number.isFinite(amount) && amount > 0
+                    ? String(Math.round(amount * 100))
+                    : "");
+                }} required />
             </label>
             <label>Maximum credits per participant
               <input type="number" min={1} step={1} value={election.max_credits_per_participant}
                 onChange={(event) => updateElection("max_credits_per_participant", event.target.value)} required />
             </label>
-            <p className="form-hint">Price is entered in Kenyan shillings and converted to minor units by the server. The server enforces the stored price and participant cap; the browser cannot set a payment amount.</p>
+            <p className="form-hint">The displayed price is converted to integer cents (minor units) before it is saved. The server enforces the stored price and participant cap; the browser cannot set a payment amount.</p>
             <p className="form-hint">Email verification is mandatory. Email addresses are kept out of ballots and Paystack metadata.</p>
           </div>
         ) : (
