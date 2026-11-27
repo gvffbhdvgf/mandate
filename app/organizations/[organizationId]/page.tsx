@@ -4,6 +4,8 @@ import { signOutAction } from "../../actions/auth";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { CreateElectionForm } from "./create-election-form";
 import { OrganizationMembersPanel } from "./members-panel";
+import { WorkspaceShell } from "../../components/workspace-shell";
+import { formatDateTime, formatStatusLabel, formatVotingMode } from "../../../lib/ui/presentation";
 
 export default async function OrganizationPage({ params, searchParams }: {
   params: Promise<{ organizationId: string }>;
@@ -65,27 +67,24 @@ export default async function OrganizationPage({ params, searchParams }: {
   const elections = electionRows ?? [];
 
   return (
+    <WorkspaceShell section="Organization workspace" context={organization.name} items={[{ label: "Dashboard", href: "/dashboard" }, { label: "Organization", href: `/organizations/${organizationId}` }, { label: "Elections", href: `/organizations/${organizationId}#elections` }, ...(canManageMembers ? [{ label: "Members", href: `/organizations/${organizationId}#members` }] : [])]} activeHref={`/organizations/${organizationId}`} actions={<form action={signOutAction}><button className="quiet-button">Sign out</button></form>}>
     <main className="dashboard-shell">
-      <header className="topbar">
-        <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
-        <div className="nav-actions"><Link href="/dashboard">All organizations</Link><form action={signOutAction}><button className="quiet-button">Sign out</button></form></div>
-      </header>
       <section className="dashboard-intro">
         <p className="kicker">ORGANIZATION WORKSPACE</p>
         <h1>{organization.name}</h1>
-        <p className="muted">/{organization.slug} · {organization.status}</p>
+        <p className="muted">/{organization.slug} · {formatStatusLabel(organization.status)}</p>
       </section>
       {canManageMembers && (
-        <OrganizationMembersPanel
+        <div id="members"><OrganizationMembersPanel
           organizationId={organizationId}
           members={members}
           invitations={pendingInvitations}
           actorRole={membership.role}
           memberNotice={feedback.memberNotice}
           memberError={feedback.memberError}
-        />
+        /></div>
       )}
-      <section className="dashboard-grid organization-workspace-grid">
+      <section className="dashboard-grid organization-workspace-grid" id="elections">
         <div className="panel">
           <div className="panel-heading"><div><p className="kicker">ELECTIONS</p><h2>Election workspace</h2></div><span className="count">{elections.length}</span></div>
           {elections.length === 0 ? (
@@ -94,8 +93,8 @@ export default async function OrganizationPage({ params, searchParams }: {
             <div className="organization-list">
               {elections.map((election) => (
                 <Link className="organization-item election-item" href={`/organizations/${organizationId}/elections/${election.id}`} key={election.id}>
-                  <div><h3>{election.title}</h3><p className="muted">{election.voting_mode.replaceAll("_", " ")} · {new Date(election.starts_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}</p></div>
-                  <span className="status-pill">{election.status}</span>
+                  <div><h3>{election.title}</h3><p className="muted">{formatVotingMode(election.voting_mode)} · {formatDateTime(election.starts_at)}</p></div>
+                  <span className={`status-pill status-${election.status}`}>{formatStatusLabel(election.status)}</span>
                 </Link>
               ))}
             </div>
@@ -108,5 +107,6 @@ export default async function OrganizationPage({ params, searchParams }: {
         </div>}
       </section>
     </main>
+    </WorkspaceShell>
   );
 }
