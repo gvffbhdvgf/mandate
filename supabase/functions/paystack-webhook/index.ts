@@ -226,7 +226,7 @@ Deno.serve(async (request: Request) => {
 
   if (intent.purpose === "public_vote_credits") {
     const providerFeeMinor = verified.data.fees == null ? null : Number(verified.data.fees);
-    if (providerFeeMinor !== null && (!Number.isSafeInteger(providerFeeMinor) || providerFeeMinor < 0)) {
+    if (providerFeeMinor !== null && (!Number.isSafeInteger(providerFeeMinor) || providerFeeMinor < 0 || providerFeeMinor > amountMinor)) {
       const { error } = await admin.from("payment_events").update({ processing_status: "failed", processed_at: null }).eq("id", eventId);
       if (error) return json(500, { error: "WEBHOOK_RETRY_STATE_PERSIST_FAILED" });
       return json(503, { error: "PAYMENT_PROVIDER_FEE_INVALID" });
