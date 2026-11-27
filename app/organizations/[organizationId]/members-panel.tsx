@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { PendingSubmitButton } from "../../components/pending-submit-button";
 import {
   changeOrganizationMemberRoleAction,
   createOrganizationInvitationAction,
@@ -105,13 +106,13 @@ export function OrganizationMembersPanel({
                     <select name="role" defaultValue={member.role} aria-label={`Role for ${member.email ?? member.user_id}`}>
                       {availableRoles.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                     </select>
-                    <button className="secondary-button compact-button">Save role</button>
+                    <PendingSubmitButton className="secondary-button compact-button" pendingLabel="Saving role…">Save role</PendingSubmitButton>
                   </form>
                   <form action={revokeOrganizationMemberAction}>
                     <input type="hidden" name="organizationId" value={organizationId} />
                     <input type="hidden" name="memberId" value={member.member_id} />
                     <label className="form-hint"><input type="checkbox" name="confirmRevokeMember" value="true" required /> Confirm revoke access</label>
-                    <button className="quiet-button danger-button">Revoke access</button>
+                    <PendingSubmitButton className="quiet-button danger-button" pendingLabel="Revoking access…">Revoke access</PendingSubmitButton>
                   </form>
                 </>
               )}
@@ -134,7 +135,7 @@ export function OrganizationMembersPanel({
               <input type="hidden" name="organizationId" value={organizationId} />
               <input type="hidden" name="invitationId" value={invitation.id} />
               <label className="form-hint"><input type="checkbox" name="confirmRevokeInvitation" value="true" required /> Confirm revoke invitation</label>
-              <button className="quiet-button danger-button">Revoke invitation</button>
+              <PendingSubmitButton className="quiet-button danger-button" pendingLabel="Revoking invitation…">Revoke invitation</PendingSubmitButton>
             </form>
           </article>
         ))}
