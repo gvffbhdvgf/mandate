@@ -394,7 +394,7 @@ test("Paystack refund and dispute webhooks freeze payments for explicit reconcil
   assert.match(migration, /set status = 'exception'/);
   assert.match(migration, /does not infer final refund settlement/i);
   assert.match(smoke, /REFUND_EVENT_MUST_FREEZE_PAYMENT/);
-  assert.match(smoke, /REFUND_EVENT_MUST_NOT_AUTO_REVERSE_LEDGER/);
+  assert.match(smoke, /REFUND_EVENT_FIRST_MUST_CAPTURE_ORIGINAL_RECEIPT_ONCE/);
   assert.match(webhook, /eventType\.startsWith\("refund\."\)/);
   assert.match(webhook, /eventType\.startsWith\("charge\.dispute\."\)/);
   assert.match(webhook, /apply_verified_paystack_payment_exception_event/);
