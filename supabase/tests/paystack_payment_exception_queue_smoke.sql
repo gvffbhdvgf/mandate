@@ -44,6 +44,11 @@ begin
     or v_row.payment_intent_status <> 'exception'
     or v_row.event_count <> 1
     or not ('refund.processed' = any(v_row.event_types))
+    or v_row.expected_amount_minor <> 8400
+    or v_row.provider_amount_minor <> 8400
+    or v_row.expected_currency <> 'KES'
+    or v_row.provider_currency <> 'KES'
+    or v_row.provider_status <> 'success'
     or v_row.receipt_posted is distinct from true
     or v_row.settlement_row_count <> 0 then
     raise exception 'PAYSTACK_EXCEPTION_QUEUE_EVIDENCE_MISSING';
