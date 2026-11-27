@@ -12,8 +12,7 @@ type PaystackEvent = {
     amount?: number | string;
     currency?: string;
     status?: string;
-    fees_split?: { paystack?: number | string; integration?: number | string; subaccount?: number | string };
-    subaccount?: { subaccount_code?: string; percentage_charge?: number | string };
+    fees?: number | string | null;
   };
 };
 type PaystackVerifyResponse = {
@@ -24,8 +23,7 @@ type PaystackVerifyResponse = {
     reference: string;
     amount: number;
     currency: string;
-    fees_split?: { paystack?: number | string; integration?: number | string; subaccount?: number | string };
-    subaccount?: { subaccount_code?: string; percentage_charge?: number | string };
+    fees?: number | string | null;
   };
 };
 
@@ -227,42 +225,24 @@ Deno.serve(async (request: Request) => {
   }
 
   if (intent.purpose === "public_vote_credits") {
-    const feesSplit = verified.data.fees_split;
-    const subaccount = verified.data.subaccount;
-    const paystackFee = Number(feesSplit?.paystack);
-    const integrationShare = Number(feesSplit?.integration);
-    const organizerShare = Number(feesSplit?.subaccount);
-    const subaccountPercentageCharge = subaccount?.percentage_charge == null ? null : Number(subaccount.percentage_charge);
-    if (!feesSplit || feesSplit.paystack == null || feesSplit.integration == null || feesSplit.subaccount == null
-      || (subaccountPercentageCharge !== null
-        && (!Number.isFinite(subaccountPercentageCharge) || subaccountPercentageCharge < 0))
-      || !Number.isSafeInteger(paystackFee) || paystackFee < 0
-      || !Number.isSafeInteger(integrationShare) || integrationShare < 0
-      || !Number.isSafeInteger(organizerShare) || organizerShare < 0
-      || !subaccount?.subaccount_code) {
+    const providerFeeMinor = verified.data.fees == null ? null : Number(verified.data.fees);
+    if (providerFeeMinor !== null && (!Number.isSafeInteger(providerFeeMinor) || providerFeeMinor < 0)) {
       const { error } = await admin.from("payment_events").update({ processing_status: "failed", processed_at: null }).eq("id", eventId);
       if (error) return json(500, { error: "WEBHOOK_RETRY_STATE_PERSIST_FAILED" });
-      return json(503, { error: "PAYSTACK_SPLIT_FACTS_UNAVAILABLE" });
+      return json(503, { error: "PAYMENT_PROVIDER_FEE_INVALID" });
     }
-    const { data: splitResult, error: splitError } = await admin.rpc("apply_verified_paystack_public_vote_split", {
-      p_event_id: eventId,
-      p_provider_reference: reference,
-      p_provider_transaction_id: String(verified.data.id),
-      p_provider_status: verified.data.status,
-      p_amount_minor: amountMinor,
-      p_currency: verified.data.currency,
-      p_fees_split: { paystack: paystackFee, integration: integrationShare, subaccount: organizerShare },
-      p_subaccount_code: subaccount.subaccount_code,
-      p_subaccount_percentage_charge: subaccountPercentageCharge,
+    const { data: publicPaymentResult, error: publicPaymentError } = await admin.rpc("apply_verified_paystack_public_vote_payment", {
+      p_event_id: eventId, p_provider_reference: reference,
+      p_provider_transaction_id: String(verified.data.id), p_provider_status: verified.data.status,
+      p_amount_minor: amountMinor, p_currency: verified.data.currency,
+      p_provider_fee_minor: providerFeeMinor,
     });
-    if (splitError || !splitResult) return json(500, { error: "PUBLIC_VOTE_SPLIT_PROCESSING_FAILED" });
+    if (publicPaymentError || !publicPaymentResult) return json(500, { error: "PUBLIC_VOTE_PAYMENT_PROCESSING_FAILED" });
     return json(200, {
-      received: true,
-      processed: splitResult.processed === true,
-      duplicate: splitResult.duplicate === true,
-      matched: splitResult.matched === true,
-      status: typeof splitResult.status === "string" ? splitResult.status : undefined,
-      reason: typeof splitResult.reason === "string" ? splitResult.reason : undefined,
+      received: true, processed: publicPaymentResult.processed === true,
+      duplicate: publicPaymentResult.duplicate === true, matched: publicPaymentResult.matched === true,
+      status: typeof publicPaymentResult.status === "string" ? publicPaymentResult.status : undefined,
+      reason: typeof publicPaymentResult.reason === "string" ? publicPaymentResult.reason : undefined,
     });
   }
 
