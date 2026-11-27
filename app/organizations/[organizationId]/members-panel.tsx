@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { PendingSubmitButton } from "../../components/pending-submit-button";
+import { useActionState, useState } from "react";
+import type { ReactNode } from "react";
 import {
   changeOrganizationMemberRoleAction,
   createOrganizationInvitationAction,
@@ -21,6 +21,34 @@ type Member = {
   accepted_at: string | null;
 };
 type Invitation = { id: string; email: string; role: string; expires_at: string; created_at: string };
+
+type MemberFormAction = (formData: FormData) => void | Promise<void>;
+
+function PendingMemberForm({
+  action,
+  className,
+  buttonClassName,
+  buttonLabel,
+  pendingLabel,
+  children,
+}: {
+  action: MemberFormAction;
+  className?: string;
+  buttonClassName: string;
+  buttonLabel: string;
+  pendingLabel: string;
+  children: ReactNode;
+}) {
+  const [pending, setPending] = useState(false);
+  return (
+    <form action={action} className={className} onSubmit={() => setPending(true)}>
+      {children}
+      <button type="submit" className={buttonClassName} disabled={pending}>
+        {pending ? pendingLabel : buttonLabel}
+      </button>
+    </form>
+  );
+}
 
 const roles = [
   ["admin", "Admin"],
@@ -100,20 +128,20 @@ export function OrganizationMembersPanel({
             <div className="member-controls">
               {member.role === "owner" ? <span className="role-label">Owner</span> : (
                 <>
-                  <form action={changeOrganizationMemberRoleAction} className="inline-member-form">
+                  <PendingMemberForm action={changeOrganizationMemberRoleAction} className="inline-member-form"
+                    buttonClassName="secondary-button compact-button" buttonLabel="Save role" pendingLabel="Saving role…">
                     <input type="hidden" name="organizationId" value={organizationId} />
                     <input type="hidden" name="memberId" value={member.member_id} />
                     <select name="role" defaultValue={member.role} aria-label={`Role for ${member.email ?? member.user_id}`}>
                       {availableRoles.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
                     </select>
-                    <PendingSubmitButton className="secondary-button compact-button" pendingLabel="Saving role…">Save role</PendingSubmitButton>
-                  </form>
-                  <form action={revokeOrganizationMemberAction}>
+                  </PendingMemberForm>
+                  <PendingMemberForm action={revokeOrganizationMemberAction} buttonClassName="quiet-button danger-button"
+                    buttonLabel="Revoke access" pendingLabel="Revoking access…">
                     <input type="hidden" name="organizationId" value={organizationId} />
                     <input type="hidden" name="memberId" value={member.member_id} />
                     <label className="form-hint"><input type="checkbox" name="confirmRevokeMember" value="true" required /> Confirm revoke access</label>
-                    <PendingSubmitButton className="quiet-button danger-button" pendingLabel="Revoking access…">Revoke access</PendingSubmitButton>
-                  </form>
+                  </PendingMemberForm>
                 </>
               )}
               <span className="role-label">{member.role.replaceAll("_", " ")}</span>
@@ -131,12 +159,12 @@ export function OrganizationMembersPanel({
               <span className="muted">Expires {new Date(invitation.expires_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}</span>
               <span className="role-label">{invitation.role.replaceAll("_", " ")}</span>
             </div>
-            <form action={revokeOrganizationInvitationAction}>
+            <PendingMemberForm action={revokeOrganizationInvitationAction} buttonClassName="quiet-button danger-button"
+              buttonLabel="Revoke invitation" pendingLabel="Revoking invitation…">
               <input type="hidden" name="organizationId" value={organizationId} />
               <input type="hidden" name="invitationId" value={invitation.id} />
               <label className="form-hint"><input type="checkbox" name="confirmRevokeInvitation" value="true" required /> Confirm revoke invitation</label>
-              <PendingSubmitButton className="quiet-button danger-button" pendingLabel="Revoking invitation…">Revoke invitation</PendingSubmitButton>
-            </form>
+            </PendingMemberForm>
           </article>
         ))}
       </div>
