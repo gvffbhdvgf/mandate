@@ -30,14 +30,29 @@ Deno.serve(async (request: Request) => {
     const admin = adminClient();
     const { data: intent, error } = await admin
       .from("payment_intents")
-      .select("id,organization_id,purpose,provider_reference,amount_minor,currency,status,provider_transaction_id")
+      .select("id,organization_id,election_id,participant_id,purpose,provider_reference,amount_minor,currency,status,provider_transaction_id")
       .eq("provider_reference", body.reference)
       .maybeSingle();
     if (error || !intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" }, cors);
-    if (!intent.organization_id) return json(409, { error: "PAYMENT_INTENT_REQUIRES_ORGANIZATION" }, cors);
     if (!paymentPurposeEnabled(intent.purpose)) return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);
-    if (intent.purpose === "public_vote_credits") return json(409, { error: "PAID_VOTING_FEATURE_GATED" }, cors);
-    await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
+    if (intent.purpose === "public_vote_credits") {
+      if (intent.organization_id || !intent.election_id || !intent.participant_id || !user.email_confirmed_at) {
+        return json(403, { error: "VERIFIED_PARTICIPANT_REQUIRED" }, cors);
+      }
+      const { data: participant, error: participantError } = await admin
+        .from("public_participants")
+        .select("auth_user_id,verification_status")
+        .eq("id", intent.participant_id)
+        .eq("election_id", intent.election_id)
+        .maybeSingle();
+      if (participantError || !participant || participant.auth_user_id !== user.id
+        || participant.verification_status !== "verified") {
+        return json(403, { error: "VERIFIED_PARTICIPANT_REQUIRED" }, cors);
+      }
+    } else {
+      if (!intent.organization_id) return json(409, { error: "PAYMENT_INTENT_REQUIRES_ORGANIZATION" }, cors);
+      await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
+    }
 
     const result = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(body.reference)}`);
     const payment = result.data;
