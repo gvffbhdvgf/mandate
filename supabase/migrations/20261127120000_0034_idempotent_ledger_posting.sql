@@ -153,9 +153,10 @@ begin
     for update;
 
     if not found
-      or v_existing.transaction_type <> p_transaction_type
-      or v_existing.source_type <> p_source_type
-      or v_existing.source_id is distinct from p_source_id then
+      or v_existing.transaction_type <> btrim(p_transaction_type)
+      or v_existing.source_type <> btrim(p_source_type)
+      or v_existing.source_id is distinct from p_source_id
+      or v_existing.description is distinct from p_description then
       raise exception 'LEDGER_IDEMPOTENCY_CONFLICT' using errcode = '23505';
     end if;
 
