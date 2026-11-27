@@ -774,3 +774,23 @@ test("server CSV import accepts ignored extra columns consistently with the brow
   assert.doesNotMatch(actions, /headers\.some\(\(header\) => !allowedHeaders\.has\(header\)\)/);
   assert.match(preview, /Additional columns are not used and will be ignored/);
 });
+
+
+test("global skip navigation targets a unique main-content region on every non-workspace page", async () => {
+  const layout = await read("../app/layout.tsx");
+  assert.match(layout, /href="#main-content"/);
+  assert.doesNotMatch(layout, /id="main-content"/);
+  for (const path of [
+    "../app/page.tsx",
+    "../app/login/page.tsx",
+    "../app/signup/page.tsx",
+    "../app/invitations/accept/page.tsx",
+    "../app/public-vote/[slug]/page.tsx",
+    "../app/results/[electionId]/page.tsx",
+    "../app/vote/page.tsx",
+  ]) {
+    assert.match(await read(path), /<main id="main-content"/);
+  }
+  const shell = await read("../app/components/workspace-shell.tsx");
+  assert.match(shell, /id="main-content"/);
+});
