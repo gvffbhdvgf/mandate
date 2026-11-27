@@ -1,6 +1,18 @@
 -- Require provider-confirmed split evidence before public voting credits can be fulfilled.
 -- The RPC records split facts and successful payment state in one transaction.
 
+-- The original profile validator runs only when the immutable snapshot is attached.
+-- Do not revalidate an already-snapshotted policy on later settlement-state changes.
+drop trigger if exists payment_intents_validate_split_profile on public.payment_intents;
+create trigger payment_intents_validate_split_profile
+before insert or update of split_policy_version, split_subaccount_profile_id,
+  split_fee_type, split_fixed_fee_minor, split_percentage_basis_points, split_fee_bearer,
+  split_snapshot_at, amount_minor, currency, purpose, election_id
+on public.payment_intents
+for each row
+when (new.split_status <> 'not_configured')
+execute function mandate_private.validate_payment_intent_split_profile();
+
 create or replace function mandate_private.require_verified_public_vote_split()
 returns trigger
 language plpgsql
@@ -173,7 +185,22 @@ begin
   end if;
 
   if v_intent.split_fee_type <> 'fixed' then
-    raise exception 'PERCENTAGE_SPLIT_ROUNDING_NOT_YET_APPROVED' using errcode = '0A000';
+    update public.payment_intents
+    set status = 'exception',
+        provider_transaction_id = p_provider_transaction_id,
+        provider_status = p_provider_status,
+        provider_amount_minor = p_amount_minor,
+        provider_currency = p_currency,
+        split_status = 'exception',
+        verified_at = pg_catalog.now()
+    where id = v_intent.id
+      and status in ('initialized','pending');
+    if p_event_id is not null then
+      update public.payment_events
+      set processing_status = 'processed', processed_at = pg_catalog.now()
+      where id = p_event_id;
+    end if;
+    return jsonb_build_object('processed', true, 'matched', false, 'status', 'exception', 'reason', 'PERCENTAGE_SPLIT_ROUNDING_NOT_YET_APPROVED');
   end if;
 
   if jsonb_typeof(p_fees_split->'paystack') is distinct from 'number'
