@@ -48,15 +48,19 @@ Deno.test("Paystack mode config fails closed for missing, mixed or mismatched cr
 
   Deno.env.set("PAYSTACK_MODE", "test");
   Deno.env.set("PAYSTACK_TEST_SECRET_KEY", "sk_live_wrong_mode");
-  Deno.env.set("PAYSTACK_TEST_WEBHOOK_SECRET", "test-webhook-secret");
+  Deno.env.set("PAYSTACK_TEST_WEBHOOK_SECRET", "whsec_test_webhook_secret");
   if (paymentsModeEnabled()) throw new Error("Live key in test mode must be disabled");
 
   Deno.env.set("PAYSTACK_TEST_SECRET_KEY", "sk_test_unit_test_key");
-  if (!paymentsModeEnabled()) throw new Error("Valid test key and webhook secret should configure test mode");
+  if (paymentsModeEnabled()) throw new Error("Test webhook secret without whsec_ prefix must be rejected");
+  Deno.env.set("PAYSTACK_TEST_WEBHOOK_SECRET", "whsec_test_unit_test_secret");
+  if (!paymentsModeEnabled()) throw new Error("Valid test key and signing secret should configure test mode");
 
   Deno.env.set("PAYSTACK_MODE", "live");
   Deno.env.set("PAYSTACK_LIVE_SECRET_KEY", "sk_live_unit_test_key");
   Deno.env.set("PAYSTACK_LIVE_WEBHOOK_SECRET", "live-webhook-secret");
+  if (paymentsModeEnabled()) throw new Error("Live webhook secret without whsec_ prefix must be rejected");
+  Deno.env.set("PAYSTACK_LIVE_WEBHOOK_SECRET", "whsec_live_unit_test_secret");
   if (!paymentsModeEnabled()) {
     throw new Error("Valid live credentials must remain available for verification and webhook processing");
   }
