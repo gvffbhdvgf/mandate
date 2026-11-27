@@ -10,13 +10,17 @@ import { ElectionLifecycleControls } from "./lifecycle-controls";
 import { ElectionAuditTimeline } from "./audit-timeline";
 import { SetupConfirmation } from "./setup-confirmation";
 import { PlatformFeeCheckout } from "./platform-fee-checkout";
+import { WorkspaceShell } from "../../../../components/workspace-shell";
+import { ActionToast } from "../../../../components/action-toast";
+import { formatDateTime, formatResultVisibility, formatStatusLabel, formatVotingMode } from "../../../../../lib/ui/presentation";
+import { buildElectionOpeningChecks } from "../../../../../lib/ui/election-readiness";
 
 export default async function ElectionPage({ params, searchParams }: {
   params: Promise<{ organizationId: string; electionId: string }>;
-  searchParams: Promise<{ batchId?: string }>;
+  searchParams: Promise<{ batchId?: string; validated?: string; imported?: string; source?: string }>;
 }) {
   const { organizationId, electionId } = await params;
-  const { batchId } = await searchParams;
+  const { batchId, validated, imported, source } = await searchParams;
   const supabase = await createSupabaseServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) redirect("/login");
@@ -52,11 +56,18 @@ export default async function ElectionPage({ params, searchParams }: {
     .eq("election_id", electionId)
     .order("display_order");
 
-  const { count: voterCount, error: voterCountError } = canViewRegister && election.voting_mode !== "public_paid"
-    ? await supabase.from("election_voters").select("id", { count: "exact", head: true }).eq("election_id", electionId)
-      .eq("eligibility_status", "eligible")
-    : { count: null, error: null };
-  if (voterCountError) throw new Error("Could not load the voter register count.");
+  const [voterCountResult, invitedVoterCountResult] = canViewRegister && election.voting_mode !== "public_paid"
+    ? await Promise.all([
+        supabase.from("election_voters").select("id", { count: "exact", head: true })
+          .eq("election_id", electionId).eq("eligibility_status", "eligible"),
+        supabase.from("election_voters").select("id", { count: "exact", head: true })
+          .eq("election_id", electionId).eq("eligibility_status", "eligible")
+          .not("access_token_hash", "is", null).not("invited_at", "is", null),
+      ])
+    : [{ count: null, error: null }, { count: null, error: null }];
+  const voterCount = voterCountResult.count;
+  const invitedVoterCount = invitedVoterCountResult.count;
+  if (voterCountResult.error || invitedVoterCountResult.error) throw new Error("Could not load the voter register readiness.");
 
   let platformFeeQuote: {
     eligibleVoterCount: number; amountMinor: number; currency: string; policyVersion: number; status: string;
@@ -113,25 +124,35 @@ export default async function ElectionPage({ params, searchParams }: {
       .order("display_order");
     return { contest, options: data ?? [] };
   }));
+  const openingChecks = election.voting_mode !== "public_paid" && canViewRegister
+    ? buildElectionOpeningChecks({
+        setupConfirmed: Boolean(election.setup_confirmed_at),
+        eligibleVoterCount: voterCount ?? 0,
+        invitedVoterCount: invitedVoterCount ?? 0,
+        activeOptionCounts: optionResults.map(({ options }) => options.filter((option) => option.status === "active").length),
+        startsAt: election.starts_at,
+        endsAt: election.ends_at,
+        timezone: election.timezone,
+      })
+    : [];
+  const nextOpeningStep = openingChecks.find((check) => !check.complete);
 
   return (
+    <WorkspaceShell section="Election workspace" context={election.title} items={[{ label: "Dashboard", href: "/dashboard" }, { label: "Organization", href: `/organizations/${organizationId}` }, { label: "Overview", href: `/organizations/${organizationId}/elections/${electionId}` }, ...(canViewRegister ? [{ label: "Voter register", href: `/organizations/${organizationId}/elections/${electionId}#voter-register` }] : []), { label: "Readiness", href: `/organizations/${organizationId}/elections/${electionId}#readiness` }, { label: "Lifecycle", href: `/organizations/${organizationId}/elections/${electionId}#lifecycle` }, { label: "Contests", href: `/organizations/${organizationId}/elections/${electionId}#contests` }, ...(publishedResults ? [{ label: "Results", href: `/organizations/${organizationId}/elections/${electionId}#results` }] : [])]} activeHref={`/organizations/${organizationId}/elections/${electionId}`} actions={<form action={signOutAction}><button className="quiet-button">Sign out</button></form>}>
     <main className="dashboard-shell">
-      <header className="topbar">
-        <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
-        <div className="nav-actions"><Link href={`/organizations/${organizationId}`}>Organization</Link><form action={signOutAction}><button className="quiet-button">Sign out</button></form></div>
-      </header>
+      <ActionToast message={imported === "1" ? "Voter register updated successfully. The committed count is now reflected below." : validated === "1" ? (source === "manual" ? "Voter entry validated. Review the staged record and confirm before adding it." : "CSV validation complete. Review the accepted count and confirm before adding voters.") : undefined} />
       <section className="dashboard-intro">
         <p className="kicker">ELECTION DRAFT</p>
         <h1>{election.title}</h1>
         <p className="muted">{election.description || "No description provided."}</p>
       </section>
-      <section className="panel election-summary">
-        <div className="panel-heading"><div><p className="kicker">STATUS</p><h2>{election.status}</h2></div><span className="status-pill">{election.voting_mode.replaceAll("_", " ")}</span></div>
+      <section className="panel election-summary" id="election-overview">
+        <div className="panel-heading"><div><p className="kicker">STATUS</p><h2>{formatStatusLabel(election.status)}</h2></div><span className="mode-pill">{formatVotingMode(election.voting_mode)}</span></div>
         <div className="summary-grid">
-          <div><span>Starts</span><strong>{new Date(election.starts_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}</strong></div>
-          <div><span>Ends</span><strong>{new Date(election.ends_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}</strong></div>
+          <div><span>Starts</span><strong>{formatDateTime(election.starts_at, election.timezone)}</strong></div>
+          <div><span>Ends</span><strong>{formatDateTime(election.ends_at, election.timezone)}</strong></div>
           <div><span>Timezone</span><strong>{election.timezone}</strong></div>
-          <div><span>Results</span><strong>{election.result_visibility}</strong></div>
+          <div><span>Results</span><strong>{formatResultVisibility(election.result_visibility)}</strong></div>
         </div>
       </section>
       {canOpen && election.status === "draft" && (
@@ -162,7 +183,7 @@ export default async function ElectionPage({ params, searchParams }: {
         <PlatformFeeCheckout organizationId={organizationId} electionId={electionId} quote={platformFeeQuote} />
       )}
       {canViewRegister && election.voting_mode !== "public_paid" && (
-        <section className="panel voter-register-panel">
+        <section className="panel voter-register-panel" id="voter-register">
           <div className="panel-heading"><div><p className="kicker">ELIGIBLE VOTERS</p><h2>Voter register</h2></div><span className="count">{voterCount ?? 0}</span></div>
           <p className="muted">Add voters individually or upload a private CSV register. Every entry is validated and reviewed before it is committed to the draft election.</p>
           <p className="form-hint">Registered voters are not yet invited. Election opening remains blocked until each eligible voter has a secure access token and invitation record.</p>
@@ -178,9 +199,17 @@ export default async function ElectionPage({ params, searchParams }: {
           )}
           {canManageRegister && election.status === "draft" && !election.platform_fee_quoted_at && (
             <>
-              <p className="template-link"><Link href="/voter-register-template.csv" download>Download CSV template</Link></p>
+              <div className="template-card">
+                <div>
+                  <h3>Start with the voter register template</h3>
+                  <p>Required columns: <strong>voter_ref</strong> and <strong>name</strong>. Add an email address or international phone number for each voter. Optional: weight (defaults to 1).</p>
+                  <p>Email is the supported invitation channel. Phone-only voters can be registered, but cannot receive invitations until another delivery channel is enabled.</p>
+                  <p>CSV only · up to 10 MB · maximum 25,000 voters · voter references must be unique.</p>
+                </div>
+                <Link className="secondary-button" href="/voter-register-template.csv" download>Download CSV template</Link>
+              </div>
               <ManualVoterForm organizationId={organizationId} electionId={electionId} votingMode={election.voting_mode} />
-              <VoterImportForm organizationId={organizationId} electionId={electionId} />
+              <VoterImportForm organizationId={organizationId} electionId={electionId} votingMode={election.voting_mode} />
               {(voterCount ?? 0) > 0 && (
                 <div className="invitation-section">
                   <div className="form-section-title">Voter invitations</div>
@@ -201,12 +230,33 @@ export default async function ElectionPage({ params, searchParams }: {
           )}
         </section>
       )}
+      {openingChecks.length > 0 && election.status === "draft" && (
+        <section className="panel readiness-panel" aria-labelledby="readiness-heading" id="readiness">
+          <div className="panel-heading">
+            <div><p className="kicker">BEFORE OPENING</p><h2 id="readiness-heading">Election readiness</h2><p className="muted">The election remains closed until every requirement is satisfied and the server confirms the transition.</p></div>
+            <span className="count">{openingChecks.filter((check) => check.complete).length}/{openingChecks.length}</span>
+          </div>
+          <ol className="readiness-list">
+            {openingChecks.map((check) => (
+              <li className="readiness-item" key={check.label}>
+                <span className={`readiness-icon ${check.complete ? "is-complete" : ""}`} aria-label={check.complete ? "Complete" : "Incomplete"}>{check.complete ? "✓" : "○"}</span>
+                <div><strong>{check.label}</strong><small>{check.detail}</small></div>
+              </li>
+            ))}
+          </ol>
+          <div className="next-step-panel">
+            <p className="kicker">NEXT STEP</p>
+            <strong>{nextOpeningStep?.label ?? "All readiness checks are complete"}</strong>
+            <p>{nextOpeningStep?.detail ?? "An authorized election manager can now open voting. The server will verify every requirement again."}</p>
+          </div>
+        </section>
+      )}
       {auditTrail?.events && <ElectionAuditTimeline events={auditTrail.events} />}
-      <ElectionLifecycleControls organizationId={organizationId} electionId={electionId} status={election.status}
+      <div id="lifecycle"><ElectionLifecycleControls organizationId={organizationId} electionId={electionId} status={election.status}
         votingMode={election.voting_mode} canOpen={canOpen} canClose={canClose} canTally={canTally}
-        canPublish={canPublish} tallySummary={tallySummary} />
+        canPublish={canPublish} tallySummary={tallySummary} /></div>
       {publishedResults && (
-        <section className="panel results-panel">
+        <section className="panel results-panel" id="results">
           <div className="panel-heading"><div><p className="kicker">PUBLISHED RESULTS</p><h2>Election results</h2></div><span className="status-pill">Published</span></div>
           <div className="summary-grid">
             <div><span>Eligible voters</span><strong>{publishedResults.tally.eligibleVoters}</strong></div>
@@ -236,7 +286,7 @@ export default async function ElectionPage({ params, searchParams }: {
           )}
         </section>
       )}
-      <section className="panel contest-panel">
+      <section className="panel contest-panel" id="contests">
         <div className="panel-heading"><div><p className="kicker">BALLOT STRUCTURE</p><h2>Contests and options</h2></div><span className="count">{optionResults.length}</span></div>
         {optionResults.map(({ contest, options }) => (
           <article className="contest-card" key={contest.id}>
@@ -249,5 +299,6 @@ export default async function ElectionPage({ params, searchParams }: {
           : "Next: complete the voter register, review the election rules, and verify the opening checklist. This draft cannot accept votes yet."}</p>
       </section>
     </main>
+    </WorkspaceShell>
   );
 }
