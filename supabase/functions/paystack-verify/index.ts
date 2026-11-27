@@ -84,6 +84,26 @@ Deno.serve(async (request: Request) => {
     const isSuccess = payment.status === "success" && amountMatches && currencyMatches && referenceMatches;
 
     if (intent.purpose === "public_vote_credits" && payment.status === "success") {
+      if (!referenceMatches) {
+        const { data: quarantined, error: quarantineError } = await admin
+          .from("payment_intents")
+          .update({
+            status: "exception",
+            split_status: "exception",
+            provider_transaction_id: String(payment.id),
+            provider_status: payment.status,
+            provider_amount_minor: providerAmountMinor,
+            provider_currency: payment.currency,
+            verified_at: new Date().toISOString(),
+          })
+          .eq("id", intent.id)
+          .in("status", ["initialized", "pending"])
+          .select("id")
+          .maybeSingle();
+        if (quarantineError) return json(500, { error: "PAYMENT_REFERENCE_MISMATCH_PERSIST_FAILED" }, cors);
+        if (!quarantined) return json(409, { error: "PAYMENT_STATE_CHANGED" }, cors);
+        return json(409, { error: "PAYMENT_REFERENCE_MISMATCH", status: "exception" }, cors);
+      }
       const feesSplit = payment.fees_split;
       const subaccount = payment.subaccount;
       const paystackFee = Number(feesSplit?.paystack);
