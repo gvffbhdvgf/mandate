@@ -79,7 +79,7 @@ begin
     select 1
     from jsonb_array_elements(p_entries) e(value)
     where jsonb_typeof(e.value) is distinct from 'object'
-      or case when jsonb_typeof(e.value) = 'object' then jsonb_object_length(e.value) else -1 end <> 4
+      or case when jsonb_typeof(e.value) = 'object' then (select count(*) from jsonb_object_keys(e.value)) else -1 end <> 4
       or not (e.value ?& array['account_id','direction','amount_minor','currency'])
       or jsonb_typeof(e.value->'account_id') is distinct from 'string'
       or jsonb_typeof(e.value->'direction') is distinct from 'string'
