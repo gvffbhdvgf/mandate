@@ -62,7 +62,16 @@ export default async function ElectionPage({ params, searchParams }: {
   if (canManagePayments && election.voting_mode !== "public_paid") {
     const { data: quote } = await supabase.rpc("get_platform_fee_quote", { p_election_id: electionId });
     if (quote && typeof quote === "object") {
-      platformFeeQuote = quote as typeof platformFeeQuote;
+      const value = quote as Record<string, unknown>;
+      const eligibleVoterCount = Number(value.eligibleVoterCount);
+      const amountMinor = Number(value.amountMinor);
+      const policyVersion = Number(value.policyVersion);
+      if (Number.isSafeInteger(eligibleVoterCount) && eligibleVoterCount >= 0
+        && Number.isSafeInteger(amountMinor) && amountMinor > 0
+        && Number.isSafeInteger(policyVersion) && policyVersion > 0
+        && value.currency === "KES" && typeof value.status === "string") {
+        platformFeeQuote = { eligibleVoterCount, amountMinor, currency: "KES", policyVersion, status: value.status };
+      }
     }
   }
 
