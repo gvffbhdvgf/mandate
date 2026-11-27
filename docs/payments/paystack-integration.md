@@ -47,6 +47,7 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 - A browser callback is an untrusted navigation signal, not proof of payment.
 - Payment verification currently updates payment state only. It does not post ledger entries, issue vote credits or settle an organization balance.
 - The existing webhook RPC atomically updates payment/event state but does not post ledger entries or fulfill credits.
+- Migration `0034_idempotent_ledger_posting` adds a service-role-only, balanced, idempotent ledger posting primitive and append-only guards. It deliberately requires callers to supply policy-approved account allocations; it does not decide how gross receipts, processor fees, organization liabilities, taxes or refunds are classified, and it is not yet wired into Paystack settlement.
 - Webhook payloads are not stored raw; only redacted transaction metadata is persisted.
 - Payouts and transfers remain disabled.
 - Do not put ballot choices, candidate IDs, participant contact details or other sensitive election data in Paystack metadata, references, logs or analytics.
