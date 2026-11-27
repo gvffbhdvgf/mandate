@@ -1,6 +1,7 @@
 name: Paystack edge integration
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, feat/m2-election-setup-lifecycle-next]
   pull_request:
