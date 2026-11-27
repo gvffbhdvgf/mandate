@@ -226,7 +226,7 @@ export function CreateElectionForm({
           <div className="panel form-stack">
             <h3>Public participant and credit rules</h3>
             <label>Public election URL slug
-              <input value={election.public_slug} onChange={(event) => updateElection("public_slug", event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80))}
+              <input value={election.public_slug} onChange={(event) => updateElection("public_slug", event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/--+/g, "-").replace(/^-+|-+$/g, "").replace(/^-+|-+$/g, "").slice(0, 80))}
                 placeholder="e.g. annual-leadership-2027" maxLength={80} required />
             </label>
             <label>Price per voting credit (KES)
