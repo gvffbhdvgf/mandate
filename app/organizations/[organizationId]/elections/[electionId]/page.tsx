@@ -226,7 +226,7 @@ export default async function ElectionPage({ params, searchParams }: {
                 </div>
               ))}
             </article>
-          )}
+          ))}
           {election.result_visibility === "public" && <p className="template-link"><Link href={`/results/${electionId}`}>Open public results page</Link></p>}
           {canPublish && election.status === "results_published" && (
             <p className="template-link">
