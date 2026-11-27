@@ -75,7 +75,7 @@ select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-11111111
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111147',true);
 select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111147","role":"authenticated"}',true);
 
-do $
+do $$
 declare v_rejected boolean := false;
 begin
   begin
@@ -86,7 +86,7 @@ begin
   end;
   if not v_rejected then raise exception 'CLIENT_MUST_NOT_WRITE_PLATFORM_FEE_STATUS'; end if;
 end;
-$;
+$$;
 
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111146',true);
 select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111146","role":"authenticated"}',true);
