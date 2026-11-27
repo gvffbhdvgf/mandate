@@ -743,3 +743,13 @@ test("all Paystack checkout purposes share trusted hosted-redirect validation", 
   assert.match(platformFee, /validatePaystackAuthorizationUrl/);
   assert.match(publicVote, /validatePaystackAuthorizationUrl/);
 });
+
+
+test("committing a staged voter register requires explicit administrator confirmation", async () => {
+  const actions = await read("../app/actions/voters.ts");
+  const form = await read("../app/organizations/[organizationId]/elections/[electionId]/commit-import-form.tsx");
+  assert.match(actions, /confirmImport/);
+  assert.match(actions, /Review the voter count and confirm before adding the register/);
+  assert.match(form, /name="confirmImport"/);
+  assert.match(form, /ready to add/);
+});
