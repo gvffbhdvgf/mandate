@@ -1,55 +1,43 @@
 # Mandate pilot readiness and operations
 
-**Status:** release candidate; production deployment and pilot authorization are pending.  
+**Status:** production registered-election application deployed; pilot authorization remains pending.  
 **Last verified:** 2026-11-27.
 
 This runbook is an operator checklist. A checkbox is complete only when the linked system or evidence confirms it.
 
 ## Current known state
 
-- Release work is on [PR #10](https://github.com/gvffbhdvgf/mandate/pull/10), branch `feat/m2-election-setup-lifecycle-next`. The application, database acceptance/concurrency and Edge Function workflows passed on head `ad4db2897d30fe8623bcb1a8f03946cf443472c0`; rerun them for any subsequent branch update.
-- Hosted Supabase migrations are applied through `0033_election_setup_confirmation_index`.
-- Supabase security advisors have no WARN findings. RLS-enabled tables without policies are intentional private/default-deny tables; verify their access only through approved RPCs. Performance INFO findings currently include unused indexes because there is no production workload.
-- Paystack initialize/verify/webhook functions are active with test-only checks. Paid voting and payouts are disabled.
-- Organization invitation delivery is deployed fail-closed. The Supabase Edge Function secret `MANDATE_SITE_URL` is set to `https://mandate.markmachukhu97.workers.dev`; `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are not set.
-- Resend has one domain entry, `poptraworld.digital`, in `not_started` status with its DNS records unconfigured. It is not referenced in Mandate project records. The Resend dashboard reports it is in use by another Resend team; verifying ownership would transfer it and revoke that team's access. Cloudflare currently has no DNS zones, so this domain has not been attached to Mandate.
-- Cloudflare account has an active workers.dev subdomain but no production Worker or Pages project.
-- Supabase Auth Site URL and signup callback allowlist have been verified in the hosted dashboard. Production signup, confirmation, login and password-reset flows are still untested because no Worker is deployed.
+- M0–M5 registered-election release was consolidated in [PR #10](https://github.com/gvffbhdvgf/mandate/pull/10), merged to `main` at merge commit `47523f85435e46a15316940052827f38d1bd2465`. The PR head `4b0d8d5d2e293161c2ff02a8fd9b9195bb146097` passed the application, disposable database migration/invariant/concurrency and Paystack Edge Function workflows.
+- Production Cloudflare Worker `mandate` is deployed at [https://mandate.markmachukhu97.workers.dev](https://mandate.markmachukhu97.workers.dev). Production deployment run [#4](https://github.com/gvffbhdvgf/mandate/actions/runs/45924589936) passed contract/type/compatibility checks, Worker build and smoke checks for home, login and signup. The deployed source commit is `3858cbb950fc439178efd932ef197b76af98c314`; Cloudflare reports the Worker script is present and modified on 2026-11-27.
+- Supabase project `yhdosrhtzcsfqfuuqhsk` (Mandate, `eu-central-1`) is `ACTIVE_HEALTHY`, with hosted migrations through `0033_election_setup_confirmation_index`.
+- Supabase security advisors have no WARN findings. Sixteen RLS-enabled tables without policies are intentional private/default-deny tables; access must be through approved RPCs. Forty-eight unused-index notices are INFO findings and should not be removed without production workload evidence.
+- Active hosted Edge Functions include Paystack initialize v3, verify v3 and webhook v4, voter invitations v10, and organization invitations v2. Paystack remains test-gated; payment functions do not issue vote credits, settle funds or initiate payouts.
+- Supabase Auth Site URL is `https://mandate.markmachukhu97.workers.dev`; the callback allowlist includes `https://mandate.markmachukhu97.workers.dev/auth/callback?next=*`. Edge Function secret `MANDATE_SITE_URL` matches the production origin.
+- Organization invitation delivery remains fail-closed. `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are not configured. The Resend domain entry `poptraworld.digital` is unverified, its DNS is unconfigured, and the provider reports it is in use by another Resend team. Do not claim or verify it without explicit ownership and transfer authorization.
+- No real voter invitation, ballot, live provider charge, transfer or payout is represented as verified. Paid voting and wallet payouts remain disabled.
 
-## Release sequence
+## Release and production verification
 
-### 1. Close readiness gates before merge
+### Completed
 
-- [x] Set Supabase Auth Site URL to `https://mandate.markmachukhu97.workers.dev`.
-- [x] Confirm the signup callback allowlist includes `https://mandate.markmachukhu97.workers.dev/auth/callback?next=*`. Email confirmation remains enabled.
-- [ ] Confirm a project-controlled sending domain. Configure and verify its DNS in Resend, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Supabase function secrets. The current Resend domain is unverified, is not confirmed as project-controlled, and is reported in use by another Resend team. Do not claim or verify it without explicit ownership and transfer authorization.
-- [ ] Rotate the Paystack test secret previously exposed. Confirm Paystack mode remains test-only and live transactions remain disabled.
-- [ ] Confirm required GitHub branch protection/review policy and deployment credentials are available. Never paste credential values into issues, logs or this document.
-- [ ] Obtain the external legal, provider, custody and operational approvals required before enabling any paid-voting or payout feature. Those features remain off.
-- [ ] Complete the M7 evidence in the pilot checklist below, or explicitly defer the pilot.
+- [x] PR #10 reviewed, merged to `main`, and required application/database/Edge Function checks passed on the recorded PR head.
+- [x] Production Worker deployed from `main`.
+- [x] Production deployment workflow passed home, login and signup route smoke checks.
+- [x] Supabase Auth production Site URL and callback allowlist configured.
+- [x] Hosted Supabase migration history verified through `0033_election_setup_confirmation_index`.
+- [x] Supabase security advisors checked; no WARN findings.
 
-### 2. Review and merge
+### Still required before real pilot use
 
-- [ ] Confirm PR #10 targets `main`, includes the current migration and docs, and all required checks passed on its exact head revision.
-- [ ] Review the complete PR diff and migration sequence.
-- [ ] Merge only after the Auth, email, security and pilot-scope gates above are resolved.
-- [ ] Confirm the main-branch production workflow succeeds. The workflow builds and deploys the `mandate` Worker, then checks the homepage, sign-in and sign-up routes.
-
-### 3. Production smoke checks
-
-After deployment, from an independent network/session:
-
-- [ ] `/` returns the Mandate landing page.
-- [ ] `/login` and `/signup` return their expected pages.
-- [ ] Unauthenticated access to `/dashboard` redirects to sign-in.
-- [ ] A test account can sign up, receive confirmation, follow the callback, log in and reset its password.
-- [ ] An owner can create an organization and invite an operator using a designated test mailbox; the invitee can accept it and receives only the assigned role.
-- [ ] An authorized operator can create and resume a draft, confirm authority, configure an election, import a non-production test voter list, complete the registered-election lifecycle and publish the test results.
-- [ ] CSV and PDF exports contain only published aggregates, are readable, and create `election.results.exported` audit events.
-- [ ] A lower-privilege member cannot perform operator actions or export results. Unpublished results remain private.
-- [ ] No real voter data, live election, real provider charge, transfer or payout is used during these checks.
-
-Record the date, release commit, operator, test accounts (never passwords), outcomes and any defects in the Notion decision/state register.
+- [ ] From an independent browser/network, verify unauthenticated `/dashboard` redirects to sign-in.
+- [ ] Using a designated test account, verify signup, email confirmation, callback, login and password reset on the production origin.
+- [ ] Confirm a project-controlled sending domain. Configure and verify its DNS in Resend, then set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in Supabase function secrets. Use only an explicitly authorized test mailbox before real invitations. Do not transfer or claim `poptraworld.digital` without explicit authorization.
+- [ ] Test organization invitation creation, delivery, acceptance, expiry, revocation and assigned-role boundaries after sender setup.
+- [ ] Test the election setup and lifecycle on non-production test data: create/resume draft, confirm authority, import a test voter list, run registered voting, close/tally/publish, and verify audited aggregate CSV/PDF exports.
+- [ ] Verify lower-privilege members cannot perform operator actions or export results, and unpublished results remain private.
+- [ ] Rotate the previously exposed Paystack test secret. Confirm the provider account is in test mode and perform signed test-mode payment validation only. Do not enable live mode.
+- [ ] Confirm GitHub branch protection/review policy and deployment credential ownership. Never paste credential values into issues, logs or this document.
+- [ ] Keep paid voting, settlements and payouts disabled until separate legal, provider, custody and operational approvals are recorded.
 
 ## Rollback and recovery
 
