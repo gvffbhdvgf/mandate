@@ -77,7 +77,7 @@ begin
   );
   reset role;
   set local role service_role;
-  select set_config('request.jwt.claim.role','service_role',true);
+  perform set_config('request.jwt.claim.role','service_role',true);
   update public.payment_intents
   set status='success',
       provider_transaction_id='paystack-registered-lifecycle-fee',
