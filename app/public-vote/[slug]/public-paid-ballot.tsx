@@ -85,30 +85,27 @@ function PaidContest({
       <p className="kicker">BALLOT CONTEST</p>
       <h2>{contest.title}</h2>
       <p className="muted">Previously cast: {contest.ballotsCast}</p>
-      <form className="form-stack" onSubmit={submit}>
-        <fieldset className="form-stack">
-          <legend>Select one option</legend>
-          {maxCredits < 1 ? (
+      {maxCredits < 1 ? (
         <p className="form-hint">No voting credits remain. Purchase additional credits if the election is still accepting payments.</p>
       ) : (
         <form className="form-stack" onSubmit={submit}>
           <fieldset className="form-stack">
             <legend>Select one option</legend>
             {contest.options.map((option) => (
-            <label key={option.id}>
-              <input
-                type="radio"
-                name={`option-${contest.id}`}
-                value={option.id}
-                checked={optionId === option.id}
-                onChange={() => {
-                  setOptionId(option.id);
-                  setIdempotencyKey("");
-                  setReceipt("");
-                }}
-              />
-              {option.displayName}
-            </label>
+              <label key={option.id}>
+                <input
+                  type="radio"
+                  name={`option-${contest.id}`}
+                  value={option.id}
+                  checked={optionId === option.id}
+                  onChange={() => {
+                    setOptionId(option.id);
+                    setIdempotencyKey("");
+                    setReceipt("");
+                  }}
+                />
+                {option.displayName}
+              </label>
             ))}
           </fieldset>
           <label>Credits to use
@@ -120,7 +117,7 @@ function PaidContest({
               value={credits}
               onChange={(event) => {
                 const next = Number(event.target.value);
-                if (Number.isSafeInteger(next) && next >= 1 && next <= Math.max(1, maxCredits)) {
+                if (Number.isSafeInteger(next) && next >= 1 && next <= maxCredits) {
                   setCredits(next);
                   setIdempotencyKey("");
                   setReceipt("");
@@ -129,7 +126,7 @@ function PaidContest({
               required
             />
           </label>
-          <button className="primary-button" disabled={pending || !optionId || maxCredits < 1}>
+          <button className="primary-button" disabled={pending || !optionId}>
             {pending ? "Recording ballot…" : "Confirm and cast ballot"}
           </button>
         </form>
