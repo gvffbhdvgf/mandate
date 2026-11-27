@@ -15,6 +15,7 @@ create table public.paystack_settlements (
   settled_at timestamptz,
   imported_at timestamptz not null default now(),
   unique (environment, provider_settlement_id),
+  unique (id, environment),
   check (settlement_amount_minor is null or settlement_amount_minor >= 0),
   check (gross_amount_minor is null or gross_amount_minor >= 0),
   check (fee_amount_minor is null or fee_amount_minor >= 0)
@@ -22,7 +23,9 @@ create table public.paystack_settlements (
 
 create table public.paystack_settlement_transactions (
   id uuid primary key default gen_random_uuid(),
-  settlement_id uuid not null references public.paystack_settlements(id) on delete restrict,
+  settlement_id uuid not null,
+  environment text not null check (environment in ('test', 'live')),
+  foreign key (settlement_id, environment) references public.paystack_settlements(id, environment) on delete restrict,
   provider_transaction_id text not null,
   provider_reference text not null,
   provider_status text not null,
@@ -31,14 +34,12 @@ create table public.paystack_settlement_transactions (
   fee_minor bigint check (fee_minor is null or fee_minor >= 0),
   paid_at timestamptz,
   imported_at timestamptz not null default now(),
-  unique (settlement_id, provider_transaction_id)
+  unique (settlement_id, provider_transaction_id),
+  unique (environment, provider_transaction_id)
 );
 
 create index paystack_settlement_transactions_reference_idx
   on public.paystack_settlement_transactions(provider_reference);
-create unique index paystack_settlement_transactions_environment_transaction_uq
-  on public.paystack_settlement_transactions(provider_transaction_id, settlement_id);
-
 alter table public.paystack_settlements enable row level security;
 alter table public.paystack_settlement_transactions enable row level security;
 revoke all on public.paystack_settlements, public.paystack_settlement_transactions
