@@ -46,7 +46,7 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 - Never accept client-supplied amount, fee, currency, purpose, payment status or provider reference as authoritative.
 - A browser callback is an untrusted navigation signal, not proof of payment.
 - Payment verification currently updates payment state only. It does not post ledger entries, issue vote credits or settle an organization balance. The browser callback route is not yet implemented; do not configure or advertise a callback URL until that route exists.
-- The existing webhook RPC atomically updates payment/event state but does not post ledger entries or fulfill credits.
+- The existing webhook RPC atomically updates payment/event state but does not post ledger entries or fulfill credits. Migration `0035_paystack_terminal_state_guard` also prevents late `charge.success` events from resurrecting refunded, reversed, failed, abandoned, exception or already-successful intents; those states require explicit reconciliation.
 - Migration `0034_idempotent_ledger_posting` adds a service-role-only, balanced, idempotent ledger posting primitive and append-only guards. It deliberately requires callers to supply policy-approved account allocations; it does not decide how gross receipts, processor fees, organization liabilities, taxes or refunds are classified, and it is not yet wired into Paystack settlement.
 - Webhook payloads are not stored raw; only redacted transaction metadata is persisted.
 - Payouts and transfers remain disabled.
