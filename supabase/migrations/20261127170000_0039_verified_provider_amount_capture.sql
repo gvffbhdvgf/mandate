@@ -29,7 +29,7 @@ declare
   v_suspense_account uuid;
   v_posting jsonb;
 begin
-  if new.provider_status = 'success'
+  if new.provider_status in ('success', 'reversal pending', 'reversed')
     and new.provider_transaction_id is not null
     and new.verified_at is not null
     and new.provider_amount_minor is not null
@@ -96,7 +96,7 @@ after update of provider_status, provider_transaction_id, provider_amount_minor,
 on public.payment_intents
 for each row
 when (
-  new.provider_status = 'success'
+  new.provider_status in ('success', 'reversal pending', 'reversed')
   and (
     old.provider_status is distinct from new.provider_status
     or old.provider_transaction_id is distinct from new.provider_transaction_id
@@ -247,5 +247,113 @@ revoke all on function public.apply_verified_paystack_webhook_event(uuid,text,te
 grant execute on function public.apply_verified_paystack_webhook_event(uuid,text,text,text,bigint,text)
   to service_role;
 
+create or replace function mandate_private.apply_verified_paystack_payment_exception_event(
+  p_event_id uuid,
+  p_provider_reference text,
+  p_provider_transaction_id text,
+  p_provider_status text,
+  p_amount_minor bigint,
+  p_currency text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, pg_temp
+as $
+declare
+  v_event public.payment_events%rowtype;
+  v_intent public.payment_intents%rowtype;
+  v_next_status public.payment_status;
+begin
+  select * into v_event
+  from public.payment_events
+  where id = p_event_id
+  for update;
+
+  if not found
+    or v_event.provider <> 'paystack'
+    or v_event.signature_verified is distinct from true
+    or v_event.provider_reference is distinct from p_provider_reference
+    or not (
+      left(v_event.event_type, 7) = 'refund.'
+      or left(v_event.event_type, 15) = 'charge.dispute.'
+    )
+    or p_provider_transaction_id is null
+    or p_provider_status is null
+    or p_amount_minor <= 0
+    or p_currency is null then
+    raise exception 'INVALID_VERIFIED_PAYSTACK_EXCEPTION_EVENT' using errcode = '22023';
+  end if;
+
+  if v_event.processing_status = 'processed' then
+    return jsonb_build_object('duplicate', true, 'processed', true);
+  end if;
+
+  select * into v_intent
+  from public.payment_intents
+  where provider = 'paystack'
+    and provider_reference = p_provider_reference
+  for update;
+
+  if not found then
+    update public.payment_events
+    set processing_status = 'failed', processed_at = null
+    where id = v_event.id;
+    return jsonb_build_object('duplicate', false, 'processed', false, 'reason', 'PAYMENT_INTENT_NOT_FOUND');
+  end if;
+
+  v_next_status := case
+    when v_intent.status in ('initialized', 'pending', 'success') then 'exception'::public.payment_status
+    else v_intent.status
+  end;
+
+  update public.payment_intents
+  set status = v_next_status,
+      provider_transaction_id = p_provider_transaction_id,
+      provider_status = p_provider_status,
+      provider_amount_minor = p_amount_minor,
+      provider_currency = p_currency,
+      verified_at = pg_catalog.now()
+  where id = v_intent.id;
+
+  update public.payment_events
+  set processing_status = 'processed', processed_at = pg_catalog.now()
+  where id = v_event.id;
+
+  return jsonb_build_object(
+    'duplicate', false,
+    'processed', true,
+    'status', v_next_status,
+    'provider_status', p_provider_status
+  );
+end;
+$;
+
+revoke all on function mandate_private.apply_verified_paystack_payment_exception_event(uuid,text,text,text,bigint,text)
+  from public, anon, authenticated;
+grant execute on function mandate_private.apply_verified_paystack_payment_exception_event(uuid,text,text,text,bigint,text)
+  to service_role;
+
+create or replace function public.apply_verified_paystack_payment_exception_event(
+  p_event_id uuid,
+  p_provider_reference text,
+  p_provider_transaction_id text,
+  p_provider_status text,
+  p_amount_minor bigint,
+  p_currency text
+)
+returns jsonb
+language sql
+security invoker
+set search_path = pg_catalog
+as $
+  select mandate_private.apply_verified_paystack_payment_exception_event($1, $2, $3, $4, $5, $6);
+$;
+
+revoke all on function public.apply_verified_paystack_payment_exception_event(uuid,text,text,text,bigint,text)
+  from public, anon, authenticated;
+grant execute on function public.apply_verified_paystack_payment_exception_event(uuid,text,text,text,bigint,text)
+  to service_role;
+
 comment on function mandate_private.capture_verified_payment_receipt()
-  is 'Captures actual provider-reported KES success amounts to clearing and suspense, including mismatched payments requiring reconciliation. Never books the expected intent amount as cash received.';
+  is 'Captures actual provider-reported KES success and reversal-state amounts to clearing and suspense, including mismatched payments requiring reconciliation. Never books the expected intent amount as cash received.';
