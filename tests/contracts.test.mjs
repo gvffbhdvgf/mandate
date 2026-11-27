@@ -573,9 +573,11 @@ test("registered elections use a versioned server-priced platform fee before inv
   assert.match(migration, /create_platform_fee_payment_intent/);
   assert.match(migration, /PLATFORM_FEE_QUOTE_CHANGED/);
   assert.match(migration, /VOTER_REGISTER_FROZEN_BY_PLATFORM_FEE_QUOTE/);
+  assert.match(migration, /PLATFORM_FEE_FIELDS_SERVER_MANAGED/);
   assert.match(migration, /PLATFORM_FEE_PAYMENT_REQUIRED/);
   assert.match(migration, /sync_platform_fee_payment_status/);
   assert.match(smoke, /PLATFORM_FEE_SERVER_PRICING_OR_IDEMPOTENCY_FAILED/);
+  assert.match(smoke, /CLIENT_MUST_NOT_WRITE_PLATFORM_FEE_STATUS/);
   assert.match(smoke, /VOTER_REGISTER_MUST_FREEZE_AFTER_FEE_QUOTE/);
   assert.match(smoke, /ELECTION_OPEN_MUST_REQUIRE_PAID_PLATFORM_FEE/);
   assert.match(smoke, /VERIFIED_PLATFORM_FEE_PAYMENT_MUST_MARK_ELECTION_PAID/);
