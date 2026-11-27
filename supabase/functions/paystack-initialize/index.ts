@@ -63,16 +63,9 @@ Deno.serve(async (request: Request) => {
           bearer: feeBearer,
         };
       } else {
-        const basisPoints = Number(intent.split_percentage_basis_points);
-        if (!Number.isInteger(basisPoints) || basisPoints < 1 || basisPoints > 9999
-          || Number(subaccount.provider_percentage_charge_basis_points) !== basisPoints) {
-          return json(409, { error: "SUBACCOUNT_SPLIT_PERCENTAGE_MISMATCH" }, cors);
-        }
-        // Paystack stores the main-account percentage on the subaccount profile.
-        splitInitialization = {
-          subaccount: subaccount.provider_subaccount_code,
-          bearer: feeBearer,
-        };
+        // Percentage settlement is deliberately disabled until Paystack's exact
+        // KES rounding behavior is covered by provider evidence and acceptance tests.
+        return json(503, { error: "PERCENTAGE_SPLIT_ROUNDING_NOT_YET_APPROVED" }, cors);
       }
       const { data: releaseFlags, error: releaseFlagsError } = await admin
         .from("platform_payment_feature_flags")
