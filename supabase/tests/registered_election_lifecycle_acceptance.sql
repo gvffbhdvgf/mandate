@@ -29,6 +29,7 @@ declare
   v_report_audit jsonb;
   v_fee_quote jsonb;
   v_fee_intent jsonb;
+  v_audit_count integer;
   v_duplicate_rejected boolean := false;
   v_paused_context_rejected boolean := false;
 begin
@@ -162,12 +163,14 @@ begin
   end if;
 
   reset role;
-  if (select count(*) from public.audit_events
-      where election_id=v_election
-        and action in ('election.opened','ballot.accepted','election.paused',
-                       'election.resumed','election.closed','election.tallied',
-                       'election.results_published','election.results.exported')) <> 9 then
-    raise exception 'LIFECYCLE_AUDIT_TRAIL_INCOMPLETE';
+  select count(*) into v_audit_count
+  from public.audit_events
+  where election_id=v_election
+    and action in ('election.opened','ballot.accepted','election.paused',
+                   'election.resumed','election.closed','election.tallied',
+                   'election.results_published','election.results.exported');
+  if v_audit_count <> 9 then
+    raise exception 'LIFECYCLE_AUDIT_TRAIL_INCOMPLETE: %',v_audit_count;
   end if;
 end $$;
 
