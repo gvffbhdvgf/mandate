@@ -45,7 +45,14 @@ export async function authenticate(request: Request): Promise<{ user: User; call
   if (!url || !anon) throw new Error("SUPABASE_FUNCTION_CONFIG_MISSING");
   if (!authorization?.startsWith("Bearer ")) throw new Error("AUTHENTICATION_REQUIRED");
   const token = authorization.slice("Bearer ".length);
-  const caller = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+  // Keep the caller JWT on PostgREST requests as well as validating it with Auth.
+  // auth.getUser(token) validates the supplied token but does not attach it to
+  // subsequent caller.from(...) requests; without this header those queries run
+  // as anon and organization-member RLS checks incorrectly reject valid owners.
+  const caller = createClient(url, anon, {
+    global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
   const { data, error } = await caller.auth.getUser(token);
   if (error || !data.user) throw new Error("INVALID_SESSION");
   return { user: data.user, caller };
