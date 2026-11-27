@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { signOutAction } from "../../../../actions/auth";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 import { VoterImportForm } from "./voter-import-form";
+import { ManualVoterForm } from "./manual-voter-form";
 import { CommitImportForm } from "./commit-import-form";
 import { DispatchInvitationsForm } from "./dispatch-invitations-form";
 import { ElectionLifecycleControls } from "./lifecycle-controls";
@@ -158,17 +159,13 @@ export default async function ElectionPage({ params, searchParams }: {
         </section>
       )}
       {canManagePayments && platformFeeQuote && ["draft", "scheduled"].includes(election.status) && election.voting_mode !== "public_paid" && (
-        <PlatformFeeCheckout
-          organizationId={organizationId}
-          electionId={electionId}
-          quote={platformFeeQuote}
-        />
+        <PlatformFeeCheckout organizationId={organizationId} electionId={electionId} quote={platformFeeQuote} />
       )}
       {canViewRegister && election.voting_mode !== "public_paid" && (
         <section className="panel voter-register-panel">
           <div className="panel-heading"><div><p className="kicker">ELIGIBLE VOTERS</p><h2>Voter register</h2></div><span className="count">{voterCount ?? 0}</span></div>
-          <p className="muted">Upload a private CSV register, validate every row, then commit the eligible voters to this draft election.</p>
-          <p className="form-hint">Imported voters are not yet invited. Election opening remains blocked until each eligible voter has a secure access token and invitation record.</p>
+          <p className="muted">Add voters individually or upload a private CSV register. Every entry is validated and reviewed before it is committed to the draft election.</p>
+          <p className="form-hint">Registered voters are not yet invited. Election opening remains blocked until each eligible voter has a secure access token and invitation record.</p>
           {importBatch && (
             <div className="import-result">
               <div><strong>{importBatch.original_filename}</strong><p className="muted">{importBatch.total_rows} rows · {importBatch.status}</p></div>
@@ -176,12 +173,13 @@ export default async function ElectionPage({ params, searchParams }: {
               {importBatch.status === "validated" && canManageRegister && (
                 <CommitImportForm organizationId={organizationId} electionId={electionId} batchId={importBatch.id} />
               )}
-              {importBatch.status === "committed" && <p className="form-hint">This import has been committed to the voter register.</p>}
+              {importBatch.status === "committed" && <p className="form-hint">This register update has been committed.</p>}
             </div>
           )}
           {canManageRegister && election.status === "draft" && !election.platform_fee_quoted_at && (
             <>
               <p className="template-link"><Link href="/voter-register-template.csv" download>Download CSV template</Link></p>
+              <ManualVoterForm organizationId={organizationId} electionId={electionId} votingMode={election.voting_mode} />
               <VoterImportForm organizationId={organizationId} electionId={electionId} />
               {(voterCount ?? 0) > 0 && (
                 <div className="invitation-section">
@@ -196,25 +194,17 @@ export default async function ElectionPage({ params, searchParams }: {
                   )}
                 </div>
               )}
-              {election.platform_fee_quoted_at && (
-                <p className="form-hint">The voter register is frozen against platform-fee policy v{election.platform_fee_policy_version} and the quoted eligible-voter count. To change the register, the invoice must be cancelled through an audited support process.</p>
-              )}
             </>
+          )}
+          {election.platform_fee_quoted_at && (
+            <p className="form-hint">The voter register is frozen against platform-fee policy v{election.platform_fee_policy_version} and the quoted eligible-voter count. To change the register, the invoice must be cancelled through an audited support process.</p>
           )}
         </section>
       )}
       {auditTrail?.events && <ElectionAuditTimeline events={auditTrail.events} />}
-      <ElectionLifecycleControls
-        organizationId={organizationId}
-        electionId={electionId}
-        status={election.status}
-        votingMode={election.voting_mode}
-        canOpen={canOpen}
-        canClose={canClose}
-        canTally={canTally}
-        canPublish={canPublish}
-        tallySummary={tallySummary}
-      />
+      <ElectionLifecycleControls organizationId={organizationId} electionId={electionId} status={election.status}
+        votingMode={election.voting_mode} canOpen={canOpen} canClose={canClose} canTally={canTally}
+        canPublish={canPublish} tallySummary={tallySummary} />
       {publishedResults && (
         <section className="panel results-panel">
           <div className="panel-heading"><div><p className="kicker">PUBLISHED RESULTS</p><h2>Election results</h2></div><span className="status-pill">Published</span></div>
@@ -236,12 +226,12 @@ export default async function ElectionPage({ params, searchParams }: {
                 </div>
               ))}
             </article>
-          ))}
+          )}
           {election.result_visibility === "public" && <p className="template-link"><Link href={`/results/${electionId}`}>Open public results page</Link></p>}
           {canPublish && election.status === "results_published" && (
             <p className="template-link">
-              Download report: <Link href={"/organizations/" + organizationId + "/elections/" + electionId + "/report?format=csv"}>CSV</Link>
-              {" · "}<Link href={"/organizations/" + organizationId + "/elections/" + electionId + "/report?format=pdf"}>PDF</Link>
+              Download report: <Link href={`/organizations/${organizationId}/elections/${electionId}/report?format=csv`}>CSV</Link>
+              {" · "}<Link href={`/organizations/${organizationId}/elections/${electionId}/report?format=pdf`}>PDF</Link>
             </p>
           )}
         </section>
