@@ -13,14 +13,25 @@ insert into public.payment_intents(
 set local role service_role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 
-update public.payment_intents
-set status = 'success',
-    provider_transaction_id = 'paystack-settlement-recon-transaction',
-    provider_status = 'success',
-    provider_amount_minor = 12500,
-    provider_currency = 'KES',
-    verified_at = now()
-where id = '11111111-1111-4111-8111-111111111144';
+insert into public.payment_events(
+  id, provider, provider_event_key, provider_reference, event_type,
+  signature_verified, redacted_payload, processing_status
+) values (
+  '22222222-2222-4222-8222-222222222244',
+  'paystack', 'paystack:charge.success:settlement-recon-smoke',
+  'mandate-settlement-recon-smoke-20261127', 'charge.success',
+  true, '{"status":"success","amount":"12500","currency":"KES","transaction_id":"paystack-settlement-recon-transaction"}'::jsonb,
+  'received'
+);
+
+select public.apply_verified_paystack_webhook_event(
+  '22222222-2222-4222-8222-222222222244',
+  'mandate-settlement-recon-smoke-20261127',
+  'paystack-settlement-recon-transaction',
+  'success',
+  12500,
+  'KES'
+);
 
 with settlement as (
   insert into public.paystack_settlements(
@@ -54,6 +65,17 @@ begin
 
   if v_status is distinct from 'matched_to_receipt' then
     raise exception 'PAYSTACK_SETTLEMENT_RECEIPT_MATCH_FAILED: %', v_status;
+  end if;
+
+  if not exists (
+    select 1 from public.payment_intents
+    where id = '11111111-1111-4111-8111-111111111144'
+      and provider_status = 'success'
+      and provider_amount_minor = 12500
+      and provider_currency = 'KES'
+      and provider_transaction_id = 'paystack-settlement-recon-transaction'
+  ) then
+    raise exception 'PAYSTACK_WEBHOOK_MUST_PERSIST_VERIFIED_PROVIDER_FACTS';
   end if;
 
   if has_table_privilege('authenticated', 'public.paystack_settlements', 'select')
