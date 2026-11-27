@@ -5,8 +5,12 @@ import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { CreateElectionForm } from "./create-election-form";
 import { OrganizationMembersPanel } from "./members-panel";
 
-export default async function OrganizationPage({ params }: { params: Promise<{ organizationId: string }> }) {
+export default async function OrganizationPage({ params, searchParams }: {
+  params: Promise<{ organizationId: string }>;
+  searchParams: Promise<{ memberNotice?: string; memberError?: string }>;
+}) {
   const { organizationId } = await params;
+  const feedback = await searchParams;
   const supabase = await createSupabaseServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) redirect("/login");
@@ -77,6 +81,8 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
           members={members}
           invitations={pendingInvitations}
           actorRole={membership.role}
+          memberNotice={feedback.memberNotice}
+          memberError={feedback.memberError}
         />
       )}
       <section className="dashboard-grid organization-workspace-grid">
