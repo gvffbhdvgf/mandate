@@ -14,7 +14,9 @@ type ContestDraft = {
 };
 type WizardPayload = {
   election: {
-    title: string; description: string; voting_mode: "registered_single" | "registered_weighted";
+    title: string; description: string; voting_mode: "registered_single" | "registered_weighted" | "public_paid";
+    public_slug: string; currency: "KES"; price_per_credit_minor: string;
+    max_credits_per_participant: string; contact_verification_required: boolean;
     starts_at: string; ends_at: string; timezone: string;
     result_visibility: "private" | "members" | "public";
   };
@@ -25,6 +27,8 @@ type SavedDraft = { id: string; title: string; current_step: number; payload: un
 const emptyPayload = (): WizardPayload => ({
   election: {
     title: "", description: "", voting_mode: "registered_single",
+    public_slug: "", currency: "KES", price_per_credit_minor: "", max_credits_per_participant: "",
+    contact_verification_required: true,
     starts_at: "", ends_at: "", timezone: "Africa/Nairobi", result_visibility: "private",
   },
   contests: [{
@@ -207,23 +211,50 @@ export function CreateElectionForm({
           <select value={election.voting_mode} onChange={(event) => updateElection("voting_mode", event.target.value)}>
             <option value="registered_single">One person, one vote</option>
             <option value="registered_weighted">Weighted voting (registered voters)</option>
+            <option value="public_paid">Public paid voting (email-verified participants)</option>
           </select>
         </label>
-        <p className="form-hint">Public paid voting is not available. Only registered-voter elections can be configured.</p>
+        {election.voting_mode === "public_paid" ? (
+          <p className="form-hint">Public participants verify by email OTP and purchase voting credits. The election cannot be confirmed or opened until Mandate's platform release and legal/provider checks are approved.</p>
+        ) : (
+          <p className="form-hint">Registered-voter elections use the organization's voter roll and private access invitations.</p>
+        )}
       </>}
 
       {step === 3 && <>
-        <div className="panel">
-          <h3>Participation requirements</h3>
-          <p className="muted">This election uses a registered voter roll. Before it can open, the organization must import eligible voters and issue each eligible voter their private access invitation.</p>
-          <ul>
-            <li>Only eligible, registered voters can participate.</li>
-            <li>Contact verification remains required by the current election policy.</li>
-            <li>One-vote elections enforce a weight of exactly one per voter.</li>
-            <li>Weighted voting is limited to the organization-managed voter register.</li>
-          </ul>
-        </div>
-        <p className="form-hint">These are enforced participation controls, not optional display settings.</p>
+        {election.voting_mode === "public_paid" ? (
+          <div className="panel form-stack">
+            <h3>Public participant and credit rules</h3>
+            <label>Public election URL slug
+              <input value={election.public_slug} onChange={(event) => updateElection("public_slug", event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/--+/g, "-").slice(0, 80))}
+                placeholder="e.g. annual-leadership-2027" maxLength={80} required />
+            </label>
+            <label>Price per voting credit (KES)
+              <input type="number" min={1} step={1} value={election.price_per_credit_minor}
+                onChange={(event) => updateElection("price_per_credit_minor", event.target.value)} required />
+            </label>
+            <label>Maximum credits per participant
+              <input type="number" min={1} step={1} value={election.max_credits_per_participant}
+                onChange={(event) => updateElection("max_credits_per_participant", event.target.value)} required />
+            </label>
+            <p className="form-hint">Price is entered in Kenyan shillings and converted to minor units by the server. The server enforces the stored price and participant cap; the browser cannot set a payment amount.</p>
+            <p className="form-hint">Email verification is mandatory. Email addresses are kept out of ballots and Paystack metadata.</p>
+          </div>
+        ) : (
+          <>
+            <div className="panel">
+              <h3>Participation requirements</h3>
+              <p className="muted">This election uses a registered voter roll. Before it can open, the organization must import eligible voters and issue each eligible voter their private access invitation.</p>
+              <ul>
+                <li>Only eligible, registered voters can participate.</li>
+                <li>Contact verification remains required by the current election policy.</li>
+                <li>One-vote elections enforce a weight of exactly one per voter.</li>
+                <li>Weighted voting is limited to the organization-managed voter register.</li>
+              </ul>
+            </div>
+            <p className="form-hint">These are enforced participation controls, not optional display settings.</p>
+          </>
+        )}
       </>}
 
       {step === 4 && <>
@@ -320,6 +351,15 @@ export function CreateElectionForm({
           <h3>{election.title || "Untitled election"}</h3>
           <p className="muted">{election.voting_mode.replaceAll("_", " ")} · {election.result_visibility} results · {election.timezone}</p>
           <p>{election.description || "No description supplied."}</p>
+          {election.voting_mode === "public_paid" && (
+            <div className="form-hint">
+              <p>Public URL: /public-vote/{election.public_slug || "slug-required"}</p>
+              <p>Price per credit: KSh {election.price_per_credit_minor || "not set"}</p>
+              <p>Maximum credits per participant: {election.max_credits_per_participant || "not set"}</p>
+              <p>Email OTP verification: required</p>
+              <p>Platform release authorization: pending</p>
+            </div>
+          )}
           <p>Starts: {election.starts_at ? new Date(election.starts_at).toLocaleString("en-KE", { timeZone: election.timezone }) : "Not set"}</p>
           <p>Ends: {election.ends_at ? new Date(election.ends_at).toLocaleString("en-KE", { timeZone: election.timezone }) : "Not set"}</p>
           {payload.contests.map((contest, index) => (
