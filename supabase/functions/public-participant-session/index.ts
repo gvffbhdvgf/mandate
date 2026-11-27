@@ -100,6 +100,28 @@ Deno.serve(async (request: Request) => {
       }
     }
 
+    const { data: participantRecord, error: participantRecordError } = await admin
+      .from("public_participants")
+      .select("id")
+      .eq("election_id", election.id)
+      .eq("auth_user_id", user.id)
+      .single();
+    if (participantRecordError || !participantRecord) {
+      return json(500, { error: "PARTICIPANT_STATE_UNAVAILABLE" }, cors);
+    }
+
+    const { data: activeLots, error: lotsError } = await admin
+      .from("vote_credit_lots")
+      .select("credits_remaining")
+      .eq("election_id", election.id)
+      .eq("participant_id", participantRecord.id)
+      .eq("entitlement_status", "active");
+    if (lotsError) return json(500, { error: "PARTICIPANT_CREDIT_STATE_UNAVAILABLE" }, cors);
+    const creditsRemaining = (activeLots ?? []).reduce(
+      (total, lot) => total + Number(lot.credits_remaining),
+      0,
+    );
+
     return json(200, {
       verified: true,
       election: {
@@ -110,6 +132,7 @@ Deno.serve(async (request: Request) => {
         maxCreditsPerParticipant: election.max_credits_per_participant,
         endsAt: election.ends_at,
         timezone: election.timezone,
+        creditsRemaining,
       },
     }, cors);
   } catch (error) {
