@@ -89,7 +89,9 @@ end;
 $$;
 
 revoke all on function mandate_private.get_public_paid_ballot_context(text)
-  from public, anon, authenticated;
+  from public, anon;
+grant execute on function mandate_private.get_public_paid_ballot_context(text)
+  to authenticated;
 
 create or replace function public.get_public_paid_ballot_context(p_election_slug text)
 returns jsonb
@@ -306,7 +308,9 @@ end;
 $$;
 
 revoke all on function mandate_private.cast_public_paid_ballot(text,uuid,uuid,integer,boolean,text)
-  from public, anon, authenticated;
+  from public, anon;
+grant execute on function mandate_private.cast_public_paid_ballot(text,uuid,uuid,integer,boolean,text)
+  to authenticated;
 
 create or replace function public.cast_public_paid_ballot(
   p_election_slug text,
