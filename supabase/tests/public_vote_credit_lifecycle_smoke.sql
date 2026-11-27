@@ -436,7 +436,7 @@ declare
   v_duplicate jsonb;
 begin
   v_context := public.get_public_paid_ballot_context('public-credit-acceptance');
-  if (v_context->>'creditsRemaining')::bigint <> 2 then
+  if (v_context->>'creditsRemaining')::bigint <> 3 then
     raise exception 'PUBLIC_PARTICIPANT_CONTEXT_MUST_SHOW_VERIFIED_CREDITS';
   end if;
 
