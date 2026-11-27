@@ -528,6 +528,9 @@ test("public paid voting uses Mandate single-merchant collection and readable au
   assert.match(migration, /apply_verified_paystack_public_vote_payment/);
   assert.match(migration, /split_status <> 'not_configured'/);
   assert.match(migration, /provider_fee_minor/);
+  assert.match(migration, /platform_revenue/);
+  assert.match(migration, /processor_fee/);
+  assert.match(migration, /public_vote_provider_processing_fee/);
   assert.match(migration, /payment_intents_require_verified_public_vote_split/);
   assert.match(initialize, /public_vote_credits_enabled/);
   assert.doesNotMatch(initialize, /PAYSTACK_SPLIT_NOT_CONFIGURED|VERIFIED_ORGANIZER_SUBACCOUNT_REQUIRED|splitInitialization/);
