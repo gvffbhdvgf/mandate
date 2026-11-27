@@ -170,6 +170,19 @@ declare
   v_description text;
   v_posting jsonb;
 begin
+  -- A previously verified success already captured the gross receipt. A later
+  -- refund/dispute exception must freeze the intent without posting that same
+  -- receipt a second time under a changed ledger classification.
+  if new.status = 'exception'
+    and exists (
+      select 1 from public.ledger_transactions
+      where source_type = 'payment_intent'
+        and source_id = new.id
+        and idempotency_key = 'paystack-payment-receipt:' || new.id::text
+    ) then
+    return new;
+  end if;
+
   if new.status = 'success' and old.status is distinct from new.status then
     if new.provider <> 'paystack'
       or new.provider_transaction_id is null
