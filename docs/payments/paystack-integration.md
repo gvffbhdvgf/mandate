@@ -1,43 +1,61 @@
 # Paystack integration
 
-Mandate uses a server-side Paystack adapter. Provider credentials are supplied through Supabase Edge Function secrets and are never exposed to the browser.
+Mandate uses server-side Paystack Edge Functions. Provider credentials are supplied through Supabase Edge Function secrets and are never exposed to the browser. Test and live credentials are separate; the legacy shared `PAYSTACK_SECRET_KEY` and `PAYSTACK_WEBHOOK_SECRET` names are not accepted by the mode-aware adapter.
 
-## Edge Functions
+## Payment purposes
 
-- `paystack-initialize`: initializes a transaction for an existing payment intent after authenticating the user and checking active organization-manager membership.
-- `paystack-verify`: verifies a reference server-side and compares the provider reference, amount and currency with the stored intent.
-- `paystack-webhook`: verifies the timestamped `Paystack-Signature` HMAC over the exact raw request body, deduplicates events and stores only redacted event metadata.
+The supported product scope is three distinct purposes:
 
-## Required secrets
+- `platform_fee`: payment owed to Mandate under an approved fee policy.
+- `organization_topup`: funds attributable to an organization under an approved custody, beneficial-ownership and settlement policy.
+- `public_vote_credits`: election-specific credit purchases, requiring a scoped public-participant flow and separate legal/provider approval.
 
-| Secret | Purpose |
+Each purpose has an independent mode-specific flag. A flag only permits the corresponding technical path to proceed; it does not establish pricing, accounting classification, legal eligibility, custody, settlement or payout authority. The current user-initiated initialize/verify routes remain organization-manager routes and explicitly reject public-vote-credit checkout until the participant-token purchase path is implemented. No purpose is live-enabled by default.
+
+## Mode configuration
+
+Set exactly one `PAYSTACK_MODE` value: `test` or `live`.
+
+| Secret / variable | Purpose |
 |---|---|
-| `PAYSTACK_SECRET_KEY` | Server-side Paystack API key |
-| `PAYSTACK_PUBLIC_KEY` | Public checkout key; never grants API access |
-| `PAYSTACK_WEBHOOK_SECRET` | Webhook signing secret beginning with `whsec_` |
-| `PAYSTACK_MODE` | Must be `test` to enable transaction initialization |
-| `PAYSTACK_LIVE_TRANSACTIONS_ENABLED` | Keep unset or `false`; setting it to `true` disables initialization in this development adapter |
-| `MANDATE_PAYMENT_CALLBACK_URL` | Optional HTTPS callback URL when the application domain is established |
+| `PAYSTACK_MODE` | Selects the active environment; any other value fails closed |
+| `PAYSTACK_TEST_SECRET_KEY` | Test API key; must begin `sk_test_` |
+| `PAYSTACK_TEST_WEBHOOK_SECRET` | Test webhook signing secret |
+| `PAYSTACK_LIVE_SECRET_KEY` | Live API key; must begin `sk_live_` |
+| `PAYSTACK_LIVE_WEBHOOK_SECRET` | Live webhook signing secret |
+| `PAYSTACK_LIVE_TRANSACTIONS_ENABLED` | Additional live-mode master switch; must be exactly `true` |
+| `PAYSTACK_TEST_PLATFORM_FEE_ENABLED` | Test-mode platform fee gate |
+| `PAYSTACK_TEST_ORGANIZATION_TOPUP_ENABLED` | Test-mode organization top-up gate |
+| `PAYSTACK_TEST_PUBLIC_VOTE_CREDITS_ENABLED` | Test-mode public vote credits gate |
+| `PAYSTACK_LIVE_PLATFORM_FEE_ENABLED` | Live-mode platform fee gate |
+| `PAYSTACK_LIVE_ORGANIZATION_TOPUP_ENABLED` | Live-mode organization top-up gate |
+| `PAYSTACK_LIVE_PUBLIC_VOTE_CREDITS_ENABLED` | Live-mode public vote credits gate |
+| `MANDATE_PAYMENT_CALLBACK_URL` | Optional HTTPS callback URL; callback is never proof of payment |
 | `MANDATE_ALLOWED_ORIGINS` | Optional comma-separated browser origins |
 
-The initialization function fails closed unless `PAYSTACK_MODE=test` and the secret key begins with `sk_test_`. A live key cannot initialize transactions through this function. The temporary live credential supplied during development is stored server-side but must be rotated before any real-money use.
+A purpose flag is enabled only when its mode-specific value is exactly `true`; missing flags are disabled. Live mode additionally requires the live master switch, a matching live key prefix and a live webhook secret. The adapter never falls back from a missing mode-specific key to a shared/other-mode key.
+
+## Edge Function behavior
+
+- `paystack-initialize`: loads an existing server-created intent; amount, currency and reference come from the database. Requires the matching mode and purpose gates. Public vote-credit initialization remains blocked until a scoped participant-token checkout path is implemented.
+- `paystack-verify`: verifies the provider transaction server-side and compares exact reference, amount and KES currency. Organization intents require active organization-manager authorization.
+- `paystack-webhook`: verifies the timestamped `Paystack-Signature` HMAC over the exact raw body, deduplicates provider events, checks the associated intent's purpose gate, verifies with Paystack and calls the row-locked database RPC. Webhook events for a disabled purpose are not applied.
 
 ## Important boundaries
 
-- The client supplies a payment-intent ID, never an amount or provider reference.
-- Amount and currency come from the stored payment intent.
-- Public paid-vote credits remain gated.
-- Successful payment verification updates payment state only. It does not itself create vote credits, settle an organization wallet or post ledger entries.
-- Webhook processing requires the new `PAYSTACK_WEBHOOK_SECRET` and `Paystack-Signature` header. Legacy `X-Paystack-Signature` is deliberately not accepted by this implementation.
+- Never accept client-supplied amount, fee, currency, purpose, payment status or provider reference as authoritative.
+- A browser callback is an untrusted navigation signal, not proof of payment.
+- Payment verification currently updates payment state only. It does not post ledger entries, issue vote credits or settle an organization balance.
+- The existing webhook RPC atomically updates payment/event state but does not post ledger entries or fulfill credits.
 - Webhook payloads are not stored raw; only redacted transaction metadata is persisted.
-- Payouts and transfers are outside this integration slice and remain disabled.
+- Payouts and transfers remain disabled.
+- Do not put ballot choices, candidate IDs, participant contact details or other sensitive election data in Paystack metadata, references, logs or analytics.
 
-## Activation checklist
+## Implementation sequence and release gates
 
-1. Create a Paystack test restricted key and set it as `PAYSTACK_SECRET_KEY`.
-2. Set `PAYSTACK_MODE=test`.
-3. Generate the matching test webhook signing secret and set `PAYSTACK_WEBHOOK_SECRET`.
-4. Apply migration 0030, deploy the Edge Functions and register the public webhook URL in Paystack.
-5. Test initialization, callback verification, webhook signature, duplicate delivery, provider retry after temporary verification failure, and amount/currency mismatch. The webhook application RPC locks the event and payment intent and commits both state changes atomically.
-6. Complete ledger settlement and reconciliation before granting any paid value.
-7. Only after security, legal and operational review should a separate live configuration be considered.
+1. Provision separate test API and webhook signing secrets in Supabase Edge Function secrets; do not send them through chat or store them in Notion.
+2. Enable only the required test-purpose flags and verify signed test delivery and provider test transactions.
+3. Implement server-created purpose-specific intents, scoped authorization, callback handling, idempotent settlement postings, credit issuance/consumption, refunds/reversals, and reconciliation for all three purposes.
+4. Obtain approved pricing, tax, fee allocation, merchant-of-record, custody, settlement, chargeback, paid-voting eligibility and payout policies. Do not infer these from the existence of database enums or accounts.
+5. Only after legal/provider/security/operational approval, install separate live secrets and enable an individual live-purpose flag. Live mode also requires the master switch.
+6. A controlled real-money payment requires separate explicit approval of the exact KES amount, payer and purpose. No configuration change or scope decision authorizes a real charge by itself.
