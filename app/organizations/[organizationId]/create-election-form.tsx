@@ -234,8 +234,10 @@ export function CreateElectionForm({
                 value={election.price_per_credit_minor ? (Number(election.price_per_credit_minor) / 100).toFixed(2) : ""}
                 onChange={(event) => {
                   const amount = Number(event.target.value);
-                  updateElection("price_per_credit_minor", Number.isFinite(amount) && amount > 0
-                    ? String(Math.round(amount * 100))
+                  const amountMinor = Math.round(amount * 100);
+                  updateElection("price_per_credit_minor", Number.isFinite(amount)
+                    && amount > 0 && Number.isSafeInteger(amountMinor)
+                    ? String(amountMinor)
                     : "");
                 }} required />
             </label>
