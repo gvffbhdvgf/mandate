@@ -8,6 +8,8 @@ type PaystackVerifyResponse = {
     reference: string;
     amount: number;
     currency: string;
+    fees_split?: { paystack?: number | string; integration?: number | string; subaccount?: number | string };
+    subaccount?: { subaccount_code?: string; percentage_charge?: number | string };
   };
 };
 
@@ -80,6 +82,38 @@ Deno.serve(async (request: Request) => {
     const currencyMatches = payment.currency === intent.currency;
     const referenceMatches = payment.reference === intent.provider_reference;
     const isSuccess = payment.status === "success" && amountMatches && currencyMatches && referenceMatches;
+
+    if (intent.purpose === "public_vote_credits" && payment.status === "success") {
+      const feesSplit = payment.fees_split;
+      const subaccount = payment.subaccount;
+      const paystackFee = Number(feesSplit?.paystack);
+      const integrationShare = Number(feesSplit?.integration);
+      const organizerShare = Number(feesSplit?.subaccount);
+      if (!feesSplit || !Number.isSafeInteger(paystackFee) || paystackFee < 0
+        || !Number.isSafeInteger(integrationShare) || integrationShare < 0
+        || !Number.isSafeInteger(organizerShare) || organizerShare < 0
+        || !subaccount?.subaccount_code) {
+        return json(503, { error: "PAYSTACK_SPLIT_FACTS_UNAVAILABLE", message: "The provider did not return verifiable split settlement facts. Credits have not been issued." }, cors);
+      }
+      const { data: splitResult, error: splitError } = await admin.rpc("apply_verified_paystack_public_vote_split", {
+        p_event_id: null,
+        p_provider_reference: payment.reference,
+        p_provider_transaction_id: String(payment.id),
+        p_provider_status: payment.status,
+        p_amount_minor: providerAmountMinor,
+        p_currency: payment.currency,
+        p_fees_split: { paystack: paystackFee, integration: integrationShare, subaccount: organizerShare },
+        p_subaccount_code: subaccount.subaccount_code,
+        p_subaccount_percentage_charge: subaccount.percentage_charge == null ? null : Number(subaccount.percentage_charge),
+      });
+      if (splitError || !splitResult) {
+        return json(409, { error: "PAYSTACK_SPLIT_VERIFICATION_FAILED", message: "Payment remains unfulfilled pending split reconciliation." }, cors);
+      }
+      if (splitResult.matched !== true || splitResult.status !== "success") {
+        return json(409, { error: "PAYMENT_REQUIRES_RECONCILIATION", status: splitResult.status ?? "exception", reason: splitResult.reason }, cors);
+      }
+      return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: splitResult.duplicate === true, returnPath }, cors);
+    }
 
     // Terminal states are immutable through this user-facing verification path.
     // A repeat of the same successful provider transaction is safe and idempotent.
