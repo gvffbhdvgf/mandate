@@ -378,6 +378,7 @@ test("verified Paystack success atomically posts an unallocated balanced suspens
   assert.match(migration, /does not classify revenue/i);
   assert.match(smoke, /PAYMENT_EDGE_SERVICE_ROLE_GRANTS_MISSING/);
   assert.match(smoke, /PAYMENT_TABLES_MUST_REMAIN_PRIVATE_TO_BROWSER_ROLES/);
+  assert.ok(smoke.includes("$;"));
   assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_MUST_BE_BALANCED/);
   assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_POSTING_MUST_BE_IDEMPOTENT/);
   assert.match(smoke, /rollback;/);
