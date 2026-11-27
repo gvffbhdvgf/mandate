@@ -28,7 +28,8 @@ export default async function ElectionPage({ params, searchParams }: {
     .maybeSingle();
   const role = membership?.status === "active" ? membership.role : "viewer";
   const canManageRegister = ["owner", "admin", "election_manager"].includes(role);
-  const canViewRegister = ["owner", "admin", "election_manager", "returning_officer", "finance_manager"].includes(role);
+  const canViewRegister = ["owner", "admin", "election_manager", "returning_officer"].includes(role);
+  const canViewAudit = canViewRegister || canManagePayments;
   const canManagePayments = ["owner", "admin", "finance_manager"].includes(role);
   const canOpen = ["owner", "admin", "election_manager"].includes(role);
   const canClose = ["owner", "admin", "election_manager", "returning_officer"].includes(role);
@@ -87,7 +88,7 @@ export default async function ElectionPage({ params, searchParams }: {
   }
 
   let auditTrail = null;
-  if (canViewRegister) {
+  if (canViewAudit) {
     const { data } = await supabase.rpc("get_election_audit_trail", { p_election_id: electionId, p_limit: 50 });
     auditTrail = data;
   }
