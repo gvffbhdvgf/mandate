@@ -20,7 +20,6 @@ Deno.serve(async (request: Request) => {
   if (!paymentsModeEnabled()) {
     return json(503, { error: "PAYMENTS_DISABLED", message: "Webhook processing is restricted to configured Paystack test credentials. Live transactions remain disabled." });
   }
-  if (!env("PAYSTACK_WEBHOOK_SECRET")) return json(503, { error: "PAYSTACK_WEBHOOK_SECRET_MISSING" });
 
   const rawBody = await request.text();
   const signature = request.headers.get("Paystack-Signature");
