@@ -22,26 +22,11 @@ begin
 end;
 $$;
 
-create trigger ledger_entries_append_only
-before insert or update or delete on public.ledger_entries
+-- Existing migration 0007 already protects posted ledger entries and transactions
+-- against update/delete. This additional guard permits inserts only while pending.
+create trigger ledger_entries_pending_insert_guard
+before insert on public.ledger_entries
 for each row execute function mandate_private.guard_ledger_entry_immutability();
-
-create or replace function mandate_private.guard_posted_ledger_transaction_immutability()
-returns trigger
-language plpgsql
-set search_path = pg_catalog
-as $$
-begin
-  if tg_op = 'DELETE' or old.status in ('posted','reversed') then
-    raise exception 'POSTED_LEDGER_TRANSACTIONS_APPEND_ONLY' using errcode = '55000';
-  end if;
-  return new;
-end;
-$$;
-
-create trigger ledger_transactions_append_only
-before update or delete on public.ledger_transactions
-for each row execute function mandate_private.guard_posted_ledger_transaction_immutability();
 
 create or replace function mandate_private.post_ledger_transaction(
   p_transaction_type text,
