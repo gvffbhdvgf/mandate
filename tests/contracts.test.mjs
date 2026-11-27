@@ -137,7 +137,7 @@ test("election audit timeline exposes only redacted non-ballot activity", async 
   assert.match(migration, /action not like 'wallet\.%'/);
   assert.match(migration, /redacted_metadata/);
   assert.match(migration, /grant execute on function public\.get_election_audit_trail.*to authenticated/);
-  assert.match(component, /Event details/);
+  assert.match(component, /View event details/);
 });
 
 test("audit timeline uses a strict action allowlist and removes free-text metadata", async () => {
@@ -280,4 +280,60 @@ test("concurrency fixtures record authority confirmation before opening", async 
   const concurrency = await read("../scripts/concurrency.acceptance.mjs");
   assert.match(concurrency, /public[.]confirm_election_setup/);
   assert.match(concurrency, /public[.]open_election/);
+});
+
+test("election activity presents human-readable details instead of serialized JSON", async () => {
+  const timeline = await read("../app/organizations/[organizationId]/elections/[electionId]/audit-timeline.tsx");
+  assert.match(timeline, /formatAuditAction/);
+  assert.match(timeline, /formatAuditMetadata/);
+  assert.match(timeline, /View event details/);
+  assert.doesNotMatch(timeline, /JSON\.stringify/);
+});
+
+test("voter import commit requires an explicit confirmation from the administrator", async () => {
+  const actions = await read("../app/actions/voters.ts");
+  assert.match(actions, /confirmImport/);
+  assert.match(actions, /Review the voter count and confirm before adding the register/);
+  assert.match(actions, /p_batch_id: batchId/);
+});
+
+test("irreversible election operations require explicit server-validated confirmation", async () => {
+  const lifecycle = await read("../app/actions/lifecycle.ts");
+  const invitations = await read("../app/actions/invitations.ts");
+  assert.match(lifecycle, /confirmClose/);
+  assert.match(lifecycle, /confirmPublish/);
+  assert.match(invitations, /confirmInvitations/);
+});
+
+test("destructive and externally visible actions have explicit confirmation controls", async () => {
+  const lifecycleForm = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
+  const invitationsForm = await read("../app/organizations/[organizationId]/elections/[electionId]/dispatch-invitations-form.tsx");
+  assert.match(lifecycleForm, /name="confirmClose"/);
+  assert.match(lifecycleForm, /name="confirmPublish"/);
+  assert.match(invitationsForm, /name="confirmInvitations"/);
+});
+
+test("member access revocation and invitation revocation require explicit confirmation", async () => {
+  const actions = await read("../app/actions/organization-members.ts");
+  const panel = await read("../app/organizations/[organizationId]/members-panel.tsx");
+  assert.match(actions, /confirmRevokeMember/);
+  assert.match(actions, /confirmRevokeInvitation/);
+  assert.match(panel, /name="confirmRevokeMember"/);
+  assert.match(panel, /name="confirmRevokeInvitation"/);
+});
+
+test("invitation UI explains the current email-only delivery limitation", async () => {
+  const invitationForm = await read("../app/organizations/[organizationId]/elections/[electionId]/dispatch-invitations-form.tsx");
+  const electionPage = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
+  const actions = await read("../app/actions/invitations.ts");
+  assert.match(invitationForm, /Email is the currently supported invitation channel/);
+  assert.match(electionPage, /[Pp]hone-only voters/);
+  assert.match(actions, /tone: skippedNoEmail > 0 \|\| failed > 0 \? "warning" : "success"/);
+});
+
+test("success feedback is announced and can be dismissed accessibly", async () => {
+  const toast = await read("../app/components/action-toast.tsx");
+  assert.match(toast, /role="status"/);
+  assert.match(toast, /aria-live="polite"/);
+  assert.match(toast, /aria-label="Dismiss notification"/);
 });

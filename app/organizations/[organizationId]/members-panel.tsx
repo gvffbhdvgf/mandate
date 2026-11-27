@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import { formatRoleLabel, formatStatusLabel } from "../../../lib/ui/presentation";
+import { ActionToast } from "../../components/action-toast";
 import {
   changeOrganizationMemberRoleAction,
   createOrganizationInvitationAction,
@@ -46,7 +48,7 @@ export function OrganizationMembersPanel({
     : roles.filter(([value]) => !["admin", "finance_manager"].includes(value));
 
   return (
-    <section className="panel members-panel">
+    <section className="panel members-panel" id="members">
       <div className="panel-heading">
         <div><p className="kicker">ACCESS & PERMISSIONS</p><h2>Organization members</h2></div>
         <span className="count">{members.length}</span>
@@ -57,16 +59,16 @@ export function OrganizationMembersPanel({
         <h3>Invite a member</h3>
         <form action={action} className="member-invite-form">
           <input type="hidden" name="organizationId" value={organizationId} />
-          <label>Email address<input name="email" type="email" autoComplete="email" placeholder="colleague@example.com" required /></label>
-          <label>Organization role
-            <select name="role" defaultValue="election_manager">
+          <label htmlFor="member-invite-email">Email address<input id="member-invite-email" name="email" type="email" autoComplete="email" inputMode="email" placeholder="colleague@example.com" required /></label>
+          <label htmlFor="member-invite-role">Organization role
+            <select id="member-invite-role" name="role" defaultValue="election_manager">
               {availableRoles.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
             </select>
           </label>
           <button className="primary-button" disabled={pending}>{pending ? "Sending…" : "Send invitation"}</button>
         </form>
         {state.error && <p className="form-error" role="alert">{state.error}</p>}
-        {state.message && <p className="form-hint" role="status">{state.message}</p>}
+        <ActionToast message={state.message} />
       </div>
 
       <div className="member-list">
@@ -76,10 +78,10 @@ export function OrganizationMembersPanel({
             <div className="member-identity">
               <strong>{member.display_name || member.email || "Organization member"}</strong>
               <span className="muted">{member.email || member.user_id}</span>
-              <span className="status-pill">{member.status}</span>
+              <span className={`status-pill status-${member.status}`}>{formatStatusLabel(member.status)}</span>
             </div>
             <div className="member-controls">
-              {member.role === "owner" ? <span className="role-label">Owner</span> : (
+              {member.role === "owner" ? null : (
                 <>
                   <form action={changeOrganizationMemberRoleAction} className="inline-member-form">
                     <input type="hidden" name="organizationId" value={organizationId} />
@@ -92,11 +94,12 @@ export function OrganizationMembersPanel({
                   <form action={revokeOrganizationMemberAction}>
                     <input type="hidden" name="organizationId" value={organizationId} />
                     <input type="hidden" name="memberId" value={member.member_id} />
-                    <button className="quiet-button danger-button">Revoke access</button>
+                    <label className="member-confirmation"><input type="checkbox" name="confirmRevokeMember" value="true" required /> Confirm removal</label>
+                    <button className="quiet-button danger-button" aria-label={`Revoke access for ${member.email ?? member.user_id}`}>Revoke access</button>
                   </form>
                 </>
               )}
-              <span className="role-label">{member.role.replaceAll("_", " ")}</span>
+              <span className="role-label">{formatRoleLabel(member.role)}</span>
             </div>
           </article>
         ))}
@@ -109,12 +112,13 @@ export function OrganizationMembersPanel({
             <div className="member-identity">
               <strong>{invitation.email}</strong>
               <span className="muted">Expires {new Date(invitation.expires_at).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}</span>
-              <span className="role-label">{invitation.role.replaceAll("_", " ")}</span>
+              <span className="role-label">{formatRoleLabel(invitation.role)}</span>
             </div>
             <form action={revokeOrganizationInvitationAction}>
               <input type="hidden" name="organizationId" value={organizationId} />
               <input type="hidden" name="invitationId" value={invitation.id} />
-              <button className="quiet-button danger-button">Revoke invitation</button>
+              <label className="member-confirmation"><input type="checkbox" name="confirmRevokeInvitation" value="true" required /> Confirm revocation</label>
+              <button className="quiet-button danger-button" aria-label={`Revoke invitation for ${invitation.email}`}>Revoke invitation</button>
             </form>
           </article>
         ))}

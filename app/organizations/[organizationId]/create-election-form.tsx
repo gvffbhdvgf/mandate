@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { formatResultVisibility, formatTiePolicy, formatVotingMode } from "../../../lib/ui/presentation";
+import { ActionToast } from "../../components/action-toast";
 import {
   finalizeAndConfirmElectionSetupAction,
   saveElectionSetupDraftAction,
@@ -177,19 +179,25 @@ export function CreateElectionForm({
               <button type="button" className="organization-item" key={draft.id}
                 onClick={() => resume(draft)} disabled={pending}>
                 <span><strong>{draft.title}</strong><small>Step {draft.current_step} of 6 · Saved {new Date(draft.updated_at).toLocaleString("en-KE")}</small></span>
-                <span className="status-pill">Resume</span>
+                <span className="status-pill status-saved">Resume</span>
               </button>
             ))}
           </div>
         </section>
       )}
 
-      <div className="form-section-title">Guided election setup · Step {step} of 6</div>
-      <div className="form-hint" aria-live="polite">
-        {["Identity","Voting mode","Participation rules","Contests and options","Schedule and results","Review and authority"][step - 1]}
+      <div className="wizard-progress-wrap">
+        <div className="wizard-progress-copy">
+          <span>Step {step} of 6</span>
+          <strong aria-live="polite">{["Election details", "Voting method", "Participation rules", "Contests and options", "Schedule and results", "Review and approval"][step - 1]}</strong>
+        </div>
+        <div className="wizard-progress" role="progressbar" aria-label="Election setup progress" aria-valuemin={1} aria-valuemax={6} aria-valuenow={step}>
+          <span style={{ width: `${(step / 6) * 100}%` }} />
+        </div>
+        <p className="form-hint">Your progress is saved securely as you continue. You can return to this draft later.</p>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
-      {notice && <p className="form-hint" role="status">{notice}</p>}
+      <ActionToast message={notice} />
 
       {step === 1 && <>
         <label>Election name
@@ -318,13 +326,13 @@ export function CreateElectionForm({
       {step === 6 && <>
         <section className="panel form-stack">
           <h3>{election.title || "Untitled election"}</h3>
-          <p className="muted">{election.voting_mode.replaceAll("_", " ")} · {election.result_visibility} results · {election.timezone}</p>
+          <p className="muted">{formatVotingMode(election.voting_mode)} · {formatResultVisibility(election.result_visibility)} · {election.timezone}</p>
           <p>{election.description || "No description supplied."}</p>
           <p>Starts: {election.starts_at ? new Date(election.starts_at).toLocaleString("en-KE", { timeZone: election.timezone }) : "Not set"}</p>
           <p>Ends: {election.ends_at ? new Date(election.ends_at).toLocaleString("en-KE", { timeZone: election.timezone }) : "Not set"}</p>
           {payload.contests.map((contest, index) => (
             <div key={index}><strong>{index + 1}. {contest.title || "Untitled contest"}</strong>
-              <p className="muted">{contest.is_required ? "Required" : "Optional"} · {contest.tie_policy.replaceAll("_", " ")}</p>
+              <p className="muted">{contest.is_required ? "Required" : "Optional"} · {formatTiePolicy(contest.tie_policy)}</p>
               <ul>{contest.options.map((option, oi) => <li key={oi}>{option.display_name || "Unnamed option"}{option.profile ? ` — ${option.profile}` : ""}</li>)}</ul>
             </div>
           ))}

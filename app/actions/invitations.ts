@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 
-export type InvitationActionState = { error?: string; message?: string; hasMore?: boolean };
+export type InvitationActionState = { error?: string; message?: string; hasMore?: boolean; tone?: "success" | "warning" };
 
 export async function dispatchVoterInvitationsAction(
   _previousState: InvitationActionState,
@@ -12,6 +12,9 @@ export async function dispatchVoterInvitationsAction(
 ): Promise<InvitationActionState> {
   const organizationId = String(formData.get("organizationId") ?? "");
   const electionId = String(formData.get("electionId") ?? "");
+  if (formData.get("confirmInvitations") !== "true") {
+    return { error: "Confirm that the voter contact details are correct before sending invitations." };
+  }
   if (![organizationId, electionId].every((value) => z.string().uuid().safeParse(value).success)) {
     return { error: "The election reference is invalid. Refresh and try again." };
   }
@@ -51,6 +54,7 @@ export async function dispatchVoterInvitationsAction(
   const failed = Number(responseData?.failed ?? 0);
   return {
     message: `${sent} invitations sent. ${skippedNoEmail} eligible voters have no email address and need another delivery channel. ${failed} sends failed.`,
+    tone: skippedNoEmail > 0 || failed > 0 ? "warning" : "success",
     hasMore: Boolean(responseData?.hasMore),
   };
 }

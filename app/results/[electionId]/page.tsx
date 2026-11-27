@@ -19,7 +19,7 @@ export default async function PublicResultsPage({ params }: { params: Promise<{ 
   if (error || !data) notFound();
 
   return (
-    <main className="ballot-shell">
+    <main className="ballot-shell" id="main-content" tabIndex={-1}>
       <header className="ballot-header">
         <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
         <span className="eyebrow">PUBLISHED RESULTS</span>
@@ -41,7 +41,7 @@ export default async function PublicResultsPage({ params }: { params: Promise<{ 
           {contest.options.map((option: any) => (
             <div className="result-option" key={option.id}>
               <div className="result-option-label"><span>{option.name}</span><strong>{option.voteUnits} votes · {(option.shareBasisPoints / 100).toFixed(1)}%</strong></div>
-              <div className="result-bar"><span style={{ width: `${option.shareBasisPoints / 100}%` }} /></div>
+              <div className="result-bar" role="progressbar" aria-label={`${option.name} share of votes`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={option.shareBasisPoints / 100}><span style={{ width: `${option.shareBasisPoints / 100}%` }} /></div>
               {option.isWinner && <span className="winner-label">Winner</span>}
               {option.isTied && <span className="muted">Tied</span>}
             </div>

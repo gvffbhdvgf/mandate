@@ -28,7 +28,7 @@ export function InvitationTokenCapture() {
   return (
     <form ref={formRef} action={stageOrganizationInvitationAction} className="form-stack">
       <input ref={tokenRef} type="hidden" name="token" />
-      <p className="form-hint" role="status">{message}</p>
+      <p className="form-hint" role="status" aria-live="polite">{message}</p>
       <noscript><p className="form-error">JavaScript is required to securely process this invitation link.</p></noscript>
     </form>
   );
