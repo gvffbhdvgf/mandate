@@ -401,3 +401,20 @@ test("Paystack refund and dispute webhooks freeze payments for explicit reconcil
   assert.match(webhook, /reconciliationRequired: true/);
   assert.match(smoke, /rollback;/);
 });
+
+
+test("verified provider amounts are captured even when they mismatch the intent", async () => {
+  const migration = await read("../supabase/migrations/20261127170000_0039_verified_provider_amount_capture.sql");
+  const smoke = await read("../supabase/tests/verified_provider_amount_mismatch_smoke.sql");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  assert.match(migration, /provider_amount_minor bigint/);
+  assert.match(migration, /provider_currency text/);
+  assert.match(migration, /new\.provider_status = 'success'/);
+  assert.match(migration, /new\.provider_amount_minor/);
+  assert.match(migration, /payment_receipt_pending_allocation/);
+  assert.match(smoke, /MISMATCHED_PROVIDER_SUCCESS_MUST_CAPTURE_ACTUAL_AMOUNT_ONCE/);
+  assert.match(smoke, /7900/);
+  assert.match(verify, /provider_amount_minor: providerAmountMinor/);
+  assert.match(verify, /provider_status: payment\.status/);
+  assert.match(smoke, /rollback;/);
+});
