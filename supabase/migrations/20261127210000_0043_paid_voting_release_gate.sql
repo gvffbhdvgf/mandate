@@ -644,7 +644,20 @@ language plpgsql
 security definer
 set search_path = pg_catalog
 as $$
+declare
+  v_mode public.voting_mode;
 begin
+  if tg_table_name = 'payment_intents' then
+    if new.purpose <> 'public_vote_credits' then return new; end if;
+  elsif tg_table_name = 'ballots' then
+    select voting_mode into v_mode
+    from public.elections
+    where id = new.election_id;
+    if v_mode is distinct from 'public_paid' then return new; end if;
+  else
+    return new;
+  end if;
+
   if not exists (
     select 1 from public.platform_payment_feature_flags
     where singleton and public_vote_credits_enabled
@@ -669,7 +682,6 @@ drop trigger if exists ballots_public_paid_feature_guard on public.ballots;
 create trigger ballots_public_paid_feature_guard
 before insert on public.ballots
 for each row
-when (exists(select 1 from public.elections e where e.id=new.election_id and e.voting_mode='public_paid'))
 execute function mandate_private.guard_public_vote_credit_feature_flag();
 
 comment on function mandate_private.tally_and_reconcile(uuid)
