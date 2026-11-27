@@ -8,6 +8,7 @@ import { DispatchInvitationsForm } from "./dispatch-invitations-form";
 import { ElectionLifecycleControls } from "./lifecycle-controls";
 import { ElectionAuditTimeline } from "./audit-timeline";
 import { SetupConfirmation } from "./setup-confirmation";
+import { PlatformFeeCheckout } from "./platform-fee-checkout";
 
 export default async function ElectionPage({ params, searchParams }: {
   params: Promise<{ organizationId: string; electionId: string }>;
@@ -28,6 +29,8 @@ export default async function ElectionPage({ params, searchParams }: {
   const role = membership?.status === "active" ? membership.role : "viewer";
   const canManageRegister = ["owner", "admin", "election_manager"].includes(role);
   const canViewRegister = ["owner", "admin", "election_manager", "returning_officer"].includes(role);
+  const canManagePayments = ["owner", "admin", "finance_manager"].includes(role);
+  const canViewAudit = canViewRegister || canManagePayments;
   const canOpen = ["owner", "admin", "election_manager"].includes(role);
   const canClose = ["owner", "admin", "election_manager", "returning_officer"].includes(role);
   const canTally = canClose;
@@ -35,7 +38,7 @@ export default async function ElectionPage({ params, searchParams }: {
 
   const { data: election, error } = await supabase
     .from("elections")
-    .select("id,organization_id,title,description,status,voting_mode,starts_at,ends_at,timezone,result_visibility,setup_confirmed_at")
+    .select("id,organization_id,title,description,status,voting_mode,public_slug,currency,price_per_credit_minor,max_credits_per_participant,paid_voting_authorized_at,starts_at,ends_at,timezone,result_visibility,setup_confirmed_at,platform_fee_status,platform_fee_amount_minor,platform_fee_eligible_voter_count,platform_fee_policy_version,platform_fee_quoted_at")
     .eq("id", electionId)
     .eq("organization_id", organizationId)
     .maybeSingle();
@@ -48,13 +51,33 @@ export default async function ElectionPage({ params, searchParams }: {
     .eq("election_id", electionId)
     .order("display_order");
 
-  const { count: voterCount, error: voterCountError } = canViewRegister
+  const { count: voterCount, error: voterCountError } = canViewRegister && election.voting_mode !== "public_paid"
     ? await supabase.from("election_voters").select("id", { count: "exact", head: true }).eq("election_id", electionId)
+      .eq("eligibility_status", "eligible")
     : { count: null, error: null };
   if (voterCountError) throw new Error("Could not load the voter register count.");
 
+  let platformFeeQuote: {
+    eligibleVoterCount: number; amountMinor: number; currency: string; policyVersion: number; status: string;
+  } | null = null;
+  if (canManagePayments && election.voting_mode !== "public_paid") {
+    const { data: quote } = await supabase.rpc("get_platform_fee_quote", { p_election_id: electionId });
+    if (quote && typeof quote === "object") {
+      const value = quote as Record<string, unknown>;
+      const eligibleVoterCount = Number(value.eligibleVoterCount);
+      const amountMinor = Number(value.amountMinor);
+      const policyVersion = Number(value.policyVersion);
+      if (Number.isSafeInteger(eligibleVoterCount) && eligibleVoterCount >= 0
+        && Number.isSafeInteger(amountMinor) && amountMinor > 0
+        && Number.isSafeInteger(policyVersion) && policyVersion > 0
+        && value.currency === "KES" && typeof value.status === "string") {
+        platformFeeQuote = { eligibleVoterCount, amountMinor, currency: "KES", policyVersion, status: value.status };
+      }
+    }
+  }
+
   let importBatch = null;
-  if (canViewRegister) {
+  if (canViewRegister && election.voting_mode !== "public_paid") {
     let importQuery = supabase.from("import_batches")
       .select("id,status,total_rows,accepted_rows,rejected_rows,created_at,original_filename")
       .eq("election_id", electionId);
@@ -65,7 +88,7 @@ export default async function ElectionPage({ params, searchParams }: {
   }
 
   let auditTrail = null;
-  if (canViewRegister) {
+  if (canViewAudit) {
     const { data } = await supabase.rpc("get_election_audit_trail", { p_election_id: electionId, p_limit: 50 });
     auditTrail = data;
   }
@@ -111,9 +134,37 @@ export default async function ElectionPage({ params, searchParams }: {
         </div>
       </section>
       {canOpen && election.status === "draft" && (
-        <SetupConfirmation electionId={electionId} confirmed={Boolean(election.setup_confirmed_at)} />
+        election.voting_mode === "public_paid" && !election.paid_voting_authorized_at ? (
+          <section className="panel">
+            <p className="kicker">PLATFORM AUTHORIZATION PENDING</p>
+            <h2>Public paid voting is configured but not released</h2>
+            <p className="muted">The organization can prepare the public election configuration, but Mandate must complete legal, provider, pricing and settlement approval before setup confirmation and opening are available.</p>
+          </section>
+        ) : (
+          <SetupConfirmation electionId={electionId} confirmed={Boolean(election.setup_confirmed_at)} />
+        )
       )}
-      {canViewRegister && (
+      {election.voting_mode === "public_paid" && (
+        <section className="panel">
+          <p className="kicker">PUBLIC PARTICIPANT ACCESS</p>
+          <h2>Email-verified voting credits</h2>
+          <p className="muted">Participants verify an email address, purchase credits through Paystack, and cast ballots without their contact identity being written to ballot records.</p>
+          <div className="summary-grid">
+            <div><span>Public link</span><strong>{election.public_slug ? `/public-vote/${election.public_slug}` : "Not configured"}</strong></div>
+            <div><span>Credit price</span><strong>{election.currency === "KES" && election.price_per_credit_minor ? `KSh ${(Number(election.price_per_credit_minor)/100).toFixed(2)}` : "Not configured"}</strong></div>
+            <div><span>Participant cap</span><strong>{election.max_credits_per_participant ?? "Not configured"}</strong></div>
+            <div><span>Platform approval</span><strong>{election.paid_voting_authorized_at ? "Authorized" : "Pending"}</strong></div>
+          </div>
+        </section>
+      )}
+      {canManagePayments && platformFeeQuote && ["draft", "scheduled"].includes(election.status) && election.voting_mode !== "public_paid" && (
+        <PlatformFeeCheckout
+          organizationId={organizationId}
+          electionId={electionId}
+          quote={platformFeeQuote}
+        />
+      )}
+      {canViewRegister && election.voting_mode !== "public_paid" && (
         <section className="panel voter-register-panel">
           <div className="panel-heading"><div><p className="kicker">ELIGIBLE VOTERS</p><h2>Voter register</h2></div><span className="count">{voterCount ?? 0}</span></div>
           <p className="muted">Upload a private CSV register, validate every row, then commit the eligible voters to this draft election.</p>
@@ -128,16 +179,25 @@ export default async function ElectionPage({ params, searchParams }: {
               {importBatch.status === "committed" && <p className="form-hint">This import has been committed to the voter register.</p>}
             </div>
           )}
-          {canManageRegister && election.status === "draft" && (
+          {canManageRegister && election.status === "draft" && !election.platform_fee_quoted_at && (
             <>
               <p className="template-link"><Link href="/voter-register-template.csv" download>Download CSV template</Link></p>
               <VoterImportForm organizationId={organizationId} electionId={electionId} />
               {(voterCount ?? 0) > 0 && (
                 <div className="invitation-section">
                   <div className="form-section-title">Voter invitations</div>
-                  <p className="form-hint">Invitations are sent privately to registered email addresses. Phone-only voters need a separate delivery channel. The raw access token is never shown in this workspace.</p>
-                  <DispatchInvitationsForm organizationId={organizationId} electionId={electionId} />
+                  {election.platform_fee_status === "paid" ? (
+                    <>
+                      <p className="form-hint">Invitations are sent privately to registered email addresses. Phone-only voters need a separate delivery channel. The raw access token is never shown in this workspace.</p>
+                      <DispatchInvitationsForm organizationId={organizationId} electionId={electionId} />
+                    </>
+                  ) : (
+                    <p className="form-hint">Pay the Mandate platform service fee before voter invitations can be dispatched.</p>
+                  )}
                 </div>
+              )}
+              {election.platform_fee_quoted_at && (
+                <p className="form-hint">The voter register is frozen against platform-fee policy v{election.platform_fee_policy_version} and the quoted eligible-voter count. To change the register, the invoice must be cancelled through an audited support process.</p>
               )}
             </>
           )}
@@ -194,7 +254,9 @@ export default async function ElectionPage({ params, searchParams }: {
             <ul>{options.map((option) => <li key={option.id}><strong>{option.display_name}</strong>{option.profile && <p className="muted">{option.profile}</p>}</li>)}</ul>
           </article>
         ))}
-        <p className="form-hint">Next: complete the voter register, review the election rules, and verify the opening checklist. This draft cannot accept votes yet.</p>
+        <p className="form-hint">{election.voting_mode === "public_paid"
+          ? "Next: complete platform authorization, review the public price and participant cap, then confirm and open the election. Public paid voting cannot accept purchases or ballots until all release gates are satisfied."
+          : "Next: complete the voter register, review the election rules, and verify the opening checklist. This draft cannot accept votes yet."}</p>
       </section>
     </main>
   );

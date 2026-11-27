@@ -51,13 +51,33 @@ insert into trigger_acl_append_only_probe values (1);
 grant select, update on trigger_acl_append_only_probe to authenticated;
 
 create temporary table trigger_acl_election_snapshot_probe(
-  status text, rules_snapshot jsonb, candidate_snapshot jsonb, rules_hash text,
-  voting_mode text, starts_at timestamptz, ends_at timestamptz
+  status text,
+  rules_snapshot jsonb,
+  candidate_snapshot jsonb,
+  rules_hash text,
+  voting_mode text,
+  starts_at timestamptz,
+  ends_at timestamptz,
+  public_slug text,
+  currency char(3),
+  price_per_credit_minor bigint,
+  max_credits_per_participant integer,
+  contact_verification_required boolean,
+  paid_voting_authorized_at timestamptz,
+  paid_voting_authorized_by uuid
 );
 create trigger trigger_acl_election_snapshot_probe_before_update
 before update on trigger_acl_election_snapshot_probe
 for each row execute function mandate_private.guard_election_snapshot();
-insert into trigger_acl_election_snapshot_probe values ('open','{}','{}','old','registered_single',now(),now()+interval '1 hour');
+insert into trigger_acl_election_snapshot_probe(
+  status, rules_snapshot, candidate_snapshot, rules_hash, voting_mode,
+  starts_at, ends_at, public_slug, currency, price_per_credit_minor,
+  max_credits_per_participant, contact_verification_required,
+  paid_voting_authorized_at, paid_voting_authorized_by
+) values (
+  'open', '{}', '{}', 'old', 'registered_single',
+  now(), now()+interval '1 hour', null, null, null, null, true, null, null
+);
 grant select, update on trigger_acl_election_snapshot_probe to authenticated;
 
 create temporary table trigger_acl_ledger_probe(id uuid, status text);

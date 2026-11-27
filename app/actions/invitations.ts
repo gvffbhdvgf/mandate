@@ -43,6 +43,9 @@ export async function dispatchVoterInvitationsAction(
     if (responseData?.error === "INVITATION_DELIVERY_NOT_CONFIGURED") {
       return { error: "Invitation delivery is not configured yet. A verified sender domain and site URL are required; no invitations or tokens were issued." };
     }
+    if (responseData?.error === "PLATFORM_FEE_PAYMENT_REQUIRED") {
+      return { error: "Pay the verified Mandate platform service fee before sending voter invitations." };
+    }
     return { error: "The invitation batch could not be sent. No ballot choices or voter tokens were exposed." };
   }
 

@@ -27,6 +27,32 @@ values(current_setting('test.org_id')::uuid,current_setting('test.election_id'):
  encode(extensions.digest(convert_to('secret-test-token-1234567890-abcdefghijklmnopqrstuvwxyz','UTF8'),'sha256'),'hex'),now());
 set local role authenticated;
 select set_config('request.jwt.claim.sub','99999999-9999-4999-8999-999999999999',true);
+do $$
+declare v_quote jsonb; v_intent jsonb;
+begin
+  v_quote:=public.get_platform_fee_quote(current_setting('test.election_id')::uuid);
+  v_intent:=public.create_platform_fee_payment_intent(
+    current_setting('test.election_id')::uuid,
+    (v_quote->>'eligibleVoterCount')::integer,
+    (v_quote->>'amountMinor')::bigint,
+    (v_quote->>'policyVersion')::integer
+  );
+  perform set_config('test.platform_fee_intent_id',v_intent->>'paymentIntentId',true);
+end $$;
+reset role;
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+update public.payment_intents
+set status='success',
+    provider_transaction_id='paystack-ballot-context-fee',
+    provider_status='success',
+    provider_amount_minor=50000,
+    provider_currency='KES',
+    verified_at=now()
+where id=current_setting('test.platform_fee_intent_id')::uuid;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','99999999-9999-4999-8999-999999999999',true);
 select public.open_election(current_setting('test.election_id')::uuid,true);
 set local role anon;
 do $$

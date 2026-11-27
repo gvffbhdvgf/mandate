@@ -1,6 +1,7 @@
 name: Paystack edge integration
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, feat/m2-election-setup-lifecycle-next]
   pull_request:
@@ -38,6 +39,11 @@ jobs:
           deno check --node-modules-dir=none supabase/functions/paystack-initialize/index.ts
           deno check --node-modules-dir=none supabase/functions/paystack-verify/index.ts
           deno check --node-modules-dir=none supabase/functions/paystack-webhook/index.ts
+          deno check --node-modules-dir=none supabase/functions/send-voter-invitations/index.ts
+          deno check --node-modules-dir=none supabase/functions/public-election-details/index.ts
+          deno check --node-modules-dir=none supabase/functions/public-participant-session/index.ts
+          deno check --node-modules-dir=none supabase/functions/public-vote-credit-intent/index.ts
+          deno check --node-modules-dir=none supabase/functions/paystack-settlement-import/index.ts
 
       - name: Test Paystack webhook signature verification
-        run: deno test --node-modules-dir=none --allow-env=PAYSTACK_WEBHOOK_SECRET supabase/functions/_shared/paystack.test.ts
+        run: deno test --node-modules-dir=none --allow-env supabase/functions/_shared/paystack.test.ts

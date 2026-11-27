@@ -1,4 +1,4 @@
-import { adminClient, assertOrganizationManager, authenticate, corsHeaders, json, paystackRequest, paymentsModeEnabled } from "../_shared/paystack.ts";
+import { adminClient, assertOrganizationFinanceManager, authenticate, corsHeaders, json, paystackRequest, paymentsModeEnabled } from "../_shared/paystack.ts";
 
 type PaystackVerifyResponse = {
   status: boolean;
@@ -8,6 +8,8 @@ type PaystackVerifyResponse = {
     reference: string;
     amount: number;
     currency: string;
+    fees_split?: { paystack?: number | string; integration?: number | string; subaccount?: number | string };
+    subaccount?: { subaccount_code?: string; percentage_charge?: number | string };
   };
 };
 
@@ -18,7 +20,7 @@ Deno.serve(async (request: Request) => {
 
   try {
     if (!paymentsModeEnabled()) {
-      return json(503, { error: "PAYMENTS_DISABLED", message: "Payment verification is restricted to configured Paystack test credentials. Live transactions remain disabled." }, cors);
+      return json(503, { error: "PAYMENTS_DISABLED", message: "A valid mode-specific Paystack configuration is required." }, cors);
     }
 
     const { user, caller } = await authenticate(request);
@@ -30,46 +32,189 @@ Deno.serve(async (request: Request) => {
     const admin = adminClient();
     const { data: intent, error } = await admin
       .from("payment_intents")
-      .select("id,organization_id,purpose,provider_reference,amount_minor,currency,status")
+      .select("id,organization_id,election_id,participant_id,purpose,provider_reference,amount_minor,currency,status,provider_transaction_id")
       .eq("provider_reference", body.reference)
       .maybeSingle();
     if (error || !intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" }, cors);
-    if (!intent.organization_id) return json(409, { error: "PAYMENT_INTENT_REQUIRES_ORGANIZATION" }, cors);
-    if (intent.purpose === "public_vote_credits") return json(409, { error: "PAID_VOTING_FEATURE_GATED" }, cors);
-    await assertOrganizationManager(caller, intent.organization_id, user.id);
+    if (!paymentsModeEnabled()) return json(503, { error: "PAYMENT_PROVIDER_CONFIGURATION_UNAVAILABLE" }, cors);
+    if (intent.purpose === "public_vote_credits") {
+      if (intent.organization_id || !intent.election_id || !intent.participant_id || !user.email_confirmed_at) {
+        return json(403, { error: "VERIFIED_PARTICIPANT_REQUIRED" }, cors);
+      }
+      const { data: participant, error: participantError } = await admin
+        .from("public_participants")
+        .select("auth_user_id,verification_status")
+        .eq("id", intent.participant_id)
+        .eq("election_id", intent.election_id)
+        .maybeSingle();
+      if (participantError || !participant || participant.auth_user_id !== user.id
+        || participant.verification_status !== "verified") {
+        return json(403, { error: "VERIFIED_PARTICIPANT_REQUIRED" }, cors);
+      }
+    } else {
+      if (!intent.organization_id) return json(409, { error: "PAYMENT_INTENT_REQUIRES_ORGANIZATION" }, cors);
+      await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
+    }
+
+    let returnPath = "/dashboard";
+    if (intent.purpose === "public_vote_credits" && intent.election_id) {
+      const { data: election, error: electionError } = await admin
+        .from("elections")
+        .select("public_slug")
+        .eq("id", intent.election_id)
+        .maybeSingle();
+      if (electionError || !election?.public_slug
+        || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(election.public_slug)) {
+        return json(409, { error: "PUBLIC_ELECTION_RETURN_PATH_UNAVAILABLE" }, cors);
+      }
+      returnPath = `/public-vote/${election.public_slug}`;
+    } else if (intent.purpose === "platform_fee" && intent.election_id && intent.organization_id) {
+      returnPath = `/organizations/${intent.organization_id}/elections/${intent.election_id}`;
+    }
 
     const result = await paystackRequest<PaystackVerifyResponse>(`/transaction/verify/${encodeURIComponent(body.reference)}`);
     const payment = result.data;
-    const amountMatches = Number(payment.amount) === Number(intent.amount_minor);
+    const providerAmountMinor = Number(payment.amount);
+    if (!Number.isSafeInteger(providerAmountMinor) || providerAmountMinor <= 0) {
+      return json(409, { error: "PAYMENT_AMOUNT_INVALID" }, cors);
+    }
+    const amountMatches = providerAmountMinor === Number(intent.amount_minor);
     const currencyMatches = payment.currency === intent.currency;
     const referenceMatches = payment.reference === intent.provider_reference;
     const isSuccess = payment.status === "success" && amountMatches && currencyMatches && referenceMatches;
+
+    if (intent.purpose === "public_vote_credits" && payment.status === "success") {
+      if (!referenceMatches) {
+        const { data: quarantined, error: quarantineError } = await admin
+          .from("payment_intents")
+          .update({
+            status: "exception",
+            split_status: "exception",
+            provider_transaction_id: String(payment.id),
+            provider_status: payment.status,
+            provider_amount_minor: providerAmountMinor,
+            provider_currency: payment.currency,
+            verified_at: new Date().toISOString(),
+          })
+          .eq("id", intent.id)
+          .in("status", ["initialized", "pending"])
+          .select("id")
+          .maybeSingle();
+        if (quarantineError) return json(500, { error: "PAYMENT_REFERENCE_MISMATCH_PERSIST_FAILED" }, cors);
+        if (!quarantined) return json(409, { error: "PAYMENT_STATE_CHANGED" }, cors);
+        return json(409, { error: "PAYMENT_REFERENCE_MISMATCH", status: "exception" }, cors);
+      }
+      const feesSplit = payment.fees_split;
+      const subaccount = payment.subaccount;
+      const paystackFee = Number(feesSplit?.paystack);
+      const integrationShare = Number(feesSplit?.integration);
+      const organizerShare = Number(feesSplit?.subaccount);
+      const subaccountPercentageCharge = subaccount?.percentage_charge == null ? null : Number(subaccount.percentage_charge);
+      if (!feesSplit || feesSplit.paystack == null || feesSplit.integration == null || feesSplit.subaccount == null
+        || (subaccountPercentageCharge !== null
+          && (!Number.isFinite(subaccountPercentageCharge) || subaccountPercentageCharge < 0))
+        || !Number.isSafeInteger(paystackFee) || paystackFee < 0
+        || !Number.isSafeInteger(integrationShare) || integrationShare < 0
+        || !Number.isSafeInteger(organizerShare) || organizerShare < 0
+        || !subaccount?.subaccount_code) {
+        return json(503, { error: "PAYSTACK_SPLIT_FACTS_UNAVAILABLE", message: "The provider did not return verifiable split settlement facts. Credits have not been issued." }, cors);
+      }
+      const { data: splitResult, error: splitError } = await admin.rpc("apply_verified_paystack_public_vote_split", {
+        p_event_id: null,
+        p_provider_reference: payment.reference,
+        p_provider_transaction_id: String(payment.id),
+        p_provider_status: payment.status,
+        p_amount_minor: providerAmountMinor,
+        p_currency: payment.currency,
+        p_fees_split: { paystack: paystackFee, integration: integrationShare, subaccount: organizerShare },
+        p_subaccount_code: subaccount.subaccount_code,
+        p_subaccount_percentage_charge: subaccountPercentageCharge,
+      });
+      if (splitError || !splitResult) {
+        return json(409, { error: "PAYSTACK_SPLIT_VERIFICATION_FAILED", message: "Payment remains unfulfilled pending split reconciliation." }, cors);
+      }
+      if (splitResult.matched !== true || splitResult.status !== "success") {
+        return json(409, { error: "PAYMENT_REQUIRES_RECONCILIATION", status: splitResult.status ?? "exception", reason: splitResult.reason }, cors);
+      }
+      return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: splitResult.duplicate === true, returnPath }, cors);
+    }
+
+    // Terminal states are immutable through this user-facing verification path.
+    // A repeat of the same successful provider transaction is safe and idempotent.
+    if (intent.status === "success") {
+      const sameSuccessfulTransaction = isSuccess
+        && String(payment.id) === String(intent.provider_transaction_id);
+      if (sameSuccessfulTransaction) {
+        const { data: refreshed, error: refreshError } = await admin
+          .from("payment_intents")
+          .update({
+            provider_status: payment.status,
+            provider_amount_minor: providerAmountMinor,
+            provider_currency: payment.currency,
+            verified_at: new Date().toISOString(),
+          })
+          .eq("id", intent.id)
+          .eq("status", "success")
+          .eq("provider_transaction_id", String(payment.id))
+          .select("id")
+          .maybeSingle();
+        if (refreshError) return json(500, { error: "PAYMENT_VERIFICATION_PERSIST_FAILED" }, cors);
+        if (!refreshed) return json(409, { error: "PAYMENT_STATE_TERMINAL" }, cors);
+        return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true, returnPath }, cors);
+      }
+      return json(409, { error: "PAYMENT_STATE_TERMINAL", status: intent.status }, cors);
+    }
+    if (!["initialized", "pending"].includes(intent.status)) {
+      return json(409, { error: "PAYMENT_STATE_TERMINAL", status: intent.status }, cors);
+    }
 
     const nextStatus = payment.status === "success" && !isSuccess ? "exception"
       : payment.status === "success" ? "success"
       : payment.status === "failed" ? "failed"
       : payment.status === "abandoned" ? "abandoned"
+      : payment.status === "reversed" || payment.status === "reversal pending" ? "exception"
       : "pending";
 
-    const { error: updateError } = await admin
+    // Compare-and-set prevents a late manual verification response from
+    // overwriting a webhook's success/refund/reversal or another concurrent update.
+    const { data: updated, error: updateError } = await admin
       .from("payment_intents")
       .update({
         status: nextStatus,
         provider_transaction_id: String(payment.id),
+        provider_status: payment.status,
+        provider_amount_minor: providerAmountMinor,
+        provider_currency: payment.currency,
         verified_at: new Date().toISOString(),
       })
-      .eq("id", intent.id);
+      .eq("id", intent.id)
+      .in("status", ["initialized", "pending"])
+      .select("id")
+      .maybeSingle();
     if (updateError) return json(500, { error: "PAYMENT_VERIFICATION_PERSIST_FAILED" }, cors);
+    if (!updated) {
+      const { data: current, error: currentError } = await admin
+        .from("payment_intents")
+        .select("status,provider_transaction_id")
+        .eq("id", intent.id)
+        .maybeSingle();
+      if (currentError || !current) return json(500, { error: "PAYMENT_STATE_RECHECK_FAILED" }, cors);
+      if (current.status === "success" && isSuccess
+        && String(current.provider_transaction_id) === String(payment.id)) {
+        return json(200, { status: "success", reference: payment.reference, verified: true, duplicate: true, returnPath }, cors);
+      }
+      return json(409, { error: "PAYMENT_STATE_CHANGED", status: current.status }, cors);
+    }
 
     if (payment.status === "success" && !isSuccess) {
       return json(409, { error: "PAYMENT_MISMATCH", status: nextStatus }, cors);
     }
-    return json(200, { status: nextStatus, reference: payment.reference, verified: isSuccess });
+    return json(200, { status: nextStatus, reference: payment.reference, verified: isSuccess, returnPath }, cors);
   } catch (error) {
     const code = error instanceof Error ? error.message : "PAYMENT_VERIFICATION_FAILED";
     const status = code === "AUTHENTICATION_REQUIRED" || code === "INVALID_SESSION" ? 401
       : code === "FORBIDDEN" ? 403
-      : code === "PAYSTACK_SECRET_KEY_MISSING" || code === "SUPABASE_FUNCTION_CONFIG_MISSING" ? 503
+      : code === "PAYSTACK_MODE_CONFIG_INVALID" || code === "SUPABASE_FUNCTION_CONFIG_MISSING" ? 503
       : 500;
     return json(status, { error: code }, cors);
   }

@@ -20,6 +20,7 @@ on:
       - 'package-lock.json'
       - 'tests/contracts.test.mjs'
       - '.github/workflows/database-acceptance.yml'
+      - '.github/workflows/paystack-edge-integration.yml'
       - '.github/workflows/m1-organization-members.yml'
       - '.github/workflows/m2-election-setup.yml'
       - '.github/workflows/database-concurrency.yml'
@@ -53,8 +54,29 @@ jobs:
       - name: Authenticate to GHCR for Supabase image fallback
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
 
-      - name: Start one disposable local Supabase stack
-        run: npx --yes supabase@2.114.0 start -x edge-runtime,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,studio,supavisor,vector
+      - name: Allocate an isolated database port for this runner
+        shell: bash
+        run: |
+          db_port=$((55000 + GITHUB_RUN_NUMBER % 1000))
+          shadow_port=$((db_port + 1))
+          printf '\n[db]\nport = %s\nshadow_port = %s\n' "$db_port" "$shadow_port" >> supabase/config.toml
+          echo "Using disposable database port $db_port"
+
+      - name: Start one disposable local Supabase stack (retry registry throttling)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npx --yes supabase@2.114.0 start -x edge-runtime,imgproxy,kong,logflare,mailpit,postgres-meta,postgrest,realtime,studio,supavisor,vector; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Supabase image pull/start failed (attempt $attempt); retrying after backoff"
+              sleep $((attempt * 20))
+            fi
+          done
+          echo "Supabase local stack failed to start after 3 attempts" >&2
+          exit 1
 
       - name: Apply all repository migrations
         run: npx --yes supabase@2.114.0 db reset --local --no-seed
@@ -66,12 +88,34 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Run every rollback-only SQL acceptance test
+        shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          mkdir -p /tmp/mandate-db-acceptance
           for test_file in supabase/tests/*.sql; do
-            echo "Running ${test_file}"
-            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "${test_file}"
+            test_name="$(basename "${test_file}")"
+            log_file="/tmp/mandate-db-acceptance/${test_name}.log"
+            echo "::group::Running ${test_file}"
+            if psql "$DB_URL" -v ON_ERROR_STOP=1 -f "${test_file}" >"$log_file" 2>&1; then
+              cat "$log_file"
+              echo "PASS: ${test_name}" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "::endgroup::"
+            else
+              cat "$log_file"
+              echo "FAIL: ${test_name}" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "::endgroup::"
+              exit 1
+            fi
           done
+
+      - name: Preserve database acceptance diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mandate-database-acceptance-logs
+          path: /tmp/mandate-db-acceptance/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Run independent-session concurrency tests
         run: npm run test:concurrency

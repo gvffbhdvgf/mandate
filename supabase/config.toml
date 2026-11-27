@@ -9,3 +9,15 @@ verify_jwt = true
 
 [functions.paystack-webhook]
 verify_jwt = false
+
+[functions.public-election-details]
+verify_jwt = false
+
+[functions.public-participant-session]
+verify_jwt = true
+
+[functions.public-vote-credit-intent]
+verify_jwt = true
+
+[functions.paystack-settlement-import]
+verify_jwt = true

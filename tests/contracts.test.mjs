@@ -177,16 +177,21 @@ test("organization invitations are single-use, role-scoped and email-bound", asy
   assert.match(tokenCapture, /history\.replaceState/);
 });
 
-test("invitation authentication redirects are restricted to the signed invitation path", async () => {
+test("authentication redirects allow only invitation and payment callback return paths", async () => {
   const navigation = await read("../lib/navigation.ts");
   const auth = await read("../app/actions/auth.ts");
-  const callback = await read("../app/auth/callback/route.ts");
+  const authCallback = await read("../app/auth/callback/route.ts");
+  const paymentCallback = await read("../app/payments/paystack/callback/route.ts");
   assert.match(navigation, /startsWith\("\/\/"\)/);
-  assert.match(navigation, /resolved\.pathname !== "\/invitations\/accept"/);
-  assert.match(navigation, /resolved\.search !== ""/);
-  assert.match(navigation, /resolved\.hash !== ""/);
+  assert.match(navigation, /resolved\.pathname === "\/invitations\/accept"/);
+  assert.match(navigation, /resolved\.pathname === "\/payments\/paystack\/callback"/);
+  assert.match(navigation, /entries\.length !== 1/);
+  assert.match(navigation, /referencePattern|A-Za-z0-9/);
   assert.match(auth, /safeInternalPath/);
-  assert.match(callback, /safeInternalPath/);
+  assert.match(authCallback, /safeInternalPath/);
+  assert.match(paymentCallback, /functions\.invoke\("paystack-verify"/);
+  assert.match(paymentCallback, /getUser\(\)/);
+  assert.match(paymentCallback, /do not pay again/i);
 });
 
 
@@ -262,13 +267,28 @@ test("Paystack webhook application is atomic, idempotent and retryable", async (
   assert.doesNotMatch(webhook, /vote_credit_lots|ledger_entries/);
 });
 
-test("Paystack initialization, verification and webhooks all fail closed outside test mode", async () => {
+test("Paystack initialization, verification and webhooks enforce explicit mode and purpose gates", async () => {
   const shared = await read("../supabase/functions/_shared/paystack.ts");
   const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
   const verify = await read("../supabase/functions/paystack-verify/index.ts");
   const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
-  assert.match(shared, /PAYSTACK_MODE.*=== "test"/);
-  assert.match(shared, /PAYSTACK_SECRET_KEY.*startsWith\("sk_test_"\)/);
+  assert.match(shared, /assertOrganizationFinanceManager/);
+  assert.match(shared, /\["owner", "admin", "finance_manager"\]/);
+  assert.doesNotMatch(shared, /\["owner", "admin", "election_manager"\]/);
+  assert.match(shared, /PAYSTACK_TEST_SECRET_KEY/);
+  assert.match(shared, /PAYSTACK_LIVE_SECRET_KEY/);
+  assert.match(shared, /PAYSTACK_LIVE_TRANSACTIONS_ENABLED/);
+  assert.match(shared, /PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED/);
+  assert.match(shared, /PAYSTACK_TEST_WEBHOOK_SECRET/);
+  assert.match(shared, /PAYSTACK_LIVE_WEBHOOK_SECRET/);
+  assert.match(shared, /PAYSTACK_\$\{config\.mode\.toUpperCase\(\)\}_\$\{purposeKey\}_ENABLED/);
+  assert.match(initialize, /paymentPurposeEnabled\(intent\.purpose\)/);
+  assert.doesNotMatch(verify, /paymentPurposeEnabled\(intent\.purpose\)/);
+  assert.match(verify, /intent\.purpose === "public_vote_credits"/);
+  assert.doesNotMatch(webhook, /paymentPurposeEnabled\(intent\.purpose\)/);
+  assert.match(verify, /PAYMENT_STATE_TERMINAL/);
+  assert.doesNotMatch(webhook, /PUBLIC_VOTE_CREDIT_FULFILLMENT_NOT_READY/);
+  assert.match(webhook, /database fulfillment trigger issue public credits atomically/);
   assert.match(initialize, /if \(!paymentsModeEnabled\(\)\)/);
   assert.match(verify, /if \(!paymentsModeEnabled\(\)\)/);
   assert.match(webhook, /if \(!paymentsModeEnabled\(\)\)/);
@@ -276,8 +296,305 @@ test("Paystack initialization, verification and webhooks all fail closed outside
 
 
 
+
+test("ledger posting is balanced, append-only and idempotent", async () => {
+  const migration = await read("../supabase/migrations/20261127120000_0034_idempotent_ledger_posting.sql");
+  const baseline = await read("../supabase/migrations/20261126090353_0007_audit_and_outbox.sql");
+  const smoke = await read("../supabase/tests/ledger_posting_smoke.sql");
+  assert.match(migration, /auth\.role\(\) is distinct from 'service_role'/);
+  assert.match(migration, /on conflict \(idempotency_key\) do nothing/);
+  assert.match(migration, /LEDGER_IDEMPOTENCY_CONFLICT/);
+  assert.match(migration, /LEDGER_TRANSACTION_UNBALANCED/);
+  assert.match(migration, /ledger_entries_pending_insert_guard/);
+  assert.match(baseline, /create trigger ledger_entries_append_only/);
+  assert.match(baseline, /ledger_transactions_posted_immutable/);
+  assert.match(migration, /grant execute[\s\S]*to service_role/);
+  assert.match(smoke, /LEDGER_DUPLICATE_NOT_IDEMPOTENT/);
+  assert.match(smoke, /LEDGER_IDEMPOTENCY_CONFLICT_MUST_FAIL/);
+  assert.match(smoke, /UNBALANCED_LEDGER_POST_MUST_FAIL/);
+  assert.match(smoke, /POSTED_LEDGER_ENTRY_MUTATION_MUST_FAIL/);
+  assert.match(smoke, /POSTED_LEDGER_TRANSACTION_MUST_REJECT_NEW_ENTRIES/);
+});
+
 test("concurrency fixtures record authority confirmation before opening", async () => {
   const concurrency = await read("../scripts/concurrency.acceptance.mjs");
   assert.match(concurrency, /public[.]confirm_election_setup/);
   assert.match(concurrency, /public[.]open_election/);
+});
+
+
+test("manual Paystack verification cannot overwrite terminal payment states or race a webhook", async () => {
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  assert.match(verify, /Terminal states are immutable/);
+  assert.match(verify, /if \(intent\.status === "success"\)/);
+  assert.match(verify, /PAYMENT_STATE_TERMINAL/);
+  assert.match(verify, /\.in\("status", \["initialized", "pending"\]\)/);
+  assert.match(verify, /\.select\("id"\)\s*\.maybeSingle\(\)/);
+  assert.match(verify, /PAYMENT_STATE_CHANGED/);
+  assert.match(verify, /current\.status === "success" && isSuccess/);
+});
+
+
+test("Paystack webhook processing cannot resurrect refunded or reversed payment intents", async () => {
+  const migration = await read("../supabase/migrations/20261127130000_0035_paystack_terminal_state_guard.sql");
+  const smoke = await read("../supabase/tests/payment_terminal_state_smoke.sql");
+  assert.match(migration, /v_intent\.status not in \('initialized', 'pending'\)/);
+  assert.match(migration, /PAYMENT_INTENT_TERMINAL/);
+  assert.match(migration, /processing_status = 'processed'/);
+  assert.match(smoke, /'refunded'/);
+  assert.match(smoke, /REFUNDED_PAYMENT_MUST_NOT_BE_RESURRECTED/);
+  assert.match(smoke, /set local role service_role/);
+  assert.match(smoke, /rollback;/);
+});
+
+
+test("Paystack initialization is one-shot, idempotent and fails closed on uncertain outcomes", async () => {
+  const migration = await read("../supabase/migrations/20261127140000_0036_paystack_initialization_claims.sql");
+  const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
+  const smoke = await read("../supabase/tests/payment_initialization_claim_smoke.sql");
+  assert.match(migration, /payment_initialization_attempts/);
+  assert.match(migration, /payment_intent_id uuid not null unique/);
+  assert.match(migration, /'initializing', 'unknown', 'initialized'/);
+  assert.match(migration, /revoke all[\s\S]*from public, anon, authenticated/);
+  assert.match(initialize, /payment_initialization_attempts/);
+  assert.match(initialize, /PAYMENT_INITIALIZATION_OUTCOME_UNKNOWN/);
+  assert.match(initialize, /Reconcile it before retrying/);
+  assert.match(initialize, /duplicate: true/);
+  assert.match(initialize, /result\.data\.reference !== intent\.provider_reference/);
+  assert.match(smoke, /DUPLICATE_INITIALIZATION_CLAIM_MUST_FAIL/);
+  assert.match(smoke, /INITIALIZATION_ATTEMPTS_MUST_BE_PRIVATE/);
+  assert.match(smoke, /rollback;/);
+});
+
+
+test("verified Paystack success atomically posts an unallocated balanced suspense receipt", async () => {
+  const migration = await read("../supabase/migrations/20261127150000_0037_verified_payment_receipt_suspense.sql");
+  const smoke = await read("../supabase/tests/verified_payment_receipt_suspense_smoke.sql");
+  assert.match(migration, /payment_intents_capture_verified_receipt/);
+  assert.match(migration, /old\.status is distinct from new\.status/);
+  assert.match(migration, /provider_clearing/);
+  assert.match(migration, /unallocated-payment-receipts/);
+  assert.match(migration, /payment_receipt_pending_allocation/);
+  assert.match(migration, /mandate_private\.post_ledger_transaction/);
+  assert.match(migration, /grant select, update on public\.payment_intents to service_role/);
+  assert.match(migration, /grant select, insert, update on public\.payment_events to service_role/);
+  assert.match(migration, /does not classify revenue/i);
+  assert.match(smoke, /PAYMENT_EDGE_SERVICE_ROLE_GRANTS_MISSING/);
+  assert.match(smoke, /PAYMENT_TABLES_MUST_REMAIN_PRIVATE_TO_BROWSER_ROLES/);
+  assert.ok(smoke.includes("$;"));
+  assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_MUST_BE_BALANCED/);
+  assert.match(smoke, /VERIFIED_RECEIPT_LEDGER_POSTING_MUST_BE_IDEMPOTENT/);
+  assert.match(smoke, /rollback;/);
+});
+
+
+test("Paystack refund and dispute webhooks freeze payments for explicit reconciliation", async () => {
+  const migration = await read("../supabase/migrations/20261127160000_0038_paystack_refund_dispute_exceptions.sql");
+  const verifiedMigration = await read("../supabase/migrations/20261127170000_0039_verified_provider_amount_capture.sql");
+  const smoke = await read("../supabase/tests/paystack_refund_dispute_exception_smoke.sql");
+  const webhook = await read("../supabase/functions/paystack-webhook/index.ts");
+  assert.match(migration, /apply_paystack_payment_exception_event/);
+  assert.match(migration, /charge\.dispute\./);
+  assert.match(migration, /set status = 'exception'/);
+  assert.match(migration, /does not infer final refund settlement/i);
+  assert.match(smoke, /REFUND_EVENT_MUST_FREEZE_PAYMENT/);
+  assert.match(smoke, /REFUND_EVENT_FIRST_MUST_CAPTURE_ORIGINAL_RECEIPT_ONCE/);
+  assert.match(webhook, /eventType\.startsWith\("refund\."\)/);
+  assert.match(webhook, /eventType\.startsWith\("charge\.dispute\."\)/);
+  assert.match(webhook, /apply_verified_paystack_payment_exception_event/);
+  assert.match(webhook, /PAYSTACK_EXCEPTION_VERIFICATION_UNAVAILABLE/);
+  assert.match(verifiedMigration, /apply_verified_paystack_payment_exception_event/);
+  assert.match(verifiedMigration, /reversal pending/);
+  assert.match(webhook, /verified\.data\.reference !== reference/);
+  assert.match(webhook, /PAYSTACK_REFERENCE_MISMATCH/);
+  assert.match(webhook, /reconciliationRequired: true/);
+  assert.match(smoke, /rollback;/);
+});
+
+
+test("verified provider amounts are captured even when they mismatch the intent", async () => {
+  const migration = await read("../supabase/migrations/20261127170000_0039_verified_provider_amount_capture.sql");
+  const smoke = await read("../supabase/tests/verified_provider_amount_mismatch_smoke.sql");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  assert.match(migration, /provider_amount_minor bigint/);
+  assert.match(migration, /provider_currency text/);
+  assert.match(migration, /new\.provider_status in \('success', 'reversal pending', 'reversed'\)/);
+  assert.match(migration, /new\.provider_amount_minor/);
+  assert.match(migration, /payment_receipt_pending_allocation/);
+  assert.match(smoke, /MISMATCHED_PROVIDER_SUCCESS_MUST_CAPTURE_ACTUAL_AMOUNT_ONCE/);
+  assert.match(smoke, /7900/);
+  assert.match(verify, /provider_amount_minor: providerAmountMinor/);
+  assert.match(verify, /provider_status: payment\.status/);
+  assert.match(smoke, /rollback;/);
+});
+
+
+test("public participant verification uses email OTP and keeps identity out of ballots", async () => {
+  const migration = await read("../supabase/migrations/20261127180000_0040_public_participant_email_identity.sql");
+  const smoke = await read("../supabase/tests/public_participant_email_identity_smoke.sql");
+  const details = await read("../supabase/functions/public-election-details/index.ts");
+  const session = await read("../supabase/functions/public-participant-session/index.ts");
+  const actions = await read("../app/actions/public-vote.ts");
+  const page = await read("../app/public-vote/[slug]/page.tsx");
+  const form = await read("../app/public-vote/[slug]/participant-verification-form.tsx");
+  const config = await read("../supabase/config.toml");
+  assert.match(migration, /auth_user_id uuid references auth\.users/);
+  assert.match(migration, /unique \(election_id, auth_user_id\)/);
+  assert.match(smoke, /BALLOT_MUST_NOT_CONTAIN_PARTICIPANT_OR_CONTACT_IDENTITY/);
+  assert.match(details, /\.eq\("voting_mode", "public_paid"\)/);
+  assert.match(session, /user\.email_confirmed_at/);
+  assert.match(session, /checkoutEnabled/);
+  assert.match(session, /platform_payment_feature_flags/);
+  assert.match(session, /verification_status: "verified"/);
+  assert.match(form, /New voting-credit purchases are temporarily paused/);
+  assert.match(session, /\.eq\("auth_user_id", user\.id\)/);
+  assert.match(actions, /signInWithOtp/);
+  assert.match(actions, /shouldCreateUser: true/);
+  assert.match(actions, /verifyOtp/);
+  assert.match(form, /Six-digit email code/);
+  assert.match(page, /ParticipantVerificationForm/);
+  assert.match(config, /\[functions\.public-election-details\]\nverify_jwt = false/);
+  assert.match(config, /\[functions\.public-participant-session\]\nverify_jwt = true/);
+});
+
+
+test("public vote credits reserve quantities, fulfill only verified payments and cast anonymous ballots", async () => {
+  const reservations = await read("../supabase/migrations/20261127190000_0041_public_vote_credit_reservations_and_fulfillment.sql");
+  const ballot = await read("../supabase/migrations/20261127200000_0042_public_paid_ballot_casting.sql");
+  const smoke = await read("../supabase/tests/public_vote_credit_lifecycle_smoke.sql");
+  const intent = await read("../supabase/functions/public-vote-credit-intent/index.ts");
+  const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  const actions = await read("../app/actions/public-vote.ts");
+  const form = await read("../app/public-vote/[slug]/participant-verification-form.tsx");
+  assert.match(reservations, /create_public_vote_credit_payment_intent/);
+  assert.match(reservations, /PARTICIPANT_CREDIT_CAP_EXCEEDED/);
+  assert.match(reservations, /status in \('reserved','exception'\)/);
+  assert.match(reservations, /provider_amount_minor is distinct from new.amount_minor/);
+  assert.match(reservations, /insert into public.vote_credit_lots/);
+  assert.match(reservations, /entitlement_status = 'suspended'/);
+  assert.match(ballot, /cast_public_paid_ballot/);
+  assert.match(ballot, /submission_key_hash/);
+  assert.match(ballot, /INSUFFICIENT_VOTE_CREDITS/);
+  assert.match(ballot, /vote_credit_consumptions/);
+  assert.match(intent, /paymentPurposeEnabled\("public_vote_credits"\)/);
+  assert.match(intent, /Idempotency-Key/);
+  assert.match(initialize, /VERIFIED_PARTICIPANT_REQUIRED/);
+  assert.match(verify, /VERIFIED_PARTICIPANT_REQUIRED/);
+  assert.match(actions, /public-vote-credit-intent/);
+  assert.match(actions, /paystack-initialize/);
+  assert.match(form, /Continue to Paystack/);
+  assert.match(smoke, /ACTIVE_CREDIT_RESERVATIONS_MUST_ENFORCE_PARTICIPANT_CAP/);
+  assert.match(smoke, /PUBLIC_PAID_BALLOT_RETRY_MUST_RETURN_SAME_RECEIPT/);
+  assert.match(smoke, /PUBLIC_PAID_BALLOT_MUST_CONSUME_CREDITS_ONCE_AND_KEEP_BALLOT_ANONYMOUS/);
+});
+
+
+test("public paid elections require platform release and freeze pricing before opening", async () => {
+  const release = await read("../supabase/migrations/20261127210000_0043_paid_voting_release_gate.sql");
+  const releaseSmoke = await read("../supabase/tests/paid_voting_release_gate_smoke.sql");
+  const lifecycle = await read("../supabase/tests/public_vote_credit_lifecycle_smoke.sql");
+  const setupForm = await read("../app/organizations/[organizationId]/create-election-form.tsx");
+  const electionPage = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
+  const lifecycleControls = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
+  assert.match(release, /public_vote_credits_enabled boolean not null default false/);
+  assert.match(release, /PAID_VOTING_AUTHORIZATION_REQUIRED/);
+  assert.match(release, /pricePerCreditMinor/);
+  assert.match(release, /maxCreditsPerParticipant/);
+  assert.match(release, /new\.price_per_credit_minor is distinct from old\.price_per_credit_minor/);
+  assert.match(release, /new\.public_slug is distinct from old\.public_slug/);
+  assert.match(release, /public_paid/);
+  assert.match(release, /verified_participants/);
+  assert.doesNotMatch(release, /create trigger ballots_public_paid_feature_guard/);
+  assert.match(lifecycle, /set public_vote_credits_enabled=false/);
+  assert.match(releaseSmoke, /PUBLIC_VOTE_CREDITS_MUST_DEFAULT_DISABLED/);
+  assert.match(lifecycle, /public-credit-acceptance/);
+  assert.match(setupForm, /public_paid/);
+  assert.match(setupForm, /price_per_credit_minor/);
+  assert.match(setupForm, /max_credits_per_participant/);
+  assert.match(setupForm, /Number\.isSafeInteger\(amountMinor\)/);
+  assert.match(setupForm, /Number\(election\.price_per_credit_minor\) \/ 100/);
+  assert.match(electionPage, /PLATFORM AUTHORIZATION PENDING/);
+  assert.match(lifecycleControls, /public price, participant cap/);
+});
+
+test("Paystack settlement importer is service-role-only and safely paginated", async () => {
+  const importer = await read("../supabase/functions/paystack-settlement-import/index.ts");
+  const config = await read("../supabase/config.toml");
+  const migration = await read("../supabase/migrations/20261127220000_0044_paystack_settlement_reconciliation.sql");
+  const smoke = await read("../supabase/tests/paystack_settlement_reconciliation_smoke.sql");
+  assert.match(importer, /SERVICE_ROLE_REQUIRED/);
+  assert.match(importer, /PAYSTACK_MODE/);
+  assert.match(importer, /settlementModeEnabled\(\)/);
+  assert.match(importer, /PAYSTACK_SETTLEMENT_PIPELINE_DISABLED/);
+  assert.match(await read("../supabase/functions/_shared/paystack.ts"), /config\.mode === "test" \|\| config\.settlementReady/);
+  assert.match(importer, /MAX_SETTLEMENT_PAGES/);
+  assert.match(importer, /response\.status !== true/);
+  assert.match(importer, /transactionResponse\.status !== true/);
+  assert.match(importer, /nextTransactionPage/);
+  assert.match(importer, /onConflict: "environment,provider_transaction_id"/);
+  assert.match(importer, /31 \* 24 \* 60 \* 60 \* 1000/);
+  assert.doesNotMatch(importer, /customer\.email|customer\.phone|metadata/);
+  assert.match(config, /\[functions\.paystack-settlement-import\]\nverify_jwt = true/);
+  assert.match(migration, /security_invoker = true/);
+  assert.match(migration, /matched_to_receipt/);
+  assert.match(smoke, /PAYSTACK_SETTLEMENT_RECEIPT_MATCH_FAILED/);
+  assert.match(smoke, /PAYSTACK_SETTLEMENT_RECONCILIATION_MUST_REMAIN_SERVER_ONLY/);
+});
+
+
+
+test("Paystack payment exceptions are exposed through a private read-only evidence queue", async () => {
+  const migration = await read("../supabase/migrations/20261127230000_0045_paystack_payment_exception_queue.sql");
+  const smoke = await read("../supabase/tests/paystack_payment_exception_queue_smoke.sql");
+  assert.match(migration, /create or replace view public\.paystack_payment_exception_queue/);
+  assert.match(migration, /refund\./);
+  assert.match(migration, /charge\.dispute\./);
+  assert.match(migration, /settlement_reconciliation_statuses/);
+  assert.match(migration, /receipt_posted/);
+  assert.match(migration, /security_invoker = true/);
+  assert.match(migration, /no automatic refund|no automatic reversals|Does not automatically reverse/i);
+  assert.match(smoke, /PAYSTACK_EXCEPTION_QUEUE_EVIDENCE_MISSING/);
+  assert.match(smoke, /PAYSTACK_EXCEPTION_QUEUE_MUST_REMAIN_SERVER_ONLY/);
+  assert.match(smoke, /rollback;/);
+});
+
+
+test("registered elections use a versioned server-priced platform fee before invitations and opening", async () => {
+  const migration = await read("../supabase/migrations/20261127240000_0046_platform_fee_pricing_policy.sql");
+  const smoke = await read("../supabase/tests/platform_fee_pricing_smoke.sql");
+  const action = await read("../app/actions/payments.ts");
+  const component = await read("../app/organizations/[organizationId]/elections/[electionId]/platform-fee-checkout.tsx");
+  const page = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
+  const invitations = await read("../supabase/functions/send-voter-invitations/index.ts");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  const callback = await read("../app/payments/paystack/callback/route.ts");
+  const docs = await read("../docs/payments/paystack-integration.md");
+
+  assert.match(migration, /amount_per_eligible_voter_minor bigint/);
+  assert.match(migration, /minimum_fee_minor bigint/);
+  assert.match(migration, /values \(1,'KES',2000,50000,true\)/);
+  assert.match(migration, /get_platform_fee_quote/);
+  assert.match(migration, /create_platform_fee_payment_intent/);
+  assert.match(migration, /PLATFORM_FEE_QUOTE_CHANGED/);
+  assert.match(migration, /VOTER_REGISTER_FROZEN_BY_PLATFORM_FEE_QUOTE/);
+  assert.match(migration, /PLATFORM_FEE_FIELDS_SERVER_MANAGED/);
+  assert.match(migration, /PLATFORM_FEE_PAYMENT_REQUIRED/);
+  assert.match(migration, /sync_platform_fee_payment_status/);
+  assert.match(smoke, /PLATFORM_FEE_SERVER_PRICING_OR_IDEMPOTENCY_FAILED/);
+  assert.match(smoke, /CLIENT_MUST_NOT_WRITE_PLATFORM_FEE_STATUS/);
+  assert.match(smoke, /VOTER_REGISTER_MUST_FREEZE_AFTER_FEE_QUOTE/);
+  assert.match(smoke, /ELECTION_OPEN_MUST_REQUIRE_PAID_PLATFORM_FEE/);
+  assert.match(smoke, /VERIFIED_PLATFORM_FEE_PAYMENT_MUST_MARK_ELECTION_PAID/);
+  assert.match(action, /create_platform_fee_payment_intent/);
+  assert.match(action, /paystack-initialize/);
+  assert.match(action, /authorizationUrl\.hostname\.endsWith\("\.paystack\.com"\)/);
+  assert.match(component, /KSh 20 per voter · KSh 500 minimum/);
+  assert.match(component, /Continue to secure payment/);
+  assert.match(page, /get_platform_fee_quote/);
+  assert.match(page, /PlatformFeeCheckout/);
+  assert.match(invitations, /PLATFORM_FEE_PAYMENT_REQUIRED/);
+  assert.match(verify, /intent\.purpose === "platform_fee"/);
+  assert.match(callback, /safeReturnPath/);
+  assert.match(docs, /KES 2,000 per eligible voter and KES 50,000 minimum/);
 });

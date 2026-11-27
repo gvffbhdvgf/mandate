@@ -1,5 +1,15 @@
 import { createClient, type SupabaseClient, type User } from "npm:@supabase/supabase-js@2";
 
+export type PaymentPurpose = "platform_fee" | "organization_topup" | "public_vote_credits";
+
+type PaystackModeConfig = {
+  mode: "test" | "live";
+  secretKey: string;
+  webhookSecret: string;
+  liveTransactionsEnabled: boolean;
+  settlementReady: boolean;
+};
+
 export const json = (status: number, body: Record<string, unknown>, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), {
     status,
@@ -41,25 +51,105 @@ export async function authenticate(request: Request): Promise<{ user: User; call
   return { user: data.user, caller };
 }
 
-export async function assertOrganizationManager(caller: SupabaseClient, organizationId: string, userId: string) {
+export async function assertOrganizationFinanceManager(caller: SupabaseClient, organizationId: string, userId: string) {
   const { data, error } = await caller
     .from("organization_members")
     .select("role,status")
     .eq("organization_id", organizationId)
     .eq("user_id", userId)
     .maybeSingle();
-  if (error || !data || data.status !== "active" || !["owner", "admin", "election_manager"].includes(data.role)) {
+  if (error || !data || data.status !== "active" || !["owner", "admin", "finance_manager"].includes(data.role)) {
     throw new Error("FORBIDDEN");
   }
 }
 
+function paystackModeConfig(): PaystackModeConfig | null {
+  const mode = env("PAYSTACK_MODE");
+  if (mode === "test") {
+    const secretKey = env("PAYSTACK_TEST_SECRET_KEY");
+    const webhookSecret = env("PAYSTACK_TEST_WEBHOOK_SECRET");
+    if (!secretKey.startsWith("sk_test_") || !webhookSecret.startsWith("whsec_")) return null;
+    return { mode: "test", secretKey, webhookSecret, liveTransactionsEnabled: true, settlementReady: true };
+  }
+  if (mode === "live") {
+    const secretKey = env("PAYSTACK_LIVE_SECRET_KEY");
+    const webhookSecret = env("PAYSTACK_LIVE_WEBHOOK_SECRET");
+    if (!secretKey.startsWith("sk_live_") || !webhookSecret.startsWith("whsec_")) return null;
+    return {
+      mode: "live",
+      secretKey,
+      webhookSecret,
+      liveTransactionsEnabled: env("PAYSTACK_LIVE_TRANSACTIONS_ENABLED").toLowerCase() === "true",
+      settlementReady: env("PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED").toLowerCase() === "true",
+    };
+  }
+  return null;
+}
+
+export const paymentsModeEnabled = () => paystackModeConfig() !== null;
+
+// Settlement ingestion in live mode is separately gated from checkout. Test-mode
+// reconciliation remains available for controlled verification.
+export const settlementModeEnabled = () => {
+  const config = paystackModeConfig();
+  return config !== null && (config.mode === "test" || config.settlementReady);
+};
+
+export const paymentPurposeEnabled = (purpose: PaymentPurpose) => {
+  const config = paystackModeConfig();
+  if (!config) return false;
+  if (config.mode === "live" && (!config.liveTransactionsEnabled || !config.settlementReady)) return false;
+  const purposeKey = purpose.toUpperCase();
+  return env(`PAYSTACK_${config.mode.toUpperCase()}_${purposeKey}_ENABLED`).toLowerCase() === "true";
+};
+
+export function paymentCallbackUrl(): string | undefined {
+  const configured = env("MANDATE_PAYMENT_CALLBACK_URL");
+  const siteUrl = env("MANDATE_SITE_URL");
+  let candidate = configured;
+  if (!candidate && siteUrl) {
+    try {
+      candidate = new URL("/payments/paystack/callback", siteUrl).toString();
+    } catch {
+      throw new Error("PAYMENT_CALLBACK_URL_INVALID");
+    }
+  }
+  if (!candidate) return undefined;
+
+  let callback: URL;
+  try {
+    callback = new URL(candidate);
+  } catch {
+    throw new Error("PAYMENT_CALLBACK_URL_INVALID");
+  }
+
+  const allowedOrigins = [siteUrl, ...env("MANDATE_ALLOWED_ORIGINS").split(",")]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => {
+      try { return new URL(value).origin; } catch { return ""; }
+    })
+    .filter(Boolean);
+
+  if (callback.protocol !== "https:"
+    || callback.username
+    || callback.password
+    || callback.pathname !== "/payments/paystack/callback"
+    || callback.search
+    || callback.hash
+    || !allowedOrigins.includes(callback.origin)) {
+    throw new Error("PAYMENT_CALLBACK_URL_INVALID");
+  }
+  return callback.toString();
+}
+
 export async function paystackRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const secret = env("PAYSTACK_SECRET_KEY");
-  if (!secret) throw new Error("PAYSTACK_SECRET_KEY_MISSING");
+  const config = paystackModeConfig();
+  if (!config) throw new Error("PAYSTACK_MODE_CONFIG_INVALID");
   const response = await fetch(`https://api.paystack.co${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${secret}`,
+      Authorization: `Bearer ${config.secretKey}`,
       "Content-Type": "application/json",
       ...init.headers,
     },
@@ -75,8 +165,8 @@ const toHex = (bytes: ArrayBuffer) =>
   Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
 
 export async function verifyPaystackWebhookSignature(rawBody: string, signatureHeader: string | null) {
-  const secret = env("PAYSTACK_WEBHOOK_SECRET");
-  if (!secret || !signatureHeader) return false;
+  const config = paystackModeConfig();
+  if (!config || !signatureHeader) return false;
 
   const parts = signatureHeader.split(",").map((part) => part.trim());
   const timestamp = parts.find((part) => part.startsWith("t="))?.slice(2);
@@ -88,7 +178,7 @@ export async function verifyPaystackWebhookSignature(rawBody: string, signatureH
 
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(secret),
+    new TextEncoder().encode(config.webhookSecret),
     { name: "HMAC", hash: "SHA-512" },
     false,
     ["sign"],
@@ -105,8 +195,3 @@ export async function verifyPaystackWebhookSignature(rawBody: string, signatureH
     return difference === 0;
   });
 }
-
-export const paymentsModeEnabled = () =>
-  env("PAYSTACK_MODE") === "test"
-  && env("PAYSTACK_SECRET_KEY").startsWith("sk_test_")
-  && env("PAYSTACK_LIVE_TRANSACTIONS_ENABLED").toLowerCase() !== "true";

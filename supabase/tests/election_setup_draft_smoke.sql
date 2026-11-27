@@ -6,8 +6,9 @@ values
  ('77777777-7777-4777-8777-777777777777','authenticated','authenticated','mandate-m2-owner@example.invalid','test-only',now(),'{"display_name":"M2 Owner"}',now(),now()),
  ('88888888-8888-4888-8888-888888888888','authenticated','authenticated','mandate-m2-outsider@example.invalid','test-only',now(),'{"display_name":"M2 Outsider"}',now(),now());
 
-create temporary table m2_test_ids(election_id uuid);
+create temporary table m2_test_ids(election_id uuid, payment_intent_id uuid);
 grant select,insert,update,delete on m2_test_ids to authenticated;
+grant select on m2_test_ids to service_role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','77777777-7777-4777-8777-777777777777',true);
@@ -22,6 +23,8 @@ declare
   v_record jsonb;
   v_audit jsonb;
   v_payload jsonb;
+  v_fee_quote jsonb;
+  v_fee_intent jsonb;
 begin
   perform public.create_organization('M2 Draft Organization','m2-draft-org',null,'Africa/Nairobi');
   select id into v_org from public.organizations where slug='m2-draft-org';
@@ -121,6 +124,40 @@ begin
   insert into m2_test_ids(election_id) values(v_election);
 end $$;
 
+reset role;
+insert into public.election_voters(
+  organization_id,election_id,external_voter_ref,display_name,eligibility_status,weight_units
+)
+select e.organization_id,e.id,'m2-fee-voter-1','M2 Fee Voter','eligible',1
+from public.elections e where e.id=(select election_id from m2_test_ids);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','77777777-7777-4777-8777-777777777777',true);
+do $$
+declare v_quote jsonb; v_intent jsonb; v_election uuid;
+begin
+  select election_id into v_election from m2_test_ids;
+  v_quote:=public.get_platform_fee_quote(v_election);
+  v_intent:=public.create_platform_fee_payment_intent(
+    v_election,
+    (v_quote->>'eligibleVoterCount')::integer,
+    (v_quote->>'amountMinor')::bigint,
+    (v_quote->>'policyVersion')::integer
+  );
+  update m2_test_ids set payment_intent_id=(v_intent->>'paymentIntentId')::uuid;
+end $$;
+
+reset role;
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+update public.payment_intents
+set status='success',
+    provider_transaction_id='paystack-m2-platform-fee-smoke',
+    provider_status='success',
+    provider_amount_minor=50000,
+    provider_currency='KES',
+    verified_at=now()
+where id=(select payment_intent_id from m2_test_ids);
 reset role;
 -- A candidate-profile change after confirmation invalidates the stored hash and requires a fresh authority check.
 update public.options set profile='Profile A revised'
