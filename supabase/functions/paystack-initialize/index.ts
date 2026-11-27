@@ -1,4 +1,4 @@
-import { adminClient, assertOrganizationManager, authenticate, corsHeaders, json, paystackRequest, paymentsModeEnabled } from "../_shared/paystack.ts";
+import { adminClient, assertOrganizationManager, authenticate, corsHeaders, json, paystackRequest, paymentPurposeEnabled, paymentsModeEnabled } from "../_shared/paystack.ts";
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -32,7 +32,7 @@ Deno.serve(async (request: Request) => {
     if (intent.provider !== "paystack" || intent.currency !== "KES" || !Number.isSafeInteger(Number(intent.amount_minor)) || Number(intent.amount_minor) <= 0) {
       return json(409, { error: "PAYMENT_INTENT_INVALID" }, cors);
     }
-    if (intent.purpose === "public_vote_credits") {
+    if (!paymentPurposeEnabled(intent.purpose)) {\n      return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);\n    }\n    if (intent.purpose === "public_vote_credits") {
       return json(409, { error: "PAID_VOTING_FEATURE_GATED" }, cors);
     }
     if (intent.status !== "initialized") return json(409, { error: "PAYMENT_INTENT_NOT_INITIALIZABLE" }, cors);
