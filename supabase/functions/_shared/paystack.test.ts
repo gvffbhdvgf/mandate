@@ -86,7 +86,7 @@ Deno.test("Paystack payment purposes are independently disabled unless explicitl
   clearPaystackEnv();
   Deno.env.set("PAYSTACK_MODE", "test");
   Deno.env.set("PAYSTACK_TEST_SECRET_KEY", "sk_test_unit_test_key");
-  Deno.env.set("PAYSTACK_TEST_WEBHOOK_SECRET", "test-webhook-secret");
+  Deno.env.set("PAYSTACK_TEST_WEBHOOK_SECRET", "whsec_test_webhook_secret");
   for (const purpose of ["PLATFORM_FEE", "ORGANIZATION_TOPUP", "PUBLIC_VOTE_CREDITS"]) {
     if (paymentPurposeEnabled(purpose.toLowerCase() as "platform_fee" | "organization_topup" | "public_vote_credits")) {
       throw new Error(`${purpose} must default to disabled`);
