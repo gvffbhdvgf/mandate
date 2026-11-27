@@ -177,12 +177,12 @@ test("organization invitations are single-use, role-scoped and email-bound", asy
   assert.match(tokenCapture, /history\.replaceState/);
 });
 
-test("invitation authentication redirects are restricted to the signed invitation path", async () => {
+test("authentication redirects allow only dashboard and invitation acceptance", async () => {
   const navigation = await read("../lib/navigation.ts");
   const auth = await read("../app/actions/auth.ts");
   const callback = await read("../app/auth/callback/route.ts");
   assert.match(navigation, /startsWith\("\/\/"\)/);
-  assert.match(navigation, /resolved\.pathname !== "\/invitations\/accept"/);
+  assert.match(navigation, /allowedPaths = new Set\(\["\/dashboard", "\/invitations\/accept"\]\)/);
   assert.match(navigation, /resolved\.search !== ""/);
   assert.match(navigation, /resolved\.hash !== ""/);
   assert.match(auth, /safeInternalPath/);
