@@ -1,4 +1,4 @@
-import { adminClient, assertOrganizationManager, authenticate, corsHeaders, json, paystackRequest, paymentPurposeEnabled, paymentsModeEnabled } from "../_shared/paystack.ts";
+import { adminClient, assertOrganizationFinanceManager, authenticate, corsHeaders, json, paystackRequest, paymentPurposeEnabled, paymentsModeEnabled } from "../_shared/paystack.ts";
 
 type PaystackInitializeResponse = {
   status: boolean;
@@ -40,7 +40,7 @@ Deno.serve(async (request: Request) => {
     }
     if (intent.status !== "initialized") return json(409, { error: "PAYMENT_INTENT_NOT_INITIALIZABLE" }, cors);
 
-    await assertOrganizationManager(caller, intent.organization_id, user.id);
+    await assertOrganizationFinanceManager(caller, intent.organization_id, user.id);
     if (!user.email) return json(400, { error: "ACCOUNT_EMAIL_REQUIRED" }, cors);
 
     const result = await paystackRequest<PaystackInitializeResponse>("/transaction/initialize", {
