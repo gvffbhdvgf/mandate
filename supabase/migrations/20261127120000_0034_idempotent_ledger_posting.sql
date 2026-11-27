@@ -28,6 +28,9 @@ create trigger ledger_entries_pending_insert_guard
 before insert on public.ledger_entries
 for each row execute function mandate_private.guard_ledger_entry_immutability();
 
+revoke all on function mandate_private.guard_ledger_entry_immutability()
+  from public, anon, authenticated;
+
 create or replace function mandate_private.post_ledger_transaction(
   p_transaction_type text,
   p_source_type text,
