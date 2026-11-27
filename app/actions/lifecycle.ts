@@ -66,6 +66,7 @@ export async function resumeElectionAction(_previous: LifecycleActionState, form
 }
 
 export async function closeElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
+  if (formData.get("confirmClose") !== "true") return { error: "Confirm that you want to close voting for this election." };
   const reason = String(formData.get("reason") ?? "").trim();
   if (reason.length < 10 || reason.length > 1000) return { error: "Enter a closure reason between 10 and 1,000 characters." };
   const auth = await authorizedElection(formData);
@@ -100,6 +101,7 @@ export async function tallyElectionAction(_previous: LifecycleActionState, formD
 }
 
 export async function publishResultsAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
+  if (formData.get("confirmPublish") !== "true") return { error: "Confirm that the reconciled results are ready to publish." };
   const auth = await authorizedElection(formData);
   if ("error" in auth) return { error: auth.error };
   const { error } = await auth.supabase.rpc("publish_results", { p_election_id: auth.electionId });
