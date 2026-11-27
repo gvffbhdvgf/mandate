@@ -85,6 +85,15 @@ begin
 
   v_rejected := false;
   begin
+    insert into public.ledger_entries(transaction_id, account_id, direction, amount_minor, currency)
+    values ((v_result->>'id')::uuid, v_clearing, 'debit', 1, 'KES');
+  exception when sqlstate '55000' then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'POSTED_LEDGER_TRANSACTION_MUST_REJECT_NEW_ENTRIES'; end if;
+
+  v_rejected := false;
+  begin
     update public.ledger_transactions set description = 'tampered'
     where id = (v_result->>'id')::uuid;
   exception when sqlstate '55000' then
