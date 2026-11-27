@@ -156,7 +156,7 @@ export default async function ElectionPage({ params, searchParams }: {
           </div>
         </section>
       )}
-      {canManagePayments && platformFeeQuote && election.voting_mode !== "public_paid" && (
+      {canManagePayments && platformFeeQuote && ["draft", "scheduled"].includes(election.status) && election.voting_mode !== "public_paid" && (
         <PlatformFeeCheckout
           organizationId={organizationId}
           electionId={electionId}
