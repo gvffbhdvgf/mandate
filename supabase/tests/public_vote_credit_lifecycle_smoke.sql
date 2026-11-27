@@ -253,6 +253,12 @@ begin
 end;
 $$;
 
+-- Pause new public-credit checkout after purchase. Existing holders must still
+-- be able to cast their paid credits.
+update public.platform_payment_feature_flags
+set public_vote_credits_enabled=false
+where singleton;
+
 -- Authenticated participant context and casting: no participant identifier enters ballot rows.
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
