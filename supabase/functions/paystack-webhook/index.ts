@@ -1,4 +1,4 @@
-import { adminClient, json, paystackRequest, paymentPurposeEnabled, paymentsModeEnabled, verifyPaystackWebhookSignature } from "../_shared/paystack.ts";
+import { adminClient, json, paystackRequest, paymentsModeEnabled, verifyPaystackWebhookSignature } from "../_shared/paystack.ts";
 
 type PaystackEvent = {
   event?: string;
