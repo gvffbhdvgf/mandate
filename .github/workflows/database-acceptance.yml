@@ -20,6 +20,7 @@ on:
       - 'package-lock.json'
       - 'tests/contracts.test.mjs'
       - '.github/workflows/database-acceptance.yml'
+      - '.github/workflows/paystack-edge-integration.yml'
       - '.github/workflows/m1-organization-members.yml'
       - '.github/workflows/m2-election-setup.yml'
       - '.github/workflows/database-concurrency.yml'
