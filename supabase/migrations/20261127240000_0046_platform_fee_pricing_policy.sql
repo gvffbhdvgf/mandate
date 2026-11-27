@@ -269,7 +269,7 @@ create or replace function public.create_platform_fee_payment_intent(
   p_election_id uuid,p_expected_voter_count integer,p_expected_amount_minor bigint,p_expected_policy_version integer
 )
 returns jsonb language sql security invoker set search_path=pg_catalog
-as $ select mandate_private.create_platform_fee_payment_intent($1,$2,$3,$4); $;
+as $$ select mandate_private.create_platform_fee_payment_intent($1,$2,$3,$4); $$;
 revoke all on function public.create_platform_fee_payment_intent(uuid,integer,bigint,integer) from public,anon;
 grant execute on function public.create_platform_fee_payment_intent(uuid,integer,bigint,integer) to authenticated;
 
