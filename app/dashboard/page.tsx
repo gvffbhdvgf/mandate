@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { signOutAction } from "../actions/auth";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { CreateOrganizationForm } from "./create-organization-form";
+import { WorkspaceShell } from "../components/workspace-shell";
+import { formatStatusLabel } from "../../lib/ui/presentation";
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
@@ -18,11 +20,8 @@ export default async function DashboardPage() {
   const organizations = organizationRows ?? [];
 
   return (
+    <WorkspaceShell section="Dashboard" items={[{ label: "Dashboard", href: "/dashboard" }]} activeHref="/dashboard" actions={<form action={signOutAction}><button className="quiet-button">Sign out</button></form>}>
     <main className="dashboard-shell">
-      <header className="topbar">
-        <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
-        <form action={signOutAction}><button className="quiet-button">Sign out</button></form>
-      </header>
       <section className="dashboard-intro">
         <p className="kicker">YOUR WORKSPACE</p>
         <h1>Good to see you.</h1>
@@ -38,7 +37,7 @@ export default async function DashboardPage() {
               {organizations.map((organization) => (
                 <Link className="organization-item" href={`/organizations/${organization.id}`} key={organization.id}>
                   <div><h3>{organization.name}</h3><p className="muted">/{organization.slug}</p></div>
-                  <span className="status-pill">{organization.status}</span>
+                  <span className={`status-pill status-${organization.status}`}>{formatStatusLabel(organization.status)}</span>
                 </Link>
               ))}
             </div>
@@ -51,5 +50,6 @@ export default async function DashboardPage() {
         </div>
       </section>
     </main>
+    </WorkspaceShell>
   );
 }
