@@ -534,5 +534,5 @@ test("Paystack settlement importer is service-role-only and safely paginated", a
   assert.match(migration, /security_invoker = true/);
   assert.match(migration, /matched_to_receipt/);
   assert.match(smoke, /PAYSTACK_SETTLEMENT_RECEIPT_MATCH_FAILED/);
-  assert.match(smoke, /PAYSTACK_SETTLEMENT_MUST_REMAIN_SERVER_ONLY/);
+  assert.match(smoke, /PAYSTACK_SETTLEMENT_RECONCILIATION_MUST_REMAIN_SERVER_ONLY/);
 });
