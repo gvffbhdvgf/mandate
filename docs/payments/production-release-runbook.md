@@ -58,3 +58,14 @@ The repository's current `.github/workflows/production-deploy.yml` deploys the C
 - [Shared-revenue accounting design](./shared-revenue-accounting.md)
 - [Paystack Kenya Merchant Services Agreement](https://paystack.com/ke/terms)
 - [ODPC Guidance Notes for Electoral Purposes](https://www.odpc.go.ke/wp-content/uploads/2024/02/ODPC-Guidance-Notes-for-Electoral-Purposes.pdf)
+
+
+## Split-settlement-specific release gates
+
+- Public paid-voting organizer proceeds must use the accepted Paystack split-settlement target: an approved active KES organizer subaccount receives its share directly from Paystack; Mandate receives only its approved platform fee.
+- Do not launch the prior model where Mandate collects all proceeds and later pays organizers unless Paystack expressly approves that model in writing.
+- Do not create real organizer subaccounts until Paystack confirms the paid-voting use case and the organizer's identity/KYC and beneficiary details have been verified and authorized.
+- A server-only subaccount profile and versioned public-voting fee policy are required. Their database schema is not yet approved or implemented; no production migration may be written/applied until that schema change is explicitly approved.
+- The platform fee amount/formula and Paystack fee bearer are still unresolved. The existing registered-election KES 20-per-voter / KES 500-minimum fee is not the public-voting fee.
+- Before a test/live split is considered ready, verify Paystack's actual split formula and per-party shares from the provider transaction/webhook, reconcile them to the immutable intent snapshot, and test partial/full refunds, reversals and disputes for split transactions.
+- If Paystack does not approve this model, evaluate direct organizer merchant-of-record with a separately charged Mandate service fee; do not silently fall back to collecting all proceeds into Mandate.
