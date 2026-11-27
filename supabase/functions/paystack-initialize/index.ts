@@ -24,7 +24,7 @@ Deno.serve(async (request: Request) => {
     const admin = adminClient();
     const { data: intent, error } = await admin
       .from("payment_intents")
-      .select("id,organization_id,election_id,participant_id,purpose,provider,provider_reference,amount_minor,currency,status,split_status,split_subaccount_profile_id,split_fee_type,split_fixed_fee_minor,split_percentage_basis_points,split_fee_bearer")
+      .select("id,organization_id,election_id,participant_id,purpose,provider,provider_reference,amount_minor,currency,status")
       .eq("id", body.paymentIntentId)
       .maybeSingle();
     if (error || !intent) return json(404, { error: "PAYMENT_INTENT_NOT_FOUND" }, cors);
@@ -34,39 +34,7 @@ Deno.serve(async (request: Request) => {
     if (!paymentPurposeEnabled(intent.purpose)) {
       return json(503, { error: "PAYMENT_PURPOSE_DISABLED" }, cors);
     }
-    let splitInitialization: Record<string, string> = {};
     if (intent.purpose === "public_vote_credits") {
-      // Fail closed unless an immutable approved split snapshot is attached.
-      if (intent.split_status !== "pending" || !intent.split_subaccount_profile_id
-        || !["fixed", "percentage"].includes(intent.split_fee_type)
-        || !["mandate", "organizer"].includes(intent.split_fee_bearer)) {
-        return json(503, { error: "PAYSTACK_SPLIT_NOT_CONFIGURED" }, cors);
-      }
-      const { data: subaccount, error: subaccountError } = await admin
-        .from("organization_paystack_subaccounts")
-        .select("provider_subaccount_code,currency,status,provider_percentage_charge_basis_points")
-        .eq("id", intent.split_subaccount_profile_id)
-        .maybeSingle();
-      if (subaccountError || !subaccount || subaccount.status !== "verified"
-        || subaccount.currency !== intent.currency || !subaccount.provider_subaccount_code) {
-        return json(503, { error: "VERIFIED_ORGANIZER_SUBACCOUNT_REQUIRED" }, cors);
-      }
-      const feeBearer = intent.split_fee_bearer === "organizer" ? "subaccount" : "account";
-      if (intent.split_fee_type === "fixed") {
-        const fixedFee = Number(intent.split_fixed_fee_minor);
-        if (!Number.isSafeInteger(fixedFee) || fixedFee <= 0 || fixedFee >= Number(intent.amount_minor)) {
-          return json(409, { error: "PUBLIC_VOTE_SPLIT_FEE_INVALID" }, cors);
-        }
-        splitInitialization = {
-          subaccount: subaccount.provider_subaccount_code,
-          transaction_charge: String(fixedFee),
-          bearer: feeBearer,
-        };
-      } else {
-        // Percentage settlement is deliberately disabled until Paystack's exact
-        // KES rounding behavior is covered by provider evidence and acceptance tests.
-        return json(503, { error: "PERCENTAGE_SPLIT_ROUNDING_NOT_YET_APPROVED" }, cors);
-      }
       const { data: releaseFlags, error: releaseFlagsError } = await admin
         .from("platform_payment_feature_flags")
         .select("public_vote_credits_enabled")
@@ -160,7 +128,6 @@ Deno.serve(async (request: Request) => {
           email: user.email,
           amount: String(intent.amount_minor),
           currency: intent.currency,
-          ...splitInitialization,
           reference: intent.provider_reference,
           ...(callbackUrl ? { callback_url: callbackUrl } : {}),
           metadata: {
