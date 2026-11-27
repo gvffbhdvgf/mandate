@@ -61,6 +61,7 @@ Deno.serve(async (request: Request) => {
       return json(409, { error: "PAYMENT_INITIALIZATION_OUTCOME_UNKNOWN", message: "This reference may already have been submitted to Paystack. Reconcile it before retrying." }, cors);
     }
     if (intent.status !== "initialized") return json(409, { error: "PAYMENT_INTENT_NOT_INITIALIZABLE" }, cors);
+    const callbackUrl = paymentCallbackUrl();
 
     // The unique payment_intent_id is the database-level serialization point.
     // If another request already claimed this intent, reuse a completed checkout
@@ -72,6 +73,7 @@ Deno.serve(async (request: Request) => {
       .maybeSingle();
 
     let attempt = claimed;
+    if (!claimError && !claimed) return json(500, { error: "PAYMENT_INITIALIZATION_CLAIM_FAILED" }, cors);
     if (claimError) {
       if (claimError.code !== "23505") {
         return json(500, { error: "PAYMENT_INITIALIZATION_CLAIM_FAILED" }, cors);
@@ -97,7 +99,6 @@ Deno.serve(async (request: Request) => {
       return json(409, { error: "PAYMENT_INITIALIZATION_OUTCOME_UNKNOWN", message: "This reference may already have been submitted to Paystack. Reconcile it before retrying." }, cors);
     }
 
-    const callbackUrl = paymentCallbackUrl();
     let result: PaystackInitializeResponse;
     try {
       result = await paystackRequest<PaystackInitializeResponse>("/transaction/initialize", {
