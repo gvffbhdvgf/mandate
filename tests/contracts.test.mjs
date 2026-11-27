@@ -270,12 +270,14 @@ test("Paystack initialization, verification and webhooks enforce explicit mode a
   assert.match(shared, /PAYSTACK_TEST_SECRET_KEY/);
   assert.match(shared, /PAYSTACK_LIVE_SECRET_KEY/);
   assert.match(shared, /PAYSTACK_LIVE_TRANSACTIONS_ENABLED/);
+  assert.match(shared, /PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED/);
   assert.match(shared, /PAYSTACK_TEST_WEBHOOK_SECRET/);
   assert.match(shared, /PAYSTACK_LIVE_WEBHOOK_SECRET/);
   assert.match(shared, /PAYSTACK_\$\{config\.mode\.toUpperCase\(\)\}_\$\{purposeKey\}_ENABLED/);
   assert.match(initialize, /paymentPurposeEnabled\(intent\.purpose\)/);
   assert.match(verify, /paymentPurposeEnabled\(intent\.purpose\)/);
   assert.match(webhook, /paymentPurposeEnabled\(intent\.purpose\)/);
+  assert.match(webhook, /PUBLIC_VOTE_CREDIT_FULFILLMENT_NOT_READY/);
   assert.match(initialize, /if \(!paymentsModeEnabled\(\)\)/);
   assert.match(verify, /if \(!paymentsModeEnabled\(\)\)/);
   assert.match(webhook, /if \(!paymentsModeEnabled\(\)\)/);
