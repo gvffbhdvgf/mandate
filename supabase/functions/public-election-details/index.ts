@@ -23,6 +23,7 @@ Deno.serve(async (request: Request) => {
     .select("title,description,public_slug,voting_mode,status,starts_at,ends_at,timezone,currency,price_per_credit_minor,max_credits_per_participant,contact_verification_required")
     .eq("public_slug", slug)
     .eq("voting_mode", "public_paid")
+    .in("status", ["scheduled", "open", "closed", "tallying", "results_published"])
     .maybeSingle();
 
   if (error || !election) return json(404, { error: "PUBLIC_ELECTION_NOT_FOUND" }, cors);
