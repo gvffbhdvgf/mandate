@@ -12,6 +12,7 @@ type ParticipantElection = {
   endsAt: string;
   timezone: string;
   creditsRemaining: number;
+  checkoutEnabled: boolean;
 };
 
 type BallotContext = {
@@ -83,6 +84,10 @@ export function ParticipantVerificationForm({
         <PublicPaidBallot slug={slug} initialContext={ballotContext} />
       </section>
     );
+  }
+
+  if (participantElection && !participantElection.checkoutEnabled) {
+    return <p className="form-hint" role="status">New voting-credit purchases are temporarily paused for this election. Any credits you already own remain available for ballot casting.</p>;
   }
 
   if (participantElection) {
