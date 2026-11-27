@@ -497,7 +497,9 @@ begin
     current_setting('test.public_credit_organizer_bearer_intent_id')::uuid
   );
 
-  if v_ballots <> 1 or v_controls <> 1 or v_consumed <> 2 or v_remaining <> 0 then
+  -- Three credits were issued across the two verified split scenarios; the ballot
+  -- consumes two from the first lot, leaving the organizer-bearer lot untouched.
+  if v_ballots <> 1 or v_controls <> 1 or v_consumed <> 2 or v_remaining <> 1 then
     raise exception 'PUBLIC_PAID_BALLOT_MUST_CONSUME_CREDITS_ONCE_AND_KEEP_BALLOT_ANONYMOUS';
   end if;
 
