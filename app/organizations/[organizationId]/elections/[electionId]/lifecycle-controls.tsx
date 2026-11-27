@@ -63,6 +63,9 @@ export function ElectionLifecycleControls({
     if (openState.success || closeState.success || pauseState.success || resumeState.success || tallyState.success || publishState.success) router.refresh();
   }, [openState.success, closeState.success, pauseState.success, resumeState.success, tallyState.success, publishState.success, router]);
 
+  const successMessages = [openState.message, pauseState.message, resumeState.message, closeState.message, tallyState.message, publishState.message]
+    .filter((message): message is string => Boolean(message));
+
   const hiddenFields = (
     <>
       <input type="hidden" name="organizationId" value={organizationId} />
@@ -73,6 +76,7 @@ export function ElectionLifecycleControls({
   return (
     <section className="panel lifecycle-panel">
       <div className="panel-heading"><div><p className="kicker">ELECTION CONTROL</p><h2>Lifecycle and results</h2></div><span className="status-pill">{lifecycleStatusLabels[status] ?? status.replaceAll("_", " ")}</span></div>
+      {successMessages.map((message, index) => <p className="form-success" role="status" key={`${index}-${message}`}>{message}</p>)}
 
       {status === "draft" || status === "scheduled" ? (
         canOpen ? (
@@ -82,7 +86,6 @@ export function ElectionLifecycleControls({
               ? "Opening freezes the public price, participant cap, rules and candidate snapshot. Mandate merchant authorization and the public paid-voting release gates must be active; the database enforces these gates."
               : "Opening freezes the rules and candidate snapshot. The voter register must be complete and every eligible voter must have an invitation issued."}</p>
             {openState.error && <p className="form-error" role="alert">{openState.error}</p>}
-            {openState.message && <p className="form-success" role="status">{openState.message}</p>}
             <label className="ballot-confirmation"><input type="checkbox" name="confirmRules" value="true" required /> I have reviewed the election rules, options and {votingMode === "public_paid" ? "public participant access and credit limits" : "eligible voter register and voter access"}.</label>
             <button className="primary-button" disabled={openPending}>{openPending ? "Checking opening requirements…" : "Open election"}</button>
           </form>
@@ -94,7 +97,6 @@ export function ElectionLifecycleControls({
           {hiddenFields}
           <label>Reason for pausing<textarea name="reason" minLength={10} maxLength={1000} required placeholder="Record why voting is being paused." /></label>
           {pauseState.error && <p className="form-error" role="alert">{pauseState.error}</p>}
-          {pauseState.message && <p className="form-success" role="status">{pauseState.message}</p>}
           <button className="secondary-button" disabled={pausePending}>{pausePending ? "Pausing election…" : "Pause voting"}</button>
         </form>
       )}
@@ -104,7 +106,6 @@ export function ElectionLifecycleControls({
           {hiddenFields}
           <label>Reason for resuming<textarea name="reason" minLength={10} maxLength={1000} required placeholder="Record why voting is being resumed." /></label>
           {resumeState.error && <p className="form-error" role="alert">{resumeState.error}</p>}
-          {resumeState.message && <p className="form-success" role="status">{resumeState.message}</p>}
           <button className="primary-button" disabled={resumePending}>{resumePending ? "Resuming election…" : "Resume voting"}</button>
         </form>
       )}
@@ -115,7 +116,6 @@ export function ElectionLifecycleControls({
             {hiddenFields}
             <label>Reason for closing<textarea name="reason" minLength={10} maxLength={1000} required placeholder="Record why the election is being closed." /></label>
             {closeState.error && <p className="form-error" role="alert">{closeState.error}</p>}
-            {closeState.message && <p className="form-success" role="status">{closeState.message}</p>}
             <button className="danger-button" disabled={closePending}>{closePending ? "Closing election…" : "Close election"}</button>
           </form>
         ) : <p className="form-hint">A returning officer or election manager must close this election.</p>
@@ -127,7 +127,6 @@ export function ElectionLifecycleControls({
             {hiddenFields}
             <p className="muted">Reconciliation checks ballot records against the separate participation controls and frozen election snapshot. It publishes aggregate counts only.</p>
             {tallyState.error && <p className="form-error" role="alert">{tallyState.error}</p>}
-            {tallyState.message && <p className="form-success" role="status">{tallyState.message}</p>}
             <button className="primary-button" disabled={tallyPending}>{tallyPending ? "Reconciling ballots…" : "Run tally and reconciliation"}</button>
           </form>
         ) : <p className="form-hint">A returning officer or election manager must run reconciliation.</p>
@@ -157,7 +156,6 @@ export function ElectionLifecycleControls({
             <form action={publishAction} className="form-stack lifecycle-form">
               {hiddenFields}
               {publishState.error && <p className="form-error" role="alert">{publishState.error}</p>}
-              {publishState.message && <p className="form-success" role="status">{publishState.message}</p>}
               <button className="primary-button" disabled={publishPending}>{publishPending ? "Publishing results…" : "Publish results"}</button>
             </form>
           ) : <p className="form-hint">An owner, administrator or returning officer must publish results.</p>}
