@@ -177,16 +177,37 @@ test("organization invitations are single-use, role-scoped and email-bound", asy
   assert.match(tokenCapture, /history\.replaceState/);
 });
 
-test("invitation authentication redirects are restricted to the signed invitation path", async () => {
+test("auth callbacks allow only invitation acceptance and the password update route", async () => {
   const navigation = await read("../lib/navigation.ts");
   const auth = await read("../app/actions/auth.ts");
   const callback = await read("../app/auth/callback/route.ts");
   assert.match(navigation, /startsWith\("\/\/"\)/);
-  assert.match(navigation, /resolved\.pathname !== "\/invitations\/accept"/);
+  assert.match(navigation, /allowedPaths = new Set\(\["\/invitations\/accept", "\/update-password"\]\)/);
   assert.match(navigation, /resolved\.search !== ""/);
   assert.match(navigation, /resolved\.hash !== ""/);
   assert.match(auth, /safeInternalPath/);
   assert.match(callback, /safeInternalPath/);
+  assert.match(callback, /returnTo/);
+});
+
+test("password recovery is non-enumerating and requires a verified recovery session", async () => {
+  const auth = await read("../app/actions/auth.ts");
+  const login = await read("../app/login/login-form.tsx");
+  const requestPage = await read("../app/forgot-password/page.tsx");
+  const requestForm = await read("../app/forgot-password/forgot-password-form.tsx");
+  const updatePage = await read("../app/update-password/page.tsx");
+  const updateForm = await read("../app/update-password/update-password-form.tsx");
+  assert.match(login, /Forgot your password\?/);
+  assert.match(auth, /resetPasswordForEmail/);
+  assert.match(auth, /If an account exists for that address/);
+  assert.match(auth, /updateUser\(\{ password \}\)/);
+  assert.match(auth, /auth\.getUser\(\)/);
+  assert.match(auth, /password\.length < 10/);
+  assert.match(requestPage, /ACCOUNT RECOVERY/);
+  assert.match(requestForm, /role="status"/);
+  assert.match(updatePage, /auth\.getUser\(\)/);
+  assert.match(updatePage, /forgot-password\?notice=expired/);
+  assert.match(updateForm, /confirmPassword/);
 });
 
 
