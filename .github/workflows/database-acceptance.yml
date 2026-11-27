@@ -2,7 +2,9 @@ name: Database acceptance (schema, security and concurrency)
 
 on:
   push:
-    branches: [feat/m2-election-setup-lifecycle-next]
+    branches:
+      - feat/m2-election-setup-lifecycle-next
+      - "feat/**"
   workflow_dispatch:
   pull_request:
     branches: [main, feat/m0-vinext-foundation]
@@ -59,7 +61,7 @@ jobs:
         run: |
           db_port=$((55000 + GITHUB_RUN_NUMBER % 1000))
           shadow_port=$((db_port + 1))
-          printf '\n[db]\nport = %s\nshadow_port = %s\n' "$db_port" "$shadow_port" >> supabase/config.toml
+          printf '\\n[db]\\nport = %s\\nshadow_port = %s\\n' "$db_port" "$shadow_port" >> supabase/config.toml
           echo "Using disposable database port $db_port"
 
       - name: Start one disposable local Supabase stack (retry registry throttling)
@@ -96,12 +98,12 @@ jobs:
             test_name="$(basename "${test_file}")"
             log_file="/tmp/mandate-db-acceptance/${test_name}.log"
             echo "::group::Running ${test_file}"
-            if psql "$DB_URL" -v ON_ERROR_STOP=1 -f "${test_file}" >"$log_file" 2>&1; then
-              cat "$log_file"
+            if psql "$DB_URL" -v ON_ERROR_STOP=1 -f "${test_file}" >"${log_file}" 2>&1; then
+              cat "${log_file}"
               echo "PASS: ${test_name}" | tee -a "$GITHUB_STEP_SUMMARY"
               echo "::endgroup::"
             else
-              cat "$log_file"
+              cat "${log_file}"
               echo "FAIL: ${test_name}" | tee -a "$GITHUB_STEP_SUMMARY"
               echo "::endgroup::"
               exit 1
