@@ -38,8 +38,8 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 
 ## Edge Function behavior
 
-- `paystack-initialize`: loads an existing server-created intent; amount, currency and reference come from the database. Requires the matching mode and purpose gates. Public vote-credit initialization remains blocked until a scoped participant-token checkout path is implemented.
-- `paystack-verify`: verifies the provider transaction server-side and compares exact reference, amount and KES currency. Organization intents require active organization-manager authorization.
+- `paystack-initialize`: loads an existing server-created intent; amount, currency and reference come from the database. Requires the matching mode and purpose gates plus an active owner, admin or finance-manager role. Public vote-credit initialization remains blocked until a scoped participant-token checkout path is implemented.
+- `paystack-verify`: verifies the provider transaction server-side and compares exact reference, amount and KES currency. Organization payment intents require an active owner, admin or finance-manager membership; election-manager membership alone is not financial authority.
 - `paystack-webhook`: verifies the timestamped `Paystack-Signature` HMAC over the exact raw body, deduplicates provider events, checks the associated intent's purpose gate, verifies with Paystack and calls the row-locked database RPC. Webhook events for a disabled purpose are not applied. Public vote-credit webhook fulfillment is explicitly blocked until the atomic credit-issuance path is implemented, even if its purpose flag is accidentally enabled.
 
 ## Important boundaries
