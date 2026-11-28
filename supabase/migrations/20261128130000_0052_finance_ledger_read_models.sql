@@ -95,11 +95,12 @@ begin
       select jsonb_agg(jsonb_build_object(
         'id',x.id,'transactionId',x.transaction_id,
         'transactionType',x.transaction_type,'description',x.description,
-        'direction',x.direction,'amountMinor',x.amount_minor,
+        'accountCode',x.account_code,'ownerType',x.owner_type,\n        'direction',x.direction,'amountMinor',x.amount_minor,
         'currency',x.currency,'createdAt',x.created_at
       ) order by x.created_at desc)
       from (
         select le.id,le.transaction_id,lt.transaction_type,lt.description,
+          la.account_code,la.owner_type::text as owner_type,
           le.direction,le.amount_minor,le.currency,le.created_at
         from public.ledger_accounts la
         join public.ledger_entries le on le.account_id=la.id
