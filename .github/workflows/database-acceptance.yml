@@ -53,6 +53,16 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check disbursement and webhook Edge Functions
+        run: |
+          deno check --node-modules-dir=none supabase/functions/paystack-disbursements/index.ts
+          deno check --node-modules-dir=none supabase/functions/paystack-webhook/index.ts
+
       - name: Authenticate to GHCR for Supabase image fallback
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
 
