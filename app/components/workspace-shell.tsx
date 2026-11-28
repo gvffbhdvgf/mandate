@@ -53,7 +53,7 @@ export function WorkspaceShell({
           </div>
           <div className="app-topbar-actions">{actions}</div>
         </header>
-        <div className="app-content">{children}</div>
+        <div className="app-content" id="main-content" tabIndex={-1}>{children}</div>
       </div>
     </div>
   );
