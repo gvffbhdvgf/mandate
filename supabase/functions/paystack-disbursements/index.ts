@@ -157,11 +157,12 @@ Deno.serve(async (request: Request) => {
             destination_confirmed_by: user.id,
             destination_confirmed_at: new Date().toISOString(),
           })
-          .select("id,recipient_code,recipient_type,beneficiary_name,bank_code,masked_account,active,created_at")
+          .select("id,organization_id,recipient_code,recipient_type,beneficiary_name,bank_code,masked_account,active,created_at")
           .single();
         if (error || !createdRecipient) return json(500, { error: "RECIPIENT_RECORD_PERSIST_FAILED" }, cors);
         recipient = createdRecipient;
       }
+      if (!recipient) return json(500, { error: "RECIPIENT_RECORD_PERSIST_FAILED" }, cors);
       const { error: auditError } = await admin.from("audit_events").insert({
         organization_id: organizationId,
         actor_id: user.id,
