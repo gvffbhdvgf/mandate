@@ -6,7 +6,7 @@ create table public.organization_payout_recipients (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete restrict,
   provider public.payment_provider not null default 'paystack' check (provider = 'paystack'),
-  recipient_code text not null unique check (recipient_code ~ '^RCP_[A-Za-z0-9_-]{4,128}),
+  recipient_code text not null unique check (recipient_code ~ '^RCP_[A-Za-z0-9_-]{4,128}$'),
   recipient_type text not null check (recipient_type in ('mobile_money','mobile_money_business','kepss')),
   currency character(3) not null default 'KES' check (currency = 'KES'),
   beneficiary_name text not null check (length(btrim(beneficiary_name)) between 2 and 160),
