@@ -189,6 +189,10 @@ export function buildBankReconciliationReport(settlementRows, bankRows, dateWind
       candidatesBySettlement.push({ settlement, candidates: [], chosen: null, reviewStatus: "not_settled", evidence: "" });
       continue;
     }
+    if (settlement.currency !== "KES") {
+      candidatesBySettlement.push({ settlement, candidates: [], chosen: null, reviewStatus: "unsupported_currency", evidence: "" });
+      continue;
+    }
     if (!Number.isSafeInteger(settlement.expectedNetMinor) || settlement.expectedNetMinor < 0) {
       candidatesBySettlement.push({ settlement, candidates: [], chosen: null, reviewStatus: "missing_expected_net_amount", evidence: "" });
       continue;
