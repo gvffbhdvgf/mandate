@@ -206,7 +206,7 @@ begin
         select la.owner_type::text as owner_type,la.organization_id,o.name as organization_name,
           la.account_code,la.currency,b.debit_minor,b.credit_minor,
           case when la.owner_type::text in ('platform_revenue','organization_payable','refund_payable','payouts_payable')
-            then 'credit' else 'debit' end as normal_balance,
+            then 'credit' when la.owner_type::text='suspense' then 'variable' else 'debit' end as normal_balance,
           case when la.owner_type::text in ('platform_revenue','organization_payable','refund_payable','payouts_payable')
             then b.credit_minor-b.debit_minor else b.debit_minor-b.credit_minor end as balance_minor
         from public.ledger_accounts la
