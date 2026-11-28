@@ -29,7 +29,7 @@ Paybill recipients are not enabled in this first implementation because Paystack
 5. The API response is not final proof of payment. The function verifies immediately when the provider returns a terminal state; otherwise the signed Paystack webhook verifies the transfer and records the final state.
 6. Only a provider-verified success posts the payout ledger transaction. failed releases the reservation. reversed after a prior success restores the organization-payable principal through a separate idempotent reversal posting.
 
-If a transfer request times out, keep the request in processing and retry only with the same stored reference. Never create a new reference for an uncertain transfer.
+If Paystack returns OTP status, the business owner can finalize or resend the OTP through the server-side action; the OTP is never persisted. If a transfer request times out, keep the request in processing and retry only with the same stored reference. Never create a new reference for an uncertain transfer.
 
 ## Accounting
 
