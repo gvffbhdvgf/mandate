@@ -10,6 +10,10 @@ export function safeInternalPath(value: string | null | undefined): string {
       return resolved.search === "" ? resolved.pathname : "/dashboard";
     }
 
+    if (resolved.pathname === "/reset-password") {
+      return resolved.search === "" ? resolved.pathname : "/dashboard";
+    }
+
     if (resolved.pathname === "/payments/paystack/callback") {
       const entries = Array.from(resolved.searchParams.entries());
       const reference = resolved.searchParams.get("reference");
