@@ -149,6 +149,69 @@ export async function resendConfirmationAction(
   };
 }
 
+export async function requestPasswordResetAction(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: "Enter a valid email address." };
+  }
+
+  const requestHeaders = await headers();
+  const origin = requestHeaders.get("origin")
+    ?? (requestHeaders.get("host") ? `https://${requestHeaders.get("host")}` : "http://localhost:3001");
+  const callbackUrl = new URL("/auth/callback", origin);
+  callbackUrl.searchParams.set("next", "/reset-password");
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: callbackUrl.toString(),
+    });
+    if (error) {
+      console.error("[auth.password-reset] Supabase rejected reset request", {
+        code: error.code ?? "unknown",
+        status: error.status ?? null,
+      });
+    }
+  } catch (cause) {
+    console.error("[auth.password-reset] Unexpected reset exception", {
+      name: cause instanceof Error ? cause.name : "unknown",
+    });
+  }
+
+  // The same response is returned whether or not an account exists.
+  return { message: "If an account exists for that address, a password reset email will be sent. Check your inbox and spam folder." };
+}
+
+export async function updatePasswordAction(
+  _previousState: AuthActionState,
+  formData: FormData,
+): Promise<AuthActionState> {
+  const password = String(formData.get("password") ?? "");
+  const confirmation = String(formData.get("confirmPassword") ?? "");
+  if (password.length < 10) return { error: "Choose a password of at least 10 characters." };
+  if (password !== confirmation) return { error: "The passwords do not match." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return { error: "Your reset session is missing or expired. Request a new password reset link." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    console.error("[auth.password-reset] Password update failed", {
+      code: error.code ?? "unknown",
+      status: error.status ?? null,
+    });
+    return { error: "We could not update your password. Request a new reset link and try again." };
+  }
+
+  redirect("/dashboard");
+}
+
 export async function signOutAction() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
