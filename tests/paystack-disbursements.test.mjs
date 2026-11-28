@@ -31,7 +31,7 @@ test("transfer settlement is webhook/API verified and idempotently posted", asyn
 test("disbursement endpoint never stores raw beneficiary account details", async () => {
   const endpoint = await read("../supabase/functions/paystack-disbursements/index.ts");
   assert.match(endpoint, /\/transferrecipient/);
-  assert.match(endpoint, /masked_account:/);
+  assert.match(endpoint, /masked_account:/);\n  assert.match(endpoint, /destinationConfirmed === true/);\n  assert.match(endpoint, /destination_confirmed_by: user.id/);
   assert.doesNotMatch(endpoint, /account_number:\s*accountNumber\s*[,}][\s\S]{0,100}\.insert\(/);
   assert.match(endpoint, /claim_organization_payout/);
   assert.match(endpoint, /TRANSFER_OUTCOME_UNKNOWN/);
