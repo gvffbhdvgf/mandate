@@ -131,22 +131,43 @@ Deno.serve(async (request: Request) => {
       if (!recipientCode || created.data?.active !== true || !/^RCP_[A-Za-z0-9]+$/.test(recipientCode)) {
         return json(502, { error: "PAYSTACK_RECIPIENT_RESPONSE_INVALID" }, cors);
       }
-      const { data: recipient, error } = await admin.from("organization_payout_recipients")
-        .upsert({
-          organization_id: organizationId,
-          provider: "paystack",
-          recipient_code: recipientCode,
-          recipient_type: type,
-          currency: "KES",
-          beneficiary_name: name,
-          bank_code: bankCode,
-          masked_account: `••••${accountNumber.slice(-4)}`,
-          active: true,
-          created_by: user.id,
-        }, { onConflict: "recipient_code" })
-        .select("id,recipient_code,recipient_type,beneficiary_name,bank_code,masked_account,active,created_at")
-        .single();
-      if (error || !recipient) return json(500, { error: "RECIPIENT_RECORD_PERSIST_FAILED" }, cors);
+      const { data: existingRecipient, error: existingRecipientError } = await admin
+        .from("organization_payout_recipients")
+        .select("id,organization_id,recipient_code,recipient_type,beneficiary_name,bank_code,masked_account,active,created_at")
+        .eq("recipient_code", recipientCode).maybeSingle();
+      if (existingRecipientError) return json(500, { error: "RECIPIENT_LOOKUP_FAILED" }, cors);
+      if (existingRecipient && existingRecipient.organization_id !== organizationId) {
+        return json(409, { error: "RECIPIENT_ALREADY_LINKED_TO_ANOTHER_ORGANIZATION" }, cors);
+      }
+      let recipient = existingRecipient;
+      if (!recipient) {
+        const { data: createdRecipient, error } = await admin.from("organization_payout_recipients")
+          .insert({
+            organization_id: organizationId,
+            provider: "paystack",
+            recipient_code: recipientCode,
+            recipient_type: type,
+            currency: "KES",
+            beneficiary_name: name,
+            bank_code: bankCode,
+            masked_account: `••••${accountNumber.slice(-4)}`,
+            active: true,
+            created_by: user.id,
+          })
+          .select("id,recipient_code,recipient_type,beneficiary_name,bank_code,masked_account,active,created_at")
+          .single();
+        if (error || !createdRecipient) return json(500, { error: "RECIPIENT_RECORD_PERSIST_FAILED" }, cors);
+        recipient = createdRecipient;
+      }
+      await admin.from("audit_events").insert({
+        organization_id: organizationId,
+        actor_id: user.id,
+        actor_type: "user",
+        action: "organization.payout_recipient_created",
+        entity_type: "payout_recipient",
+        entity_id: recipient.id,
+        redacted_metadata: { recipientType: type, bankCode, maskedAccount: `••••${accountNumber.slice(-4)}` },
+      });
       return json(200, { recipient }, cors);
     }
 
