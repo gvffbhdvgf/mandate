@@ -45,6 +45,22 @@ begin
     'availableMinor',greatest(v_balance-v_reserved,0),
     'overReserved',v_balance<v_reserved,
     'paidOutMinor',v_paid,
+    'accounts',coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'ownerType',x.owner_type,'accountCode',x.account_code,
+        'currency',x.currency,'balanceMinor',x.balance_minor
+      ) order by x.owner_type,x.account_code)
+      from (
+        select la.owner_type::text as owner_type,la.account_code,la.currency,
+          coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+        from public.ledger_accounts la
+        left join public.ledger_entries le on le.account_id=la.id
+        left join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
+        where la.organization_id=p_organization_id
+          and la.owner_type in ('organization','organization_payable')
+        group by la.id,la.owner_type,la.account_code,la.currency
+      ) x
+    ),'[]'::jsonb),
     'recipients',coalesce((
       select jsonb_agg(jsonb_build_object(
         'id',r.id,'type',r.recipient_type,'name',r.beneficiary_name,
@@ -86,8 +102,8 @@ begin
         from public.ledger_accounts la
         join public.ledger_entries le on le.account_id=la.id
         join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
-        where la.owner_type='organization_payable'
-          and la.organization_id=p_organization_id and la.currency='KES'
+        where la.organization_id=p_organization_id
+          and la.owner_type in ('organization','organization_payable')
         order by le.created_at desc limit 100
       ) x
     ),'[]'::jsonb)
