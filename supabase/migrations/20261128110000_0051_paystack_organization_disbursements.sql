@@ -14,6 +14,8 @@ create table public.organization_payout_recipients (
   masked_account text not null check (length(masked_account) between 3 and 32),
   active boolean not null default true,
   created_by uuid not null references auth.users(id) on delete restrict,
+  destination_confirmed_by uuid not null references auth.users(id) on delete restrict,
+  destination_confirmed_at timestamptz not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
