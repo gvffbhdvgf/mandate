@@ -37,8 +37,11 @@ test("settlement CLI rejects missing confirmation and unapproved live mode", () 
   assert.throws(() => validateOptions(noConfirmation), /--confirm-import/);
 
   const live = parseArgs([
-    ...validArguments.filter((value) => value !== "test"),
+    "--settlement-id", "123456",
+    "--from", "2026-11-01T00:00:00Z",
+    "--to", "2026-11-02T00:00:00Z",
     "--environment", "live",
+    "--confirm-import",
   ]);
   assert.throws(() => validateOptions(live), /--allow-live/);
 });
@@ -139,8 +142,11 @@ test("settlement CLI imports every provider page idempotently and never prints c
 
 test("live settlement import requires explicit live confirmation before any request", async () => {
   const options = parseArgs([
-    ...validArguments.filter((value) => value !== "test"),
+    "--settlement-id", "123456",
+    "--from", "2026-11-01T00:00:00Z",
+    "--to", "2026-11-02T00:00:00Z",
     "--environment", "live",
+    "--confirm-import",
   ]);
   let calls = 0;
   await assert.rejects(
