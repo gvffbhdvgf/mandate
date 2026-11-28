@@ -103,7 +103,8 @@ export async function runImport({
   };
 
   const preflight = await postImportRequest(endpoint, config.serviceRoleKey, { ...common, preflight: true }, fetchImpl);
-  if (preflight.ready !== true || !["test", "live"].includes(preflight.environment)) {
+  if (preflight.ready !== true || !["test", "live"].includes(preflight.environment)
+    || String(preflight.settlementId) !== validated.settlementId || preflight.from !== validated.from || preflight.to !== validated.to) {
     throw new Error("Settlement importer preflight did not confirm readiness.");
   }
   if (preflight.environment !== validated.environment) {
@@ -124,7 +125,8 @@ export async function runImport({
     if (result.environment !== preflight.environment || String(result.settlementId) !== validated.settlementId) {
       throw new Error("Importer response identity did not match preflight; stop and inspect the settlement records.");
     }
-    if (!Number.isSafeInteger(result.importedTransactions) || result.importedTransactions < 0
+    if (result.imported !== true || typeof result.settlementStatus !== "string"
+      || !Number.isSafeInteger(result.importedTransactions) || result.importedTransactions < 0
       || !Number.isSafeInteger(result.transactionPageCount) || result.transactionPageCount < 1
       || result.transactionPageCount > 1000 || result.transactionPage !== page
       || typeof result.complete !== "boolean") {
