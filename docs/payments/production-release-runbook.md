@@ -4,15 +4,15 @@
 
 ## Current production baseline — 28 November 2026
 
-- **Repository:** gvffbhdvgf/mandate, main commit 2b84791f5e92b61887def3324252670e68fbd934.
-- **Cloudflare Worker:** https://mandate.markmachukhu97.workers.dev, deployed version 012b96e8-5d3f-4349-93ea-a07694bcff2e.
+- **Repository:** gvffbhdvgf/mandate, main commit `90ed75c9cae98d997d1f4cdfcbe2f6699c49c16e`.
+- **Cloudflare Worker:** https://mandate.markmachukhu97.workers.dev, deployed version `1c225df6-de2d-465b-9dc0-7e590b96b621` (100% traffic; 2026-11-28 00:28 UTC).
 - **Supabase:** project yhdosrhtzcsfqfuuqhsk, region eu-central-1; migrations applied through 0049_single_merchant_public_vote_payments.
 - **Paystack Edge Functions:** paystack-initialize v13 (JWT required), paystack-verify v13 (JWT required), paystack-webhook v13 (JWT disabled; signature verification in function), public-vote-credit-intent v2, public-participant-session v2, public-election-details v2 and paystack-settlement-import v3.
 - **Production purpose flags:** public_vote_credits_enabled=false, platform_fee_enabled=false, organization_topup_enabled=false.
-- **Election state:** tracked election 6e9f142d-4522-47f8-8282-ee210793c06a remains draft, registered_single, with no paid-voting authorization and no opening timestamp.
+- **Election state:** latest read-only production count is four elections, all draft. No election lifecycle action was performed during this review.
 - **Merged payment/product work:** PR #19 payment foundation; PR #23 single-merchant public vote credits; PR #24 manual voter registration; PR #26 email-confirmation UX; PR #27 human-centred workflows and shared Paystack checkout. All are merged.
 - **Deployment evidence:** PR #23 worker deployment [46082507806](https://github.com/gvffbhdvgf/mandate/actions/runs/46082507806); manual-voter deployment [46084078836](https://github.com/gvffbhdvgf/mandate/actions/runs/46084078836); auth deployment [46084417647](https://github.com/gvffbhdvgf/mandate/actions/runs/46084417647); current UX/payment-hardening deployment [46085988206](https://github.com/gvffbhdvgf/mandate/actions/runs/46085988206).
-- **Post-deploy verification:** read-only Supabase queries after PR #27 reconfirmed all three purpose flags remain false and the tracked election remains draft. No payment, refund, transfer, payout, invitation or election lifecycle action was initiated by these releases.
+- **Post-deploy verification (2026-11-28):** all three payment-purpose flags remain false; production has one pending KES 500 platform-fee intent without provider transaction/status evidence, zero payment events and zero posted ledger transactions. The pending intent was left untouched. No payment, refund, transfer, payout, invitation or election lifecycle action was initiated during this review.
 
 ## Accepted payment architecture
 
