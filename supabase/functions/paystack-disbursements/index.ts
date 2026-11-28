@@ -128,7 +128,7 @@ Deno.serve(async (request: Request) => {
         }),
       });
       const recipientCode = safeString(created.data?.recipient_code, 128);
-      if (!recipientCode || created.data?.active !== true || !/^RCP_[A-Za-z0-9]+$/.test(recipientCode)) {
+      if (!recipientCode || created.data?.active !== true || !/^RCP_[A-Za-z0-9_-]{4,128}$/.test(recipientCode)) {
         return json(502, { error: "PAYSTACK_RECIPIENT_RESPONSE_INVALID" }, cors);
       }
       const { data: existingRecipient, error: existingRecipientError } = await admin
