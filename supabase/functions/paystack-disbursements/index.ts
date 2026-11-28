@@ -111,7 +111,8 @@ Deno.serve(async (request: Request) => {
       const type = safeString(body.type, 32);
       const name = safeString(body.name, 160);
       const accountNumber = safeString(body.accountNumber, 40).replace(/[\s-]/g, "");
-      const bankCode = safeString(body.bankCode, 32);\n      const destinationConfirmed = body.destinationConfirmed === true;
+      const bankCode = safeString(body.bankCode, 32);
+      const destinationConfirmed = body.destinationConfirmed === true;
       if (!["mobile_money", "mobile_money_business", "kepss"].includes(type)
         || !name || !/^\+?[0-9]{6,31}$/.test(accountNumber) || !bankCode
         || (type === "mobile_money_business" && bankCode !== "MPTILL")) {
@@ -152,7 +153,9 @@ Deno.serve(async (request: Request) => {
             bank_code: bankCode,
             masked_account: `••••${accountNumber.slice(-4)}`,
             active: true,
-            created_by: user.id,\n            destination_confirmed_by: user.id,\n            destination_confirmed_at: new Date().toISOString(),
+            created_by: user.id,
+            destination_confirmed_by: user.id,
+            destination_confirmed_at: new Date().toISOString(),
           })
           .select("id,recipient_code,recipient_type,beneficiary_name,bank_code,masked_account,active,created_at")
           .single();
