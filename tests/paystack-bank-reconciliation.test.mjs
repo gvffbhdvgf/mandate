@@ -69,7 +69,7 @@ test("bank CSV parser maps bank-specific columns without uploading source data",
     "Date,Credit,Debit\n28/11/2026,100.00,20.00",
     { ...baseOptions, descriptionColumn: undefined, referenceColumn: undefined, currencyColumn: undefined },
   ), /both a credit and a debit/);\n  assert.throws(() => parseBankCsv(
-    "Date,Currency,Credit,Debit\\n28/11/2026,USD,100.00,",
+    "Date,Currency,Credit,Debit\n28/11/2026,,100.00,",
     { ...baseOptions, descriptionColumn: undefined, referenceColumn: undefined },
   ), /Only KES/);
 });
