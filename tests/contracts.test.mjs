@@ -195,6 +195,15 @@ test("authentication redirects allow only invitation and payment callback return
 });
 
 
+test("password recovery callback destination is exact and cannot carry a redirect", async () => {
+  const { safeInternalPath } = await import("../lib/navigation.ts");
+  assert.equal(safeInternalPath("/reset-password"), "/reset-password");
+  assert.equal(safeInternalPath("/reset-password?next=https://evil.example"), "/dashboard");
+  assert.equal(safeInternalPath("//evil.example/reset-password"), "/dashboard");
+  assert.equal(safeInternalPath("https://evil.example/reset-password"), "/dashboard");
+  assert.equal(safeInternalPath("/forgot-password"), "/dashboard");
+});
+
 test("password recovery is non-enumerating, session-bound and uses a safe callback destination", async () => {
   const auth = await read("../app/actions/auth.ts");
   const navigation = await read("../lib/navigation.ts");
