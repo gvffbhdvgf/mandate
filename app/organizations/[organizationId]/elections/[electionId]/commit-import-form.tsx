@@ -15,6 +15,7 @@ export function CommitImportForm({ organizationId, electionId, batchId }: { orga
       <input type="hidden" name="batchId" value={batchId} />
       {state.error && <p className="form-error" role="alert">{state.error}</p>}
       <p className="form-hint">Review the count above. Committing adds these voters to the election register.</p>
+      <label className="ballot-confirmation"><input type="checkbox" name="confirmImport" value="true" required /> I confirm that this voter register is correct and ready to add.</label>
       <button className="primary-button" disabled={pending}>{pending ? "Committing…" : "Commit voter register"}</button>
     </form>
   );

@@ -1,6 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "../../lib/supabase/server";
+import { validatePaystackAuthorizationUrl } from "../../lib/payments/paystack";
 
 export type PublicElectionDetails = {
   title: string;
@@ -113,7 +114,9 @@ export async function initializePublicVoteCreditCheckout(slug: string, quantity:
     if (checkoutError || !checkout?.authorizationUrl) {
       return { error: "Checkout could not be opened. Do not start another payment; retry this checkout or contact support." };
     }
-    return { authorizationUrl: checkout.authorizationUrl };
+    const authorizationUrl = validatePaystackAuthorizationUrl(checkout.authorizationUrl);
+    if (!authorizationUrl) return { error: "Paystack returned an untrusted checkout address. No redirect was made." };
+    return { authorizationUrl };
   } catch {
     return { error: "Checkout is temporarily unavailable. Please try again." };
   }

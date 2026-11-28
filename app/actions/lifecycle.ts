@@ -42,7 +42,7 @@ export async function openElectionAction(_previous: LifecycleActionState, formDa
     if (error.message.includes("ELECTION_NOT_STARTED")) return { error: "The scheduled start time has not arrived." };
     return { error: "The election could not be opened. Check the rules, options and voter access checklist." };
   }
-  return { success: true, message: "Election opened. The frozen ballot snapshot is now active." };
+  return { success: true, message: "Election opened. The frozen ballot is active and eligible voters can now vote until the scheduled close." };
 }
 
 export async function pauseElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
@@ -52,7 +52,7 @@ export async function pauseElectionAction(_previous: LifecycleActionState, formD
   if ("error" in auth) return { error: auth.error };
   const { error } = await auth.supabase.rpc("pause_election", { p_election_id: auth.electionId, p_reason: reason });
   if (error) return { error: "The election could not be paused. It may no longer be open." };
-  return { success: true, message: "Election paused. Ballot submissions are temporarily disabled." };
+  return { success: true, message: "Election paused. Ballot submissions are disabled until an authorized manager resumes voting." };
 }
 
 export async function resumeElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
@@ -62,10 +62,11 @@ export async function resumeElectionAction(_previous: LifecycleActionState, form
   if ("error" in auth) return { error: auth.error };
   const { error } = await auth.supabase.rpc("resume_election", { p_election_id: auth.electionId, p_reason: reason });
   if (error) return { error: "The election could not be resumed. It may have reached its scheduled end." };
-  return { success: true, message: "Election resumed. Ballot submissions are active again." };
+  return { success: true, message: "Election resumed. Ballot submissions are active again until the scheduled close." };
 }
 
 export async function closeElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
+  if (formData.get("confirmClose") !== "true") return { error: "Confirm that you want to close voting for this election." };
   const reason = String(formData.get("reason") ?? "").trim();
   if (reason.length < 10 || reason.length > 1000) return { error: "Enter a closure reason between 10 and 1,000 characters." };
   const auth = await authorizedElection(formData);
@@ -75,7 +76,7 @@ export async function closeElectionAction(_previous: LifecycleActionState, formD
     p_reason: reason,
   });
   if (error) return { error: "The election could not be closed. It may already be closed or cancelled." };
-  return { success: true, message: "Election closed. You can now run tally reconciliation." };
+  return { success: true, message: "Election closed. Voting is over; the next step is to run tally reconciliation." };
 }
 
 export async function tallyElectionAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
@@ -100,6 +101,7 @@ export async function tallyElectionAction(_previous: LifecycleActionState, formD
 }
 
 export async function publishResultsAction(_previous: LifecycleActionState, formData: FormData): Promise<LifecycleActionState> {
+  if (formData.get("confirmPublish") !== "true") return { error: "Confirm that the reconciled results are ready to publish." };
   const auth = await authorizedElection(formData);
   if ("error" in auth) return { error: auth.error };
   const { error } = await auth.supabase.rpc("publish_results", { p_election_id: auth.electionId });

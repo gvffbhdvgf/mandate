@@ -20,7 +20,7 @@ export default async function AcceptInvitationPage({ searchParams }: { searchPar
   const { data: { user } } = await supabase.auth.getUser();
 
   return (
-    <main className="auth-shell">
+    <main id="main-content" tabIndex={-1} className="auth-shell">
       <Link className="brand" href="/"><span className="brand-mark">M</span><span>mandate</span></Link>
       <section className="auth-card">
         <p className="kicker">ORGANIZATION INVITATION</p>

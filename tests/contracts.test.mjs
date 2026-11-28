@@ -615,7 +615,7 @@ test("registered elections use a versioned server-priced platform fee before inv
   assert.match(smoke, /VERIFIED_PLATFORM_FEE_PAYMENT_MUST_MARK_ELECTION_PAID/);
   assert.match(action, /create_platform_fee_payment_intent/);
   assert.match(action, /paystack-initialize/);
-  assert.match(action, /authorizationUrl\.hostname\.endsWith\("\.paystack\.com"\)/);
+  assert.match(action, /validatePaystackAuthorizationUrl/);
   assert.match(component, /KSh 20 per voter · KSh 500 minimum/);
   assert.match(component, /Continue to secure payment/);
   assert.match(page, /get_platform_fee_quote/);
@@ -660,4 +660,137 @@ test("unconfirmed accounts receive explicit sign-in guidance and can request a s
   assert.match(form, /Resend confirmation email/);
   assert.match(form, /state\.needsConfirmation/);
   assert.match(form, /role="status"/);
+});
+
+
+test("election lifecycle actions explain successful transitions and the next step", async () => {
+  const actions = await read("../app/actions/lifecycle.ts");
+  const controls = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
+  assert.match(actions, /eligible voters can now vote until the scheduled close/);
+  assert.match(actions, /authorized manager resumes voting/);
+  assert.match(actions, /active again until the scheduled close/);
+  assert.match(actions, /next step is to run tally reconciliation/);
+  assert.match(controls, /openState\.message/);
+  assert.match(controls, /pauseState\.message/);
+  assert.match(controls, /resumeState\.message/);
+  assert.match(controls, /closeState\.message/);
+  assert.match(controls, /lifecycleStatusLabels/);
+  assert.match(controls, /role="status"/);
+});
+
+
+test("organization member actions confirm revocations and explain successful access changes", async () => {
+  const actions = await read("../app/actions/organization-members.ts");
+  const page = await read("../app/organizations/[organizationId]/page.tsx");
+  const panel = await read("../app/organizations/[organizationId]/members-panel.tsx");
+  assert.match(actions, /confirmRevokeMember/);
+  assert.match(actions, /confirmRevokeInvitation/);
+  assert.match(actions, /memberNotice=role-updated/);
+  assert.match(actions, /memberNotice=member-revoked/);
+  assert.match(actions, /memberNotice=invitation-revoked/);
+  assert.match(actions, /role-update-failed/);
+  assert.match(page, /memberNotice\?:/);
+  assert.match(page, /memberError\?:/);
+  assert.match(panel, /Confirm revoke access/);
+  assert.match(panel, /Confirm revoke invitation/);
+  assert.match(panel, /Their new permissions are now active/);
+  assert.match(panel, /can no longer access this organization/);
+  assert.match(panel, /role="status"/);
+});
+
+
+test("closing elections, publishing results and sending voter invitations require explicit confirmation", async () => {
+  const lifecycle = await read("../app/actions/lifecycle.ts");
+  const lifecycleForm = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
+  const invitations = await read("../app/actions/invitations.ts");
+  const invitationForm = await read("../app/organizations/[organizationId]/elections/[electionId]/dispatch-invitations-form.tsx");
+  assert.match(lifecycle, /confirmClose/);
+  assert.match(lifecycle, /confirmPublish/);
+  assert.match(lifecycleForm, /name="confirmClose"/);
+  assert.match(lifecycleForm, /name="confirmPublish"/);
+  assert.match(invitations, /confirmInvitations/);
+  assert.match(invitationForm, /name="confirmInvitations"/);
+});
+
+
+test("registered-election fees and public vote credits share the same Paystack checkout and callback pipeline", async () => {
+  const platformFee = await read("../app/actions/payments.ts");
+  const publicVote = await read("../app/actions/public-vote.ts");
+  const callback = await read("../app/payments/paystack/callback/route.ts");
+  const initialize = await read("../supabase/functions/paystack-initialize/index.ts");
+  const verify = await read("../supabase/functions/paystack-verify/index.ts");
+  assert.match(platformFee, /functions\.invoke\("paystack-initialize"/);
+  assert.match(publicVote, /functions\.invoke\("paystack-initialize"/);
+  assert.match(platformFee, /authorizationUrl/);
+  assert.match(publicVote, /authorizationUrl/);
+  assert.match(callback, /functions\.invoke\("paystack-verify"/);
+  assert.match(initialize, /public_vote_credits/);
+  assert.match(verify, /intent\.purpose === "platform_fee"/);
+  assert.match(verify, /intent\.purpose === "public_vote_credits"/);
+  assert.match(verify, /apply_verified_paystack_public_vote_payment/);
+});
+
+
+test("all Paystack checkout purposes share trusted hosted-redirect validation", async () => {
+  const { validatePaystackAuthorizationUrl } = await import("../lib/payments/paystack.ts");
+  const platformFee = await read("../app/actions/payments.ts");
+  const publicVote = await read("../app/actions/public-vote.ts");
+  assert.equal(validatePaystackAuthorizationUrl("https://checkout.paystack.com/example"), "https://checkout.paystack.com/example");
+  assert.equal(validatePaystackAuthorizationUrl("http://checkout.paystack.com/example"), null);
+  assert.equal(validatePaystackAuthorizationUrl("https://paystack.com.example.org/fake"), null);
+  assert.equal(validatePaystackAuthorizationUrl("javascript:alert(1)"), null);
+  assert.equal(validatePaystackAuthorizationUrl(null), null);
+  assert.match(platformFee, /validatePaystackAuthorizationUrl/);
+  assert.match(publicVote, /validatePaystackAuthorizationUrl/);
+});
+
+
+test("committing a staged voter register requires explicit administrator confirmation", async () => {
+  const actions = await read("../app/actions/voters.ts");
+  const form = await read("../app/organizations/[organizationId]/elections/[electionId]/commit-import-form.tsx");
+  assert.match(actions, /confirmImport/);
+  assert.match(actions, /Review the voter count and confirm before adding the register/);
+  assert.match(form, /name="confirmImport"/);
+  assert.match(form, /ready to add/);
+});
+
+
+test("member access controls show pending feedback while server actions are running", async () => {
+  const panel = await read("../app/organizations/[organizationId]/members-panel.tsx");
+  assert.match(panel, /function PendingMemberForm/);
+  assert.match(panel, /useState/);
+  assert.match(panel, /disabled=\{pending\}/);
+  assert.match(panel, /Saving role/);
+  assert.match(panel, /Revoking access/);
+  assert.match(panel, /Revoking invitation/);
+});
+
+
+test("server CSV import accepts ignored extra columns consistently with the browser preview", async () => {
+  const actions = await read("../app/actions/voters.ts");
+  const preview = await read("../lib/ui/voter-import-preview.ts");
+  assert.match(actions, /headers\.includes\("voter_ref"\)/);
+  assert.match(actions, /headers\.includes\("name"\)/);
+  assert.doesNotMatch(actions, /headers\.some\(\(header\) => !allowedHeaders\.has\(header\)\)/);
+  assert.match(preview, /Additional columns are not used and will be ignored/);
+});
+
+
+test("global skip navigation targets a unique main-content region on every non-workspace page", async () => {
+  const layout = await read("../app/layout.tsx");
+  assert.match(layout, /href="#main-content"/);
+  assert.doesNotMatch(layout, /id="main-content"/);
+  for (const path of [
+    "../app/page.tsx",
+    "../app/login/page.tsx",
+    "../app/signup/page.tsx",
+    "../app/invitations/accept/page.tsx",
+    "../app/public-vote/[slug]/page.tsx",
+    "../app/results/[electionId]/page.tsx",
+    "../app/vote/page.tsx",
+  ]) {
+    assert.match(await read(path), /<main id="main-content" tabIndex=\{-1\}/);
+  }
+  const shell = await read("../app/components/workspace-shell.tsx");
+  assert.match(shell, /id="main-content"/);
 });

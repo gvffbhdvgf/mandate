@@ -14,6 +14,12 @@ import {
 
 const initialState: LifecycleActionState = {};
 
+const lifecycleStatusLabels: Record<string, string> = {
+  draft: "Draft", scheduled: "Scheduled", open: "Voting open", paused: "Voting paused",
+  closed: "Voting closed", tallying: "Reconciliation in progress",
+  results_published: "Results published", cancelled: "Cancelled",
+};
+
 type TallySummary = {
   status?: string;
   electionStatus?: string;
@@ -57,6 +63,9 @@ export function ElectionLifecycleControls({
     if (openState.success || closeState.success || pauseState.success || resumeState.success || tallyState.success || publishState.success) router.refresh();
   }, [openState.success, closeState.success, pauseState.success, resumeState.success, tallyState.success, publishState.success, router]);
 
+  const successMessages = [openState.message, pauseState.message, resumeState.message, closeState.message, tallyState.message, publishState.message]
+    .filter((message): message is string => Boolean(message));
+
   const hiddenFields = (
     <>
       <input type="hidden" name="organizationId" value={organizationId} />
@@ -66,7 +75,8 @@ export function ElectionLifecycleControls({
 
   return (
     <section className="panel lifecycle-panel">
-      <div className="panel-heading"><div><p className="kicker">ELECTION CONTROL</p><h2>Lifecycle and results</h2></div><span className="status-pill">{status.replaceAll("_", " ")}</span></div>
+      <div className="panel-heading"><div><p className="kicker">ELECTION CONTROL</p><h2>Lifecycle and results</h2></div><span className="status-pill">{lifecycleStatusLabels[status] ?? status.replaceAll("_", " ")}</span></div>
+      {successMessages.map((message, index) => <p className="form-success" role="status" key={`${index}-${message}`}>{message}</p>)}
 
       {status === "draft" || status === "scheduled" ? (
         canOpen ? (
@@ -105,6 +115,7 @@ export function ElectionLifecycleControls({
           <form action={closeAction} className="form-stack lifecycle-form">
             {hiddenFields}
             <label>Reason for closing<textarea name="reason" minLength={10} maxLength={1000} required placeholder="Record why the election is being closed." /></label>
+            <label className="ballot-confirmation"><input type="checkbox" name="confirmClose" value="true" required /> I understand that closing voting prevents further ballot submissions.</label>
             {closeState.error && <p className="form-error" role="alert">{closeState.error}</p>}
             <button className="danger-button" disabled={closePending}>{closePending ? "Closing election…" : "Close election"}</button>
           </form>
@@ -117,7 +128,6 @@ export function ElectionLifecycleControls({
             {hiddenFields}
             <p className="muted">Reconciliation checks ballot records against the separate participation controls and frozen election snapshot. It publishes aggregate counts only.</p>
             {tallyState.error && <p className="form-error" role="alert">{tallyState.error}</p>}
-            {tallyState.message && <p className="form-success" role="status">{tallyState.message}</p>}
             <button className="primary-button" disabled={tallyPending}>{tallyPending ? "Reconciling ballots…" : "Run tally and reconciliation"}</button>
           </form>
         ) : <p className="form-hint">A returning officer or election manager must run reconciliation.</p>
@@ -146,8 +156,8 @@ export function ElectionLifecycleControls({
           ) : canPublish ? (
             <form action={publishAction} className="form-stack lifecycle-form">
               {hiddenFields}
+              <label className="ballot-confirmation"><input type="checkbox" name="confirmPublish" value="true" required /> I have reviewed the reconciliation and confirm these results are ready to publish.</label>
               {publishState.error && <p className="form-error" role="alert">{publishState.error}</p>}
-              {publishState.message && <p className="form-success" role="status">{publishState.message}</p>}
               <button className="primary-button" disabled={publishPending}>{publishPending ? "Publishing results…" : "Publish results"}</button>
             </form>
           ) : <p className="form-hint">An owner, administrator or returning officer must publish results.</p>}

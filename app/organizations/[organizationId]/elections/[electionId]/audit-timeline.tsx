@@ -1,3 +1,4 @@
+import { formatAuditAction } from "../../../../../lib/ui/presentation";
 type AuditEvent = {
   action: string; actorType: string; entityType: string; createdAt: string;
   metadata: Record<string, unknown> | null;
@@ -45,7 +46,7 @@ export function ElectionAuditTimeline({ events }: { events: AuditEvent[] }) {
           <li className="audit-item" key={`${event.action}-${event.createdAt}-${index}`}>
             <span className="audit-dot" />
             <div className="audit-content">
-              <strong>{humanize(event.action.replaceAll(".", " "))}</strong>
+              <strong>{formatAuditAction(event.action)}</strong>
               <p>{event.actorType === "system" ? "System event" : "Authorized organization member"} · {new Date(event.createdAt).toLocaleString("en-KE", { timeZone: "Africa/Nairobi" })}</p>
               {event.metadata && Object.keys(event.metadata).length > 0 && (
                 <details><summary>View event information</summary>
