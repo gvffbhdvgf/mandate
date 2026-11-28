@@ -95,7 +95,8 @@ begin
       select jsonb_agg(jsonb_build_object(
         'id',x.id,'transactionId',x.transaction_id,
         'transactionType',x.transaction_type,'description',x.description,
-        'accountCode',x.account_code,'ownerType',x.owner_type,\n        'direction',x.direction,'amountMinor',x.amount_minor,
+        'accountCode',x.account_code,'ownerType',x.owner_type,
+        'direction',x.direction,'amountMinor',x.amount_minor,
         'currency',x.currency,'createdAt',x.created_at
       ) order by x.created_at desc)
       from (
