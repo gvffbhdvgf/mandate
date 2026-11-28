@@ -180,6 +180,37 @@ Deno.serve(async (request: Request) => {
       return json(200, { recipients: data ?? [] }, cors);
     }
 
+    if (action === "list_payouts") {
+      await assertOrganizationFinanceManager(caller, organizationId, user.id);
+      const { data: payouts, error: payoutListError } = await admin.from("payout_requests")
+        .select("id,amount_minor,currency,status,provider_reference,provider_status,provider_fee_minor,failure_code,created_at,paid_at,recipient_id")
+        .eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(100);
+      if (payoutListError) return json(500, { error: "PAYOUT_LIST_FAILED" }, cors);
+      const recipientIds = [...new Set((payouts ?? []).map((item) => item.recipient_id).filter(Boolean))];
+      const { data: recipients, error: recipientListError } = recipientIds.length
+        ? await admin.from("organization_payout_recipients")
+          .select("id,recipient_type,beneficiary_name,masked_account")
+          .in("id", recipientIds)
+        : { data: [], error: null };
+      if (recipientListError) return json(500, { error: "PAYOUT_RECIPIENT_LOOKUP_FAILED" }, cors);
+      const recipientById = new Map((recipients ?? []).map((item) => [item.id, item]));
+      return json(200, {
+        payouts: (payouts ?? []).map((item) => ({
+          id: item.id,
+          amountMinor: item.amount_minor,
+          currency: item.currency,
+          status: item.status,
+          reference: item.provider_reference,
+          providerStatus: item.provider_status,
+          providerFeeMinor: item.provider_fee_minor,
+          failureCode: item.failure_code,
+          createdAt: item.created_at,
+          paidAt: item.paid_at,
+          recipient: recipientById.get(item.recipient_id) ?? null,
+        })),
+      }, cors);
+    }
+
     if (action === "request_payout") {
       const recipientId = safeString(body.recipientId, 64);
       const amount = amountMinor(body.amountMinor);
