@@ -29,6 +29,31 @@ begin
   if has_table_privilege('authenticated','mandate_private.platform_paid_voting_release_audit','insert') then
     raise exception 'PLATFORM_AUDIT_DIRECT_INSERT_GRANTED';
   end if;
+  if (
+    select count(*) from pg_policies
+    where schemaname='mandate_private'
+      and policyname in (
+        'platform_authorization_guard_deny_api',
+        'platform_operator_bootstrap_allowlist_deny_api',
+        'platform_operators_deny_api',
+        'platform_paid_voting_release_requirements_deny_api',
+        'platform_paid_voting_release_audit_deny_api'
+      )
+      and qual='false' and with_check='false'
+  ) <> 5 then raise exception 'PLATFORM_RELEASE_TABLES_REQUIRE_EXPLICIT_DENY_POLICIES'; end if;
+  if (
+    select count(*) from pg_indexes
+    where schemaname='mandate_private'
+      and indexname in (
+        'platform_operator_bootstrap_allowlist_consumed_by_idx',
+        'platform_operators_granted_by_idx',
+        'platform_paid_voting_release_audit_actor_idx',
+        'platform_paid_voting_release_audit_election_idx',
+        'platform_paid_voting_release_audit_requirement_idx',
+        'platform_paid_voting_release_audit_created_idx',
+        'platform_paid_voting_release_requirements_reviewed_by_idx'
+      )
+  ) <> 7 then raise exception 'PLATFORM_RELEASE_FOREIGN_KEY_INDEXES_MISSING'; end if;
   if not exists (
     select 1 from pg_trigger
     where tgrelid='public.elections'::regclass
