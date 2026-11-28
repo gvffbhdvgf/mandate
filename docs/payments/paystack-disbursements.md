@@ -15,7 +15,7 @@ Paybill recipients are not enabled in this first implementation because Paystack
 
 - Only active organization owners, administrators and finance managers can register beneficiaries, request payouts, approve payouts or initiate/verify transfers.
 - The requester and approver must be different users.
-- Mandate stores the Paystack recipient code, beneficiary display name, bank code and masked account suffix. Raw account numbers are sent to Paystack over HTTPS and are not persisted in Mandate.
+- Finance must explicitly confirm the destination details before registering a beneficiary. Mandate records who confirmed and when. Mandate stores the Paystack recipient code, beneficiary display name, bank code and masked account suffix. Raw account numbers are sent to Paystack over HTTPS and are not persisted in Mandate.
 - A Paystack recipient code already linked to another organization cannot be reassigned.
 - Browser roles have no direct access to recipient, payout or transfer-event tables. The Edge Function authenticates the user and uses service-role access only for server-side provider operations.
 - Secrets remain in Supabase Edge Function secrets.
