@@ -392,6 +392,13 @@ begin
       provider_status='success',provider_fee_minor=p_provider_fee_minor,paid_at=now(),
       failure_code=null,failure_message=null
     where id=v_request.id;
+    insert into public.audit_events(
+      organization_id,actor_type,action,entity_type,entity_id,redacted_metadata
+    ) values (
+      v_request.organization_id,'provider','organization.payout_paid','payout_request',v_request.id,
+      jsonb_build_object('amountMinor',v_request.amount_minor,'currency','KES',
+        'transferCode',p_provider_transfer_code,'providerFeeMinor',p_provider_fee_minor)
+    );
   elsif p_provider_status='reversed' and v_request.status='paid' then
     select id into strict v_payable from public.ledger_accounts
     where owner_type='organization_payable' and organization_id=v_request.organization_id
@@ -414,6 +421,12 @@ begin
       provider_status='reversed',failure_code='TRANSFER_REVERSED',
       failure_message='Paystack reversed the transfer; the organization payable principal was restored.'
     where id=v_request.id;
+    insert into public.audit_events(
+      organization_id,actor_type,action,entity_type,entity_id,redacted_metadata
+    ) values (
+      v_request.organization_id,'provider','organization.payout_reversed','payout_request',v_request.id,
+      jsonb_build_object('amountMinor',v_request.amount_minor,'currency','KES','transferCode',p_provider_transfer_code)
+    );
   else
     if v_request.status='paid' then
       raise exception 'PAID_PAYOUT_REQUIRES_TRANSFER_REVERSAL' using errcode='55000';
@@ -422,6 +435,13 @@ begin
       provider_status=p_provider_status,failure_code='TRANSFER_FAILED',
       failure_message='Paystack did not complete this transfer.'
     where id=v_request.id;
+    insert into public.audit_events(
+      organization_id,actor_type,action,entity_type,entity_id,redacted_metadata
+    ) values (
+      v_request.organization_id,'provider','organization.payout_failed','payout_request',v_request.id,
+      jsonb_build_object('amountMinor',v_request.amount_minor,'currency','KES',
+        'transferCode',p_provider_transfer_code,'providerStatus',p_provider_status)
+    );
   end if;
 
   update public.paystack_transfer_events set processing_status='processed',processed_at=now()
