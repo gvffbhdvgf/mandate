@@ -794,3 +794,14 @@ test("global skip navigation targets a unique main-content region on every non-w
   const shell = await read("../app/components/workspace-shell.tsx");
   assert.match(shell, /id="main-content"/);
 });
+
+
+test("settlement importer preflight reports configured mode before provider calls or database writes", async () => {
+  const importer = await read("../supabase/functions/paystack-settlement-import/index.ts");
+  const preflight = importer.indexOf("if (input.preflight === true)");
+  const providerLookup = importer.indexOf("const settlement = await findSettlement");
+  assert.ok(preflight >= 0);
+  assert.ok(providerLookup > preflight);
+  assert.match(importer.slice(preflight, providerLookup), /ready: true/);
+  assert.match(importer.slice(preflight, providerLookup), /environment: mode/);
+});
