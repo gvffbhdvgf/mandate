@@ -7,7 +7,7 @@
 - **Repository:** gvffbhdvgf/mandate, main commit 2b84791f5e92b61887def3324252670e68fbd934.
 - **Cloudflare Worker:** https://mandate.markmachukhu97.workers.dev, deployed version 012b96e8-5d3f-4349-93ea-a07694bcff2e.
 - **Supabase:** project yhdosrhtzcsfqfuuqhsk, region eu-central-1; migrations applied through 0049_single_merchant_public_vote_payments.
-- **Paystack Edge Functions:** paystack-initialize v13 (JWT required), paystack-verify v13 (JWT required), paystack-webhook v13 (JWT disabled; signature verification in function), public-vote-credit-intent v2, public-participant-session v2, public-election-details v2 and paystack-settlement-import v2.
+- **Paystack Edge Functions:** paystack-initialize v13 (JWT required), paystack-verify v13 (JWT required), paystack-webhook v13 (JWT disabled; signature verification in function), public-vote-credit-intent v2, public-participant-session v2, public-election-details v2 and paystack-settlement-import v3.
 - **Production purpose flags:** public_vote_credits_enabled=false, platform_fee_enabled=false, organization_topup_enabled=false.
 - **Election state:** tracked election 6e9f142d-4522-47f8-8282-ee210793c06a remains draft, registered_single, with no paid-voting authorization and no opening timestamp.
 - **Merged payment/product work:** PR #19 payment foundation; PR #23 single-merchant public vote credits; PR #24 manual voter registration; PR #26 email-confirmation UX; PR #27 human-centred workflows and shared Paystack checkout. All are merged.
