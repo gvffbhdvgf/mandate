@@ -49,6 +49,7 @@ create table public.paystack_transfer_events (
   amount_minor bigint,
   currency character(3),
   signature_verified boolean not null default false,
+  verification_source text not null default 'webhook' check (verification_source in ('webhook','api_verify')),
   redacted_payload jsonb not null default '{}'::jsonb,
   processing_status public.payment_event_status not null default 'received',
   received_at timestamptz not null default now(),
@@ -286,7 +287,7 @@ begin
   end if;
 
   select * into v_event from public.paystack_transfer_events where id=p_event_id for update;
-  if not found or v_event.signature_verified is distinct from true
+  if not found or (v_event.signature_verified is distinct from true and v_event.verification_source <> 'api_verify')
     or v_event.transfer_reference is distinct from p_transfer_reference
     or v_event.event_type not in ('transfer.success','transfer.failed','transfer.reversed') then
     raise exception 'INVALID_VERIFIED_TRANSFER_EVENT' using errcode='22023';
