@@ -73,7 +73,7 @@ export function parseBankDate(value) {
   const text = String(value ?? "").trim();
   if (!text) throw new Error("Bank statement date is blank.");
   let date;
-  const dayFirst = /^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})$/.exec(text);
+  const dayFirst = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(text);
   if (dayFirst) {
     date = new Date(Date.UTC(Number(dayFirst[3]), Number(dayFirst[2]) - 1, Number(dayFirst[1])));
   } else {
@@ -86,8 +86,8 @@ export function parseBankDate(value) {
 export function parseAmountToMinorUnits(value, columnName, rowNumber) {
   let text = String(value ?? "").trim();
   if (!text) return 0;
-  text = text.replace(/^(?:KES|KSH)\\s*/i, "").replace(/[ ,]/g, "");
-  if (!/^\\d+(?:\\.\\d{1,2})?$/.test(text)) {
+  text = text.replace(/^(?:KES|KSH)\s*/i, "").replace(/[ ,]/g, "");
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text)) {
     throw new Error("Invalid non-negative amount in " + columnName + " at CSV row " + rowNumber + ".");
   }
   const [whole, fraction = ""] = text.split(".");
@@ -239,7 +239,7 @@ export function buildBankReconciliationReport(settlementRows, bankRows, dateWind
 
 function csvCell(value) {
   const text = String(value ?? "");
-  return /[",\\r\\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
 export function reportToCsv(rows) {
