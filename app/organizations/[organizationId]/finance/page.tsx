@@ -40,7 +40,7 @@ type Payout = {
   paidAt: string | null;
 };
 
-type LedgerAccount = { ownerType: string; accountCode: string; currency: string; balanceMinor: number };
+type LedgerAccount = { ownerType: string; accountCode: string; currency: string; normalBalance: string; debitMinor: number; creditMinor: number; balanceMinor: number };
 
 type LedgerEntry = {
   id: string;
@@ -280,11 +280,12 @@ export default async function OrganizationFinancePage({ params, searchParams }: 
           <div className="panel-heading"><div><p className="kicker">ORGANIZATION ACCOUNTS</p><h2>Ledger balances</h2></div><span className="count">{accounts.length}</span></div>
           {accounts.length === 0 ? <div className="empty-state"><h3>No organization ledger accounts</h3><p className="muted">Account balances appear here when organization transactions are posted.</p></div> : (
             <div className="finance-table-wrap"><table className="finance-table">
-              <thead><tr><th>Account</th><th>Type</th><th>Balance</th></tr></thead>
+              <thead><tr><th>Account</th><th>Type</th><th>Debit / credit</th><th>Balance</th></tr></thead>
               <tbody>{accounts.map((account) => <tr key={`${account.ownerType}:${account.accountCode}`}>
                 <td><strong>{label(account.accountCode)}</strong></td>
                 <td>{label(account.ownerType)}</td>
-                <td>{money(account.balanceMinor)}</td>
+                <td><small>Dr {money(account.debitMinor)} · Cr {money(account.creditMinor)}</small></td>
+                <td>{money(account.balanceMinor)} <small>Normal {account.normalBalance}</small></td>
               </tr>)}</tbody>
             </table></div>
           )}
