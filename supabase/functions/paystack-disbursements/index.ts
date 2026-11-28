@@ -159,7 +159,7 @@ Deno.serve(async (request: Request) => {
         if (error || !createdRecipient) return json(500, { error: "RECIPIENT_RECORD_PERSIST_FAILED" }, cors);
         recipient = createdRecipient;
       }
-      await admin.from("audit_events").insert({
+      const { error: auditError } = await admin.from("audit_events").insert({
         organization_id: organizationId,
         actor_id: user.id,
         actor_type: "user",
@@ -168,6 +168,7 @@ Deno.serve(async (request: Request) => {
         entity_id: recipient.id,
         redacted_metadata: { recipientType: type, bankCode, maskedAccount: `••••${accountNumber.slice(-4)}` },
       });
+      if (auditError) return json(500, { error: "RECIPIENT_AUDIT_PERSIST_FAILED" }, cors);
       return json(200, { recipient }, cors);
     }
 
