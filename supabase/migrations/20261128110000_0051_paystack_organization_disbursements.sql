@@ -216,6 +216,8 @@ as $$
 declare
   v_request public.payout_requests%rowtype;
   v_recipient public.organization_payout_recipients%rowtype;
+  v_balance numeric;
+  v_reserved numeric;
 begin
   if auth.role() is distinct from 'service_role' then
     raise exception 'SERVICE_ROLE_REQUIRED' using errcode='42501';
@@ -293,8 +295,6 @@ declare
   v_payable uuid;
   v_clearing uuid;
   v_fee uuid;
-  v_balance numeric;
-  v_reserved numeric;
   v_posting jsonb;
   v_reversal_posting jsonb;
 begin
