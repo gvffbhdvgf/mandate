@@ -26,6 +26,7 @@ export function LoginForm({ next, notice }: { next: string; notice?: string }) {
             onChange={(event) => setEmail(event.target.value)} required />
         </label>
         <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
+        <p className="auth-recovery-link"><a href={`/forgot-password?next=${encodeURIComponent(next)}`}>Forgot your password?</a></p>
         <button className="primary-button" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
       </form>
       {showResend && (
