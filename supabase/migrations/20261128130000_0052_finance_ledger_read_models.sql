@@ -176,13 +176,15 @@ begin
       ) order by x.owner_type,x.organization_name,x.account_code)
       from (
         select la.owner_type::text as owner_type,la.organization_id,o.name as organization_name,
-          la.account_code,la.currency,
-          coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+          la.account_code,la.currency,b.balance_minor
         from public.ledger_accounts la
         left join public.organizations o on o.id=la.organization_id
-        left join public.ledger_entries le on le.account_id=la.id
-        left join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
-        group by la.id,la.owner_type,la.organization_id,o.name,la.account_code,la.currency
+        left join lateral (
+          select coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+          from public.ledger_entries le
+          join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
+          where le.account_id=la.id
+        ) b on true
       ) x
     ),'[]'::jsonb),
     'organizationPayables',coalesce((
@@ -192,11 +194,15 @@ begin
       ) order by x.organization_name)
       from (
         select la.organization_id,o.name as organization_name,
-          coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+          sum(b.balance_minor) as balance_minor
         from public.ledger_accounts la
         join public.organizations o on o.id=la.organization_id
-        left join public.ledger_entries le on le.account_id=la.id
-        left join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
+        left join lateral (
+          select coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+          from public.ledger_entries le
+          join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
+          where le.account_id=la.id
+        ) b on true
         where la.owner_type='organization_payable' and la.currency='KES'
         group by la.organization_id,o.name
       ) x
