@@ -161,7 +161,8 @@ as $$ select mandate_private.request_organization_payout($1,$2,$3); $$;
 
 revoke all on function mandate_private.request_organization_payout(uuid,uuid,bigint) from public,anon;
 revoke all on function public.request_organization_payout(uuid,uuid,bigint) from public,anon;
-grant execute on function mandate_private.request_organization_payout(uuid,uuid,bigint) to authenticated;\ngrant execute on function public.request_organization_payout(uuid,uuid,bigint) to authenticated;
+grant execute on function mandate_private.request_organization_payout(uuid,uuid,bigint) to authenticated;
+grant execute on function public.request_organization_payout(uuid,uuid,bigint) to authenticated;
 
 create or replace function mandate_private.approve_organization_payout(p_payout_request_id uuid)
 returns jsonb
@@ -208,7 +209,8 @@ as $$ select mandate_private.approve_organization_payout($1); $$;
 
 revoke all on function mandate_private.approve_organization_payout(uuid) from public,anon;
 revoke all on function public.approve_organization_payout(uuid) from public,anon;
-grant execute on function mandate_private.approve_organization_payout(uuid) to authenticated;\ngrant execute on function public.approve_organization_payout(uuid) to authenticated;
+grant execute on function mandate_private.approve_organization_payout(uuid) to authenticated;
+grant execute on function public.approve_organization_payout(uuid) to authenticated;
 
 create or replace function mandate_private.claim_organization_payout(p_payout_request_id uuid)
 returns jsonb
