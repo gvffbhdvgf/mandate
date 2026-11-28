@@ -160,7 +160,8 @@ export default async function ElectionPage({ params, searchParams }: {
           <section className="panel">
             <p className="kicker">PLATFORM AUTHORIZATION PENDING</p>
             <h2>Public paid voting is configured but not released</h2>
-            <p className="muted">The organization can prepare the public election configuration, but Mandate must complete merchant, legal, provider, pricing and accounting approval before setup confirmation and opening are available.</p>
+            <p className="muted">The organization can prepare the public election configuration. Mandate platform release requirements must be reviewed with evidence before setup confirmation and opening are available.</p>
+            <p className="template-link"><Link href="/platform/paid-voting">Open platform paid-voting release review</Link></p>
           </section>
         ) : (
           <SetupConfirmation electionId={electionId} confirmed={Boolean(election.setup_confirmed_at)} />
