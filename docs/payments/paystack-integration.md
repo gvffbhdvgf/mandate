@@ -2,13 +2,24 @@
 
 Mandate uses server-side Paystack Edge Functions. Provider credentials are supplied through Supabase Edge Function secrets and are never exposed to the browser. Test and live credentials are separate; the legacy shared `PAYSTACK_SECRET_KEY` and `PAYSTACK_WEBHOOK_SECRET` names are not accepted by the mode-aware adapter.
 
+## Current production baseline — 28 November 2026
+
+- Production Supabase migrations are applied through 0049_single_merchant_public_vote_payments.
+- paystack-initialize, paystack-verify and paystack-webhook are deployed at v13; public-vote-credit-intent, public-participant-session and public-election-details are deployed at v2; paystack-settlement-import is deployed at v2.
+- Registered-election platform fees and public vote-credit purchases use the same paystack-initialize hosted checkout and /payments/paystack/callback → paystack-verify path. Both server actions validate the returned HTTPS Paystack URL through lib/payments/paystack.ts.
+- Mandate is the merchant and revenue owner for public vote-credit sales. The current design has no organizer proceeds, organizer subaccounts, split settlement, organizer liabilities or organizer payouts.
+- The hosted database flags public_vote_credits_enabled, platform_fee_enabled and organization_topup_enabled are all false. No public-paid election has been authorized/opened.
+- The settlement importer and read-only reconciliation/exception views are deployed, but the operator UI, aggregate bank reconciliation, reviewed exception resolution and final revenue/processor-fee/tax accounting are not complete. Keep the live settlement-readiness switch false.
+- The recorded Poptra merchant profile is Live / Pre-Approved, Owner Verified, Agreement Accepted, Starter Business. This was recorded from prior dashboard evidence and was not independently rechecked in this session. Paystack guidance says Starter Business in Kenya has a KES 600,000 lifetime collection limit and no Transfers; this does not block the current single-merchant model but the limit applies.
+- The previously exposed live secret must be rotated before any real-money operation. Paystack dashboard callback/webhook configuration and paid-vote-credit activity approval remain unverified.
+
 ## Payment purposes
 
 The supported product scope is three distinct purposes:
 
 - `platform_fee`: payment owed to Mandate under an approved fee policy.
 - `organization_topup`: funds attributable to an organization under an approved custody, beneficial-ownership and settlement policy.
-- `public_vote_credits`: election-specific credit purchases, requiring a scoped public-participant flow and separate legal/provider approval.
+- `public_vote_credits`: election-specific credit purchases sold by Mandate as merchant and revenue owner, requiring a scoped public-participant flow and provider confirmation for the actual merchant category/election types.
 
 Each purpose has an independent mode-specific flag. A flag only permits the corresponding technical path to proceed; it does not establish pricing, accounting classification, legal eligibility, custody, settlement or payout authority. Organization payment intents require an active owner/admin/finance-manager; public-vote-credit intents use a separate verified, election-scoped participant-token path. No purpose is live-enabled by default.
 
@@ -84,13 +95,16 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 
 ## Implementation sequence and release gates
 
-1. Provision separate test API and webhook signing secrets in Supabase Edge Function secrets; do not send them through chat or store them in Notion.
-2. Enable only the required test-purpose flags and verify signed test delivery and provider test transactions.
-3. Complete server-created purpose-specific intents, scoped authorization, purpose-specific ledger allocation from suspense, credit issuance/consumption, processor-fee accounting, refunds/reversals, and reconciliation for all three purposes. The current suspense receipt is an interim balanced posting, not final settlement.
-4. Obtain approved pricing, tax, fee allocation, merchant-of-record, custody, settlement, chargeback, paid-voting eligibility and payout policies. Do not infer these from the existence of database enums or accounts.
-5. Only after legal/provider/security/operational approval, install separate live secrets and enable an individual live-purpose flag. Live mode also requires the master switch.
-6. A controlled real-money payment requires separate explicit approval of the exact KES amount, payer and purpose. No configuration change or scope decision authorizes a real charge by itself.
+1. Verify test-mode keys and the dedicated test webhook signing secret without exposing values. Run a controlled test checkout, callback verification, signed webhook, duplicate delivery, refund/dispute exception and settlement-import test.
+2. Verify the Paystack dashboard callback URL, webhook URL, event subscriptions and separate test/live whsec_ signing secrets. The expected production callback is https://mandate.markmachukhu97.workers.dev/payments/paystack/callback; the expected webhook endpoint is https://yhdosrhtzcsfqfuuqhsk.supabase.co/functions/v1/paystack-webhook. These endpoints are targets to verify, not independently confirmed dashboard settings.
+3. Rotate/revoke the live secret previously exposed in chat. Install the new PAYSTACK_LIVE_SECRET_KEY and PAYSTACK_LIVE_WEBHOOK_SECRET in Supabase Edge Function secrets; verify names and prefixes without printing values.
+4. Confirm with Paystack that paid vote-credit sales are permitted under Mandate's actual merchant category and supported election types, especially political-party/non-profit use. Pre-Approved status is not blanket approval for every activity.
+5. Complete the operator settlement workflow, aggregate gross/fees/net-to-bank reconciliation against bank evidence, reviewed exception resolution, operator approval/audit, and final revenue/processor-fee/tax accounting. The current importer is page-by-page and has no operator UI or scheduled dispatch workflow.
+6. Confirm the Auth OTP template uses {{ .Token }}, SMTP delivery, expiry and rate limits with synthetic users.
+7. Keep PAYSTACK_LIVE_TRANSACTIONS_ENABLED, PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED, all PAYSTACK_LIVE_*_ENABLED purpose switches, and the three database purpose flags false until all applicable gates pass.
+8. Only after settlement readiness is complete and provider/activity approval is recorded may the team consider enabling a direct Mandate platform-fee purpose. Public vote credits require their own provider-use-case confirmation and election authorization. Any real-money test requires separate explicit approval of the exact KES amount, payer and purpose.
 
+No live purpose is enabled by default. The user has conditionally authorized live enablement if verified; that authorization does not waive provider, credential, settlement, legal or operational safeguards.
 
 ## Public participant email verification — implementation in progress
 
@@ -102,41 +116,38 @@ A purpose flag is enabled only when its mode-specific value is exactly `true`; m
 - The participant session is only the identity/verification slice. It does not yet create payment intents, reserve credits, initialize Paystack, fulfill credit lots or enable paid voting. Existing legal/provider/accounting gates remain in force.
 
 
-## Public paid voting lifecycle — implementation in progress
+## Public paid voting lifecycle — deployed single-merchant model
 
-- Migration `0041_public_vote_credit_reservations_and_fulfillment` creates a server-only credit reservation ledger. A participant's existing issued credits plus reserved/exception credits plus the requested quantity may not exceed the election cap. Election and participant rows are locked during intent creation, and the amount is calculated from the saved per-credit KES price.
-- A verified Paystack success creates exactly one credit lot only when provider status, transaction ID, actual amount, currency and reservation all match the intent. Failed/abandoned payments release a reservation only after server verification. Unknown and exception outcomes continue to hold the cap.
-- Migration `0048_atomic_public_vote_split_verification` adds a database guard that rejects every `public_vote_credits` transition to `success` unless provider split facts have been verified. Both the signed webhook and authenticated manual verification path call the same service-role-only RPC, which locks the event/intent, validates Paystack's `fees_split` and organizer subaccount code, reconciles the gross platform fee against the immutable fixed-fee snapshot and selected fee bearer, records the provider facts, and changes the payment to success in one transaction. The existing credit-lot trigger runs only after that transaction's verified success update.
-- Split facts are checked as integer KES minor units; malformed amounts, wrong subaccounts, amount/currency mismatches and share mismatches are quarantined as exceptions and never issue credits. Duplicate webhook/manual verification attempts are idempotent.
-- Fixed-fee single-subaccount splits are the only enabled settlement policy type in this implementation. Percentage split checkout fails closed until Paystack's exact KES rounding behavior is established and covered by provider-backed tests; a percentage-configured intent reaching verification is held as an exception, not fulfilled.
-- Refund, reversal or dispute exceptions suspend unspent credits and hold the reservation for reconciliation. Previously cast ballots are not silently deleted or altered. Partial refunds and chargebacks still require a separate, reviewed reconciliation decision; no automatic ledger reversal is inferred.
-- Migration `0042_public_paid_ballot_casting` adds participant-authenticated ballot context and casting. Casting locks the election and participant, consumes active credits atomically across lots, stores a hash of a client idempotency key in the restricted submission-control table, and returns a receipt. Ballot rows contain no participant, Auth-user, email, contact hash or payment identifiers.
-- Migration `0043_paid_voting_release_gate` creates server-only global release switches for all three purposes; all default to false. Public-paid election setup can be drafted with a public slug, KES price and participant cap. Setup confirmation/opening require the global public-vote-credit release flag and platform-set paid-voting authorization. Price and cap are included in the setup hash. Public-paid tallying uses verified/blocked participant records as the participant base and checks participant-to-control mapping and credit-consumption reconciliation.
-- Public checkout uses the separate `PAYSTACK_*_PUBLIC_VOTE_CREDITS_ENABLED` environment gate and the database release flag. The database also rejects payment-intent creation and ballot insertion while the global flag is off. Verification/webhooks continue processing already-started payments even if new checkout is disabled.
-- The public participant UI is `/public-vote/[slug]`. It uses the selected email OTP flow, then displays checkout and ballot controls when the session and active credit balance are available. After a verified Paystack callback, the participant can return to the election to cast ballots.
-- The global public-credit release switch blocks creation of new credit-purchase intents, but does not block settlement/webhook verification of an existing intent or casting already-purchased credits. This avoids stranding a participant who has paid if new checkout is paused. Pausing an election remains the election lifecycle control for stopping ballots.
-- A signed `charge.success` webhook is always verified against Paystack regardless of the current per-purpose checkout switch. The database only issues the reserved credit lot after exact provider split facts are persisted; the same transaction rolls back receipt and entitlement writes together on mismatch.
-- **Not released:** No payment feature flag has been enabled; no public-paid election has been opened; no production migrations or Edge Functions have been deployed; no Paystack credentials/configuration or live transaction settings have changed. The Auth OTP template still needs to be verified/configured to use `{{ .Token }}`.
-- **Accounting boundary:** Verified receipts are still captured to provider clearing and unallocated suspense. Credit issuance is an entitlement event; final vote-credit liability/revenue classification, processor fees, taxes, custody, settlement, refunds and chargeback accounting remain unresolved and must be approved before live mode.
+- Migration 0049_single_merchant_public_vote_payments supersedes the earlier split/subaccount design in migrations 0047–0048. Mandate is the merchant and revenue owner for public vote-credit sales. The current model does not allocate organizer proceeds, create organizer liabilities, use subaccounts, or pay organizers.
+- The public participant flow uses Supabase Auth email OTP and an election-scoped verified participant session. The public election details, participant session and credit-intent Edge Functions are deployed. The Supabase Auth OTP template still needs dashboard verification to ensure it renders {{ .Token }} rather than a magic link.
+- The participant creates a server-priced credit intent through public-vote-credit-intent. Election price, participant cap, election status and participant identity are derived/validated server-side; the browser cannot supply the authoritative amount.
+- Public vote-credit checkout calls the same paystack-initialize function used by registered-election platform fees. Both redirect to the same Paystack-hosted checkout and return through /payments/paystack/callback, which invokes paystack-verify. Both server actions use the same HTTPS Paystack redirect validator.
+- A verified successful payment is applied atomically through apply_verified_paystack_public_vote_payment. The RPC validates the immutable intent, provider reference, transaction ID, actual amount, currency, participant/election scope and reserved credit quantity before issuing the credit lot exactly once.
+- Credit reservations lock election and participant capacity. Unknown/exception payment outcomes retain the reservation; failed/abandoned payments release it only after server verification. Duplicate webhook/manual verification is idempotent.
+- Ballot casting consumes active credits atomically across lots, stores only a hash of the client idempotency key in the restricted submission-control table, and keeps payment/participant identifiers out of ballot rows.
+- Signed refund/dispute events verify the original provider transaction and freeze the payment for reconciliation. They do not automatically reverse ledger postings or revoke already-consumed credits; partial refunds and dispute outcomes require a reviewed decision.
+- The global public-credit release flag blocks new credit-purchase intent creation while allowing verification/settlement of already-started intents and casting of already-purchased credits. Pausing an election remains the lifecycle control for stopping ballots.
+- **Not released:** PAYSTACK_LIVE_PUBLIC_VOTE_CREDITS_ENABLED and the database public_vote_credits_enabled flag remain false. No public-paid election is authorized/opened. No live payment has been initiated.
+- **Accounting boundary:** Verified receipts post to provider clearing and unallocated suspense. Mandate's revenue recognition/deferred-revenue policy for prepaid vote credits, processor fees, taxes, refunds, chargebacks and bank-net reconciliation remain to be completed before live settlement readiness. No organizer proceeds or payouts are in scope.
 
 
-## Paystack Kenya commercial and settlement constraints — release research
+## Paystack Kenya commercial and settlement constraints — current interpretation
 
-These are published provider terms and pricing references, not confirmation of Mandate's account-specific agreement or written approval of Mandate's product use case.
+These are published provider terms and pricing references, not confirmation of Mandate's account-specific agreement or written approval of Mandate's paid-voting use case.
 
-- Paystack's public Kenya pricing lists 2.9% for local cards, 1.5% for M-PESA and 3.8% for international cards. Public guidance describes ordinary KES settlement as T+2 working days. Verify the actual account's negotiated fees and payout schedule in the dashboard/merchant agreement before booking processor fees or settlement dates.
-- The Kenya Merchant Services Agreement says the standard payout account is a bank account in the merchant's name. The optional Payout Service may pay designated third-party recipients, but its stated restrictions require a direct business relationship and payments for services rendered, activities performed or refunds. Do not assume that organization top-ups can be held as a Mandate wallet balance or paid out to arbitrary organizations.
-- Paystack supports subaccount/split payments; each beneficiary needs a subaccount, and the split configuration can determine who bears processing fees. This is a possible provider-supported route for organization proceeds, not evidence that Mandate's exact use case or account is approved.
-- The Kenya Acceptable Use Policy restricts certain games of skill with entry fees and prizes unless prior approval is obtained. Public paid voting must receive written Paystack confirmation for the actual election types, prize arrangements and commercial model before launch.
-- Paystack's published refund guidance says processing fees are non-refundable. Partial refunds are supported, and the customer refund timeline may be 3–10 working days. Refunds may be funded from pending payouts or an eligible Paystack balance; account type and available funds matter.
-- The Kenya Merchant Services Agreement places tax determination/reporting/remittance responsibility on the merchant and makes the merchant liable for chargeback/dispute-related costs. Reserves and payout deductions may also apply.
+- Paystack's official status guide says Pre-Approved merchants may accept real customer payments after initial checks, while further review may continue and payouts may be temporarily paused.
+- Paystack's official Kenya business-type guidance says Starter Business accounts have a KES 600,000 lifetime collection limit and cannot use Transfers. The recorded Poptra Starter Business account therefore has a collection ceiling, but no Transfers are needed for the current Mandate-revenue model.
+- Paystack's Kenya Merchant Services Agreement requires accurate merchant/customer transaction descriptions and merchant responsibility for service delivery, refunds, tax and chargeback obligations. Restricted-business classification may depend on the actual election type and customer segment. Obtain written confirmation for paid vote-credit sales, especially where political parties or non-profits are involved.
+- The current model is a direct customer-to-Mandate payment. Do not describe it as collecting funds for an organizer, and do not create organizer liabilities or payouts unless a future decision explicitly changes the model and Paystack approves the new fund flow.
+- Public Kenya pricing lists provider fees by payment method, but the actual Poptra negotiated fee schedule and payout timing must be verified in the dashboard before accounting for processor fees or settlement dates.
+- Paystack's published refund guidance says processing fees may be non-refundable; partial/full refund handling and chargeback responsibility must be reflected in the Mandate accounting policy.
+- Legal/privacy review is risk-based for statutory/public elections, political-party/non-profit use and the relevant jurisdiction. A universal external legal approval for every private organizational election is not established.
+- Ledger, reconciliation, refunds, reserves and financial statements are internal control/readiness requirements. A universal external accounting approval is not established unless required by the organization's governance, auditor, regulator or provider.
 
 Official references:
 - https://paystack.com/ke/pricing
-- https://paystack.com/ke/terms (Sections D and Acceptable Use Policy)
-- https://paystack.com/docs/v2/ke/payments/split-payments
+- https://paystack.com/ke/terms
+- https://support.paystack.com/en/articles/6543554
+- https://support.paystack.com/en/articles/2128898
+- https://paystack.com/docs/payments/webhooks/
 - https://support.paystack.com/en/articles/2132802
-- https://support.paystack.com/en/articles/2127106
-- https://support.paystack.com/en/articles/2125314
-
-**Release consequence:** Do not enable `platform_fee`, `organization_topup` or `public_vote_credits` in live mode until the merchant-of-record, custody, fee bearer, settlement, tax, refund, chargeback and paid-voting eligibility model is documented and approved by the appropriate business/legal/provider owners. No dashboard setting, subaccount, payout destination, fee, secret or transaction was changed during this research.
