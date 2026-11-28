@@ -54,13 +54,102 @@ Deno.serve(async (request: Request) => {
   const eventType = event.event ?? "unknown";
   const data = event.data ?? {};
   const reference = data.reference ?? data.transaction_reference ?? data.transaction?.reference ?? null;
+  const admin = adminClient();
+
+  if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(eventType)) {
+    if (!reference) return json(503, { error: "TRANSFER_REFERENCE_MISSING" });
+    let verifiedTransfer: {
+      status: boolean;
+      data: {
+        id: number | string;
+        reference: string;
+        transfer_code: string;
+        status: string;
+        amount: number | string;
+        currency: string;
+        fee_charged?: number | string | null;
+      };
+    };
+    try {
+      verifiedTransfer = await paystackRequest(
+        `/transfer/verify/${encodeURIComponent(reference)}`,
+      );
+    } catch {
+      return json(503, { error: "TRANSFER_PROVIDER_VERIFICATION_UNAVAILABLE" });
+    }
+    const transfer = verifiedTransfer.data;
+    const amountMinor = Number(transfer.amount);
+    const feeMinor = transfer.fee_charged == null ? null : Number(transfer.fee_charged);
+    if (transfer.reference !== reference || !transfer.transfer_code
+      || !["success", "failed", "reversed"].includes(String(transfer.status))
+      || !Number.isSafeInteger(amountMinor) || amountMinor <= 0
+      || String(transfer.currency).toUpperCase() !== "KES"
+      || (feeMinor !== null && (!Number.isSafeInteger(feeMinor) || feeMinor < 0))) {
+      return json(409, { error: "TRANSFER_PROVIDER_FACTS_INVALID" });
+    }
+    const eventKey = `paystack-transfer-webhook:${eventType}:${String(transfer.id)}`;
+    const { data: insertedTransferEvent, error: transferEventError } = await admin
+      .from("paystack_transfer_events")
+      .upsert({
+        provider_event_key: eventKey,
+        transfer_reference: reference,
+        event_type: eventType,
+        provider_transfer_code: transfer.transfer_code,
+        provider_status: transfer.status,
+        amount_minor: amountMinor,
+        currency: "KES",
+        signature_verified: true,
+        verification_source: "webhook",
+        redacted_payload: {
+          status: transfer.status,
+          amountMinor,
+          currency: "KES",
+          transferCode: transfer.transfer_code,
+          providerEvent: eventType,
+        },
+        processing_status: "received",
+      }, { onConflict: "provider_event_key", ignoreDuplicates: true })
+      .select("id,processing_status")
+      .maybeSingle();
+    if (transferEventError) return json(500, { error: "TRANSFER_EVENT_PERSIST_FAILED" });
+    let transferEventId = insertedTransferEvent?.id as string | undefined;
+    if (!transferEventId) {
+      const { data: existingTransferEvent, error } = await admin
+        .from("paystack_transfer_events")
+        .select("id,processing_status")
+        .eq("provider_event_key", eventKey)
+        .maybeSingle();
+      if (error || !existingTransferEvent) return json(500, { error: "TRANSFER_EVENT_LOOKUP_FAILED" });
+      if (existingTransferEvent.processing_status === "processed") return json(200, { received: true, duplicate: true });
+      transferEventId = existingTransferEvent.id;
+    }
+    const { data: transferResult, error: applyTransferError } = await admin.rpc("apply_paystack_transfer_status", {
+      p_event_id: transferEventId,
+      p_transfer_reference: reference,
+      p_provider_transfer_code: transfer.transfer_code,
+      p_provider_status: transfer.status,
+      p_amount_minor: amountMinor,
+      p_currency: "KES",
+      p_provider_fee_minor: feeMinor,
+    });
+    if (applyTransferError || !transferResult) return json(500, { error: "TRANSFER_STATUS_APPLICATION_FAILED" });
+    if (transferResult.processed !== true) return json(503, {
+      error: typeof transferResult.reason === "string" ? transferResult.reason : "TRANSFER_RECONCILIATION_REQUIRED",
+    });
+    return json(200, {
+      received: true,
+      processed: true,
+      duplicate: transferResult.duplicate === true,
+      status: transferResult.status ?? transfer.status,
+    });
+  }
+
   const transactionId = eventType === "charge.success"
     ? (data.id == null ? null : String(data.id))
     : (data.transaction?.id == null ? null : String(data.transaction.id));
   const resourceId = data.id ?? data.refund_reference ?? data.dispute?.id ?? null;
   const eventIdentity = resourceId == null ? await sha256Hex(rawBody) : String(resourceId);
   const eventKey = `paystack:${eventType}:${eventIdentity}`;
-  const admin = adminClient();
 
   const { data: inserted, error: insertError } = await admin
     .from("payment_events")

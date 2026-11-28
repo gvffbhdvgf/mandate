@@ -150,6 +150,18 @@ export function paymentCallbackUrl(): string | undefined {
   return callback.toString();
 }
 
+export class PaystackRequestError extends Error {
+  readonly httpStatus: number;
+  readonly providerCode: string | null;
+
+  constructor(httpStatus: number, providerCode: string | null) {
+    super("PAYSTACK_REQUEST_FAILED");
+    this.name = "PaystackRequestError";
+    this.httpStatus = httpStatus;
+    this.providerCode = providerCode;
+  }
+}
+
 export async function paystackRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const config = paystackModeConfig();
   if (!config) throw new Error("PAYSTACK_MODE_CONFIG_INVALID");
@@ -163,7 +175,8 @@ export async function paystackRequest<T>(path: string, init: RequestInit = {}): 
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.status) {
-    throw new Error("PAYSTACK_REQUEST_FAILED");
+    const providerCode = typeof payload?.code === "string" ? payload.code.slice(0, 80) : null;
+    throw new PaystackRequestError(response.status, providerCode);
   }
   return payload as T;
 }
