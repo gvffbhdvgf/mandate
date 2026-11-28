@@ -35,6 +35,13 @@ type PaidElection = {
   authorized: boolean;
 };
 
+function hasValidAuthorizationWindow(election: PaidElection): boolean {
+  const startsAt = Date.parse(election.startsAt);
+  const endsAt = Date.parse(election.endsAt);
+  return Number.isFinite(startsAt) && Number.isFinite(endsAt)
+    && endsAt > startsAt && endsAt > Date.now();
+}
+
 const errors: Record<string, string> = {
   bootstrap: "Your account could not be registered as the initial platform operator. Check that you are signed in with the designated Mandate owner account.",
   invalid: "The review form contains invalid information.",
@@ -150,21 +157,24 @@ export default async function PlatformPaidVotingPage({ searchParams }: {
               <p className="kicker">ELECTION AUTHORIZATION</p>
               <h2>Authorize an individual election</h2>
               <p className="muted">Only Kenya-based public-paid drafts are currently in scope. This action records a platform decision; it does not confirm the organizer's setup or open voting.</p>
-              {status.elections.length === 0 ? <p className="form-hint">There are no public-paid election drafts awaiting authorization.</p> : status.elections.map((election) => (
-                <article className="contest-card" key={election.id}>
-                  <div><h3>{election.title}</h3><p className="muted">{election.organization} · {election.countryCode} · {election.status}</p>
-                    <p className="form-hint">{election.pricePerCreditMinor !== null ? `KSh ${(election.pricePerCreditMinor/100).toFixed(2)} per credit` : "Price not configured"} · cap {election.maxCreditsPerParticipant ?? "not configured"} · {new Date(election.startsAt).toLocaleString("en-KE", {timeZone:election.timezone || "Africa/Nairobi"})} – {new Date(election.endsAt).toLocaleString("en-KE", {timeZone:election.timezone || "Africa/Nairobi"})} ({election.timezone || "Africa/Nairobi"})</p>
-                    <p className="form-hint">{election.authorized ? "Previously authorized; current global release gates are still rechecked at setup confirmation and opening." : "Platform authorization pending."}</p>
-                  </div>
-                  {!election.authorized && (
-                    <form action={authorizePublicPaidElectionAction} className="form-stack">
-                      <input type="hidden" name="electionId" value={election.id} />
-                      <label className="ballot-confirmation"><input type="checkbox" name="scopeAcknowledged" value="true" required /> I confirm this is a private organizational election in Kenya and is within the reviewed merchant, legal and provider scope. It is not a statutory/public election or an unreviewed political-party/non-profit use case.</label>
-                      <button className="primary-button" disabled={!status.releaseReady}>Authorize this election</button>
-                    </form>
-                  )}
-                </article>
-              ))}
+              {status.elections.length === 0 ? <p className="form-hint">There are no public-paid election drafts awaiting authorization.</p> : status.elections.map((election) => {
+                const scheduleValid = hasValidAuthorizationWindow(election);
+                return (
+                  <article className="contest-card" key={election.id}>
+                    <div><h3>{election.title}</h3><p className="muted">{election.organization} · {election.countryCode} · {election.status}</p>
+                      <p className="form-hint">{election.pricePerCreditMinor !== null ? `KSh ${(election.pricePerCreditMinor/100).toFixed(2)} per credit` : "Price not configured"} · cap {election.maxCreditsPerParticipant ?? "not configured"} · {new Date(election.startsAt).toLocaleString("en-KE", {timeZone:election.timezone || "Africa/Nairobi"})} – {new Date(election.endsAt).toLocaleString("en-KE", {timeZone:election.timezone || "Africa/Nairobi"})} ({election.timezone || "Africa/Nairobi"})</p>
+                      <p className="form-hint">{!scheduleValid ? "Schedule expired or invalid. Update the election dates before platform authorization." : election.authorized ? "Previously authorized; current global release gates are still rechecked at setup confirmation and opening." : "Platform authorization pending."}</p>
+                    </div>
+                    {!election.authorized && scheduleValid && (
+                      <form action={authorizePublicPaidElectionAction} className="form-stack">
+                        <input type="hidden" name="electionId" value={election.id} />
+                        <label className="ballot-confirmation"><input type="checkbox" name="scopeAcknowledged" value="true" required /> I confirm this is a private organizational election in Kenya and is within the reviewed merchant, legal and provider scope. It is not a statutory/public election or an unreviewed political-party/non-profit use case.</label>
+                        <button className="primary-button" disabled={!status.releaseReady}>Authorize this election</button>
+                      </form>
+                    )}
+                  </article>
+                );
+              })}
             </section>
             <section className="panel">
               <p className="kicker">AUDIT HISTORY</p>
