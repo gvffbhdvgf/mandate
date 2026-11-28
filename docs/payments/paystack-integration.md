@@ -13,6 +13,15 @@ Mandate uses server-side Paystack Edge Functions. Provider credentials are suppl
 - The recorded Poptra merchant profile is Live / Pre-Approved, Owner Verified, Agreement Accepted, Starter Business. This was recorded from prior dashboard evidence and was not independently rechecked in this session. Paystack guidance says Starter Business in Kenya has a KES 600,000 lifetime collection limit and no Transfers; this does not block the current single-merchant model but the limit applies.
 - The previously exposed live secret must be rotated before any real-money operation. Paystack dashboard callback/webhook configuration and paid-vote-credit activity approval remain unverified.
 
+## Commercial-model boundary and disbursements
+
+- Public paid vote-credit purchases are collected by Mandate as merchant and revenue owner; organizations do not receive a share or payout from those receipts.
+- Organization-revenue elections are a separate product model. The participant payment source and commercial allocation policy remain to be finalized; no organization-revenue allocation is currently posted to the organization-payable ledger.
+- Service-only elections charge the organization the versioned per-eligible-voter fee (currently KES 20 per voter, KES 500 minimum).
+- Organization Paystack disbursement backend is being implemented in PR #35. It uses the existing organization-payable ledger, beneficiary records and separate requester/approver identities. It cannot release funds until an approved organization-revenue collection has posted reconciled payable funds.
+- The transfer capability uses the live payment master switch but is independent of the settlement-import readiness flag. Paystack remains authoritative for merchant eligibility, payout holds, destination validity, amount limits and available Paystack balance.
+- See [Paystack organization disbursements](./paystack-disbursements.md) for the workflow and controls.
+
 ## Payment purposes
 
 The supported product scope is three distinct purposes:
