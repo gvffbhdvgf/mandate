@@ -36,7 +36,10 @@ test("disbursement endpoint never stores raw beneficiary account details", async
   assert.match(endpoint, /claim_organization_payout/);
   assert.match(endpoint, /TRANSFER_OUTCOME_UNKNOWN/);
   assert.match(endpoint, /retryWithSameRequest:\s*true/);
-  assert.match(endpoint, /\/transfer\/verify\//);\n  assert.match(endpoint, /finalize_transfer/);\n  assert.match(endpoint, /resend_otp/);\n  assert.match(endpoint, /TRANSFER_OTP_INVALID/);
+  assert.match(endpoint, /\/transfer\/verify\//);
+  assert.match(endpoint, /finalize_transfer/);
+  assert.match(endpoint, /resend_otp/);
+  assert.match(endpoint, /TRANSFER_OTP_INVALID/);
 });
 
 test("Paystack webhook reconciles transfer events through verified provider facts", async () => {
