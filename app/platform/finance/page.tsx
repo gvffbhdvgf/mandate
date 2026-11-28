@@ -9,6 +9,9 @@ type AccountBalance = {
   organizationName: string | null;
   accountCode: string;
   currency: string;
+  normalBalance: string;
+  debitMinor: number;
+  creditMinor: number;
   balanceMinor: number;
 };
 
@@ -137,11 +140,12 @@ export default async function PlatformFinancePage() {
             <div className="panel-heading"><div><p className="kicker">LEDGER ACCOUNTS</p><h2>Account balances</h2></div><span className="count">{accounts.length}</span></div>
             {accounts.length === 0 ? <div className="empty-state"><h3>No posted accounts</h3><p className="muted">Platform accounts appear when their first verified ledger posting is recorded.</p></div> : (
               <div className="finance-table-wrap"><table className="finance-table">
-                <thead><tr><th>Account</th><th>Owner</th><th>Balance</th></tr></thead>
+                <thead><tr><th>Account</th><th>Owner</th><th>Debit / credit</th><th>Balance</th></tr></thead>
                 <tbody>{accounts.map((account, index) => <tr key={`${account.ownerType}:${account.organizationId ?? "platform"}:${account.accountCode}:${index}`}>
                   <td><strong>{label(account.accountCode)}</strong><small>{account.organizationName ?? label(account.ownerType)}</small></td>
                   <td>{label(account.ownerType)}</td>
-                  <td>{money(account.balanceMinor)}</td>
+                  <td><small>Dr {money(account.debitMinor)} · Cr {money(account.creditMinor)}</small></td>
+                  <td>{money(account.balanceMinor)} <small>Normal {account.normalBalance}</small></td>
                 </tr>)}</tbody>
               </table></div>
             )}
