@@ -141,6 +141,6 @@ test("report reads only the Mandate project and labels exception scope honestly"
 });
 
 test("reconciliation report rejects nonnumeric settlement IDs and unexpected flags", () => {
-  assert.throws(() => parseArgs(["--environment", "test", "--settlement-id", "12x"]), /Settlement ID/);
+  assert.throws(() => validateOptions(parseArgs(["--environment", "test", "--settlement-id", "12x"])), /Settlement ID/);
   assert.throws(() => parseArgs(["--environment", "test", "--unknown"]), /Unknown argument/);
 });
