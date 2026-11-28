@@ -97,6 +97,9 @@ begin
       and m.status='active' and m.role in ('owner','admin','finance_manager')
   ) then raise exception 'FORBIDDEN' using errcode='42501'; end if;
 
+  perform 1 from public.organizations where id=p_organization_id for update;
+  if not found then raise exception 'ORGANIZATION_NOT_FOUND' using errcode='P0002'; end if;
+
   select * into v_recipient
   from public.organization_payout_recipients
   where id=p_recipient_id and organization_id=p_organization_id and active=true
@@ -238,6 +241,23 @@ begin
   for share;
   if not found then raise exception 'PAYOUT_RECIPIENT_UNAVAILABLE' using errcode='23514'; end if;
 
+  perform 1 from public.organizations where id=v_request.organization_id for update;
+  if not found then raise exception 'ORGANIZATION_NOT_FOUND' using errcode='P0002'; end if;
+  select coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0)
+    into v_balance
+  from public.ledger_accounts la
+  join public.ledger_entries le on le.account_id=la.id
+  join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
+  where la.owner_type='organization_payable'
+    and la.organization_id=v_request.organization_id and la.currency='KES';
+  select coalesce(sum(amount_minor),0) into v_reserved
+  from public.payout_requests
+  where organization_id=v_request.organization_id
+    and status in ('requested','under_review','approved','processing');
+  if v_balance < v_reserved then
+    raise exception 'ORGANIZATION_PAYOUT_RESERVATION_EXCEEDS_LEDGER_BALANCE' using errcode='23514';
+  end if;
+
   update public.payout_requests
   set status='processing', initiated_at=coalesce(initiated_at,now())
   where id=v_request.id returning * into v_request;
@@ -273,6 +293,8 @@ declare
   v_payable uuid;
   v_clearing uuid;
   v_fee uuid;
+  v_balance numeric;
+  v_reserved numeric;
   v_posting jsonb;
   v_reversal_posting jsonb;
 begin
