@@ -48,13 +48,20 @@ begin
     'accounts',coalesce((
       select jsonb_agg(jsonb_build_object(
         'ownerType',x.owner_type,'accountCode',x.account_code,
-        'currency',x.currency,'balanceMinor',x.balance_minor
+        'currency',x.currency,'normalBalance',x.normal_balance,
+        'debitMinor',x.debit_minor,'creditMinor',x.credit_minor,'balanceMinor',x.balance_minor
       ) order by x.owner_type,x.account_code)
       from (
-        select la.owner_type::text as owner_type,la.account_code,la.currency,b.balance_minor
+        select la.owner_type::text as owner_type,la.account_code,la.currency,
+          b.debit_minor,b.credit_minor,
+          case when la.owner_type='organization_payable' then 'credit' else 'debit' end as normal_balance,
+          case when la.owner_type='organization_payable'
+            then b.credit_minor-b.debit_minor else b.debit_minor-b.credit_minor end as balance_minor
         from public.ledger_accounts la
         left join lateral (
-          select coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+          select
+            coalesce(sum(le.amount_minor) filter (where le.direction='debit'),0) as debit_minor,
+            coalesce(sum(le.amount_minor) filter (where le.direction='credit'),0) as credit_minor
           from public.ledger_entries le
           join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
           where le.account_id=la.id
@@ -192,15 +199,22 @@ begin
       select jsonb_agg(jsonb_build_object(
         'ownerType',x.owner_type,'organizationId',x.organization_id,
         'organizationName',x.organization_name,'accountCode',x.account_code,
-        'currency',x.currency,'balanceMinor',x.balance_minor
+        'currency',x.currency,'normalBalance',x.normal_balance,
+        'debitMinor',x.debit_minor,'creditMinor',x.credit_minor,'balanceMinor',x.balance_minor
       ) order by x.owner_type,x.organization_name,x.account_code)
       from (
         select la.owner_type::text as owner_type,la.organization_id,o.name as organization_name,
-          la.account_code,la.currency,b.balance_minor
+          la.account_code,la.currency,b.debit_minor,b.credit_minor,
+          case when la.owner_type::text in ('platform_revenue','organization_payable','refund_payable','payouts_payable')
+            then 'credit' else 'debit' end as normal_balance,
+          case when la.owner_type::text in ('platform_revenue','organization_payable','refund_payable','payouts_payable')
+            then b.credit_minor-b.debit_minor else b.debit_minor-b.credit_minor end as balance_minor
         from public.ledger_accounts la
         left join public.organizations o on o.id=la.organization_id
         left join lateral (
-          select coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+          select
+            coalesce(sum(le.amount_minor) filter (where le.direction='debit'),0) as debit_minor,
+            coalesce(sum(le.amount_minor) filter (where le.direction='credit'),0) as credit_minor
           from public.ledger_entries le
           join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
           where le.account_id=la.id
