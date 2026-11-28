@@ -21,3 +21,6 @@ verify_jwt = true
 
 [functions.paystack-settlement-import]
 verify_jwt = true
+
+[functions.paystack-disbursements]
+verify_jwt = true
