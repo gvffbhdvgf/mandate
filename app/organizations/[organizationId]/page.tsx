@@ -33,6 +33,7 @@ export default async function OrganizationPage({ params, searchParams }: {
     .maybeSingle();
   const canManageMembers = membership?.status === "active" && ["owner", "admin"].includes(membership.role);
   const canManageElections = membership?.status === "active" && ["owner", "admin", "election_manager"].includes(membership.role);
+  const canManageFinance = membership?.status === "active" && ["owner", "admin", "finance_manager"].includes(membership.role);
   let setupDrafts: any[] = [];
   if (canManageElections) {
     const { data: draftRows, error: draftsError } = await supabase.rpc("list_election_setup_drafts", {
@@ -67,7 +68,7 @@ export default async function OrganizationPage({ params, searchParams }: {
   const elections = electionRows ?? [];
 
   return (
-    <WorkspaceShell section="Organization workspace" context={organization.name} items={[{ label: "Dashboard", href: "/dashboard" }, { label: "Organization", href: `/organizations/${organizationId}` }, { label: "Elections", href: `/organizations/${organizationId}#elections` }, ...(canManageMembers ? [{ label: "Members", href: `/organizations/${organizationId}#members` }] : [])]} activeHref={`/organizations/${organizationId}`} actions={<form action={signOutAction}><button className="quiet-button">Sign out</button></form>}>
+    <WorkspaceShell section="Organization workspace" context={organization.name} items={[{ label: "Dashboard", href: "/dashboard" }, { label: "Organization", href: `/organizations/${organizationId}` }, { label: "Elections", href: `/organizations/${organizationId}#elections` }, ...(canManageFinance ? [{ label: "Finance", href: `/organizations/${organizationId}/finance` }] : []), ...(canManageMembers ? [{ label: "Members", href: `/organizations/${organizationId}#members` }] : [])]} activeHref={`/organizations/${organizationId}`} actions={<form action={signOutAction}><button className="quiet-button">Sign out</button></form>}>
     <main className="dashboard-shell">
       <section className="dashboard-intro">
         <p className="kicker">ORGANIZATION WORKSPACE</p>
