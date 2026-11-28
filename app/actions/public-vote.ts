@@ -3,6 +3,50 @@
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { validatePaystackAuthorizationUrl } from "../../lib/payments/paystack";
 
+async function getEdgeFunctionErrorCode(error: unknown): Promise<string | null> {
+  if (!error || typeof error !== "object" || !("context" in error)) return null;
+  const context = (error as { context?: unknown }).context;
+  if (!(context instanceof Response)) return null;
+  try {
+    const body = await context.clone().json() as { error?: unknown };
+    return typeof body?.error === "string" ? body.error : null;
+  } catch {
+    return null;
+  }
+}
+
+function publicCheckoutError(code: string | null, stage: "intent" | "initialize"): string {
+  switch (code) {
+    case "PAYMENT_PURPOSE_DISABLED":
+      return "Public voting checkout is disabled for the active Paystack environment. Enable its public-vote-credit checkout flag before accepting payments.";
+    case "PAYMENTS_DISABLED":
+    case "PAYSTACK_MODE_CONFIG_INVALID":
+      return "Paystack is not configured for the active environment. Check the mode-specific Paystack credentials.";
+    case "VERIFIED_EMAIL_REQUIRED":
+    case "VERIFIED_PARTICIPANT_REQUIRED":
+      return "Verify your email for this election before purchasing voting credits.";
+    case "PARTICIPANT_CREDIT_CAP_EXCEEDED":
+      return "This purchase would exceed the election's participant credit limit.";
+    case "PUBLIC_PAID_ELECTION_NOT_READY":
+      return "This election is not currently ready to accept paid voting-credit purchases.";
+    case "PAYMENT_INITIALIZATION_OUTCOME_UNKNOWN":
+    case "PAYMENT_INITIALIZATION_PERSISTENCE_UNKNOWN":
+      return "Paystack may already have received this payment request. Do not start another payment; contact support to reconcile the existing reference.";
+    case "PAYMENT_CALLBACK_URL_INVALID":
+      return "The configured Paystack return URL is invalid. Check the Mandate site URL and allowed origins.";
+    case "PAYMENT_INTENT_NOT_INITIALIZABLE":
+      return "This payment request is no longer ready for checkout. Refresh the page before trying again.";
+    case "PUBLIC_VOTE_CREDIT_INTENT_FAILED":
+    case "PAYMENT_INITIALIZATION_CLAIM_FAILED":
+    case "PAYMENT_INITIALIZATION_STATE_UNAVAILABLE":
+      return "Mandate could not safely prepare this checkout. No new payment should be started; try again later or contact support.";
+    default:
+      return stage === "intent"
+        ? "We could not prepare the voting-credit purchase. Please try again."
+        : "Paystack checkout could not be opened. Do not start another payment; contact support if this continues.";
+  }
+}
+
 export type PublicElectionDetails = {
   title: string;
   description: string | null;
@@ -102,18 +146,23 @@ export async function initializePublicVoteCreditCheckout(slug: string, quantity:
       headers: { "Idempotency-Key": idempotencyKey },
     });
     if (intentError || !intent?.paymentIntentId) {
-      const code = intent?.error;
-      if (code === "PARTICIPANT_CREDIT_CAP_EXCEEDED") return { error: "This purchase would exceed the election's participant credit limit." };
-      if (code === "PAID_VOTING_RELEASE_REQUIREMENTS_PENDING") return { error: "Mandate's public paid-voting release is not currently active. No new purchases can be started; contact the election organizer for an update." };
-      if (code === "PAYMENT_PURPOSE_DISABLED" || code === "PUBLIC_PAID_ELECTION_NOT_READY") return { error: "Paid checkout is not enabled for this election yet." };
-      return { error: "We could not prepare checkout. Please try again." };
+      const code = typeof intent?.error === "string"
+        ? intent.error
+        : await getEdgeFunctionErrorCode(intentError);
+      if (code === "PAID_VOTING_RELEASE_REQUIREMENTS_PENDING") {
+        return { error: "Mandate's public paid-voting release is not currently active. No new purchases can be started; contact the election organizer for an update." };
+      }
+      return { error: publicCheckoutError(code, "intent") };
     }
 
     const { data: checkout, error: checkoutError } = await supabase.functions.invoke("paystack-initialize", {
       body: { paymentIntentId: intent.paymentIntentId },
     });
     if (checkoutError || !checkout?.authorizationUrl) {
-      return { error: "Checkout could not be opened. Do not start another payment; retry this checkout or contact support." };
+      const code = typeof checkout?.error === "string"
+        ? checkout.error
+        : await getEdgeFunctionErrorCode(checkoutError);
+      return { error: publicCheckoutError(code, "initialize") };
     }
     const authorizationUrl = validatePaystackAuthorizationUrl(checkout.authorizationUrl);
     if (!authorizationUrl) return { error: "Paystack returned an untrusted checkout address. No redirect was made." };
