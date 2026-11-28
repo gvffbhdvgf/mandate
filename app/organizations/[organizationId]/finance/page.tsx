@@ -40,11 +40,15 @@ type Payout = {
   paidAt: string | null;
 };
 
+type LedgerAccount = { ownerType: string; accountCode: string; currency: string; balanceMinor: number };
+
 type LedgerEntry = {
   id: string;
   transactionId: string;
   transactionType: string;
   description: string | null;
+  accountCode: string;
+  ownerType: string;
   direction: string;
   amountMinor: number;
   currency: string;
@@ -132,6 +136,7 @@ export default async function OrganizationFinancePage({ params, searchParams }: 
   const availableMinor = Number(summary.availableMinor ?? 0);
   const paidOutMinor = Number(summary.paidOutMinor ?? 0);
   const overReserved = summary.overReserved === true;
+  const accounts = (Array.isArray(summary.accounts) ? summary.accounts : []) as LedgerAccount[];
   const recipients = (Array.isArray(summary.recipients) ? summary.recipients : []) as Recipient[];
   const payouts = (Array.isArray(summary.payouts) ? summary.payouts : []) as Payout[];
   const ledgerEntries = (Array.isArray(summary.ledgerEntries) ? summary.ledgerEntries : []) as LedgerEntry[];
@@ -159,7 +164,7 @@ export default async function OrganizationFinancePage({ params, searchParams }: 
 
         <section className="finance-metrics" aria-label="Organization finance summary">
           <div className="finance-metric finance-metric-primary"><p>Available to request</p><strong>{money(availableMinor)}</strong><span>Posted ledger balance less pending payout reservations</span></div>
-          <div className="finance-metric"><p>Ledger balance</p><strong>{money(ledgerBalanceMinor)}</strong><span>Verified organization payable funds</span></div>
+          <div className="finance-metric"><p>Organization payable</p><strong>{money(ledgerBalanceMinor)}</strong><span>Verified organization payable funds</span></div>
           <div className="finance-metric"><p>Reserved</p><strong>{money(reservedMinor)}</strong><span>Requests awaiting final provider status</span></div>
           <div className="finance-metric"><p>Paid out</p><strong>{money(paidOutMinor)}</strong><span>Provider-verified transfers</span></div>
         </section>
@@ -272,12 +277,26 @@ export default async function OrganizationFinancePage({ params, searchParams }: 
         </section>
 
         <section className="panel finance-section">
+          <div className="panel-heading"><div><p className="kicker">ORGANIZATION ACCOUNTS</p><h2>Ledger balances</h2></div><span className="count">{accounts.length}</span></div>
+          {accounts.length === 0 ? <div className="empty-state"><h3>No organization ledger accounts</h3><p className="muted">Account balances appear here when organization transactions are posted.</p></div> : (
+            <div className="finance-table-wrap"><table className="finance-table">
+              <thead><tr><th>Account</th><th>Type</th><th>Balance</th></tr></thead>
+              <tbody>{accounts.map((account) => <tr key={`${account.ownerType}:${account.accountCode}`}>
+                <td><strong>{label(account.accountCode)}</strong></td>
+                <td>{label(account.ownerType)}</td>
+                <td>{money(account.balanceMinor)}</td>
+              </tr>)}</tbody>
+            </table></div>
+          )}
+        </section>
+
+        <section className="panel finance-section">
           <div className="panel-heading"><div><p className="kicker">DOUBLE-ENTRY LEDGER</p><h2>Account activity</h2></div><span className="count">{ledgerEntries.length}</span></div>
           {ledgerEntries.length === 0 ? <div className="empty-state"><h3>No posted organization proceeds</h3><p className="muted">The ledger is ready, but this organization has not yet received a reconciled revenue allocation.</p></div> : (
             <div className="finance-table-wrap"><table className="finance-table">
               <thead><tr><th>Activity</th><th>Direction</th><th>Amount</th><th>Date</th></tr></thead>
               <tbody>{ledgerEntries.map((entry) => <tr key={entry.id}>
-                <td><strong>{label(entry.transactionType)}</strong><small>{entry.description ?? entry.transactionId}</small></td>
+                <td><strong>{label(entry.transactionType)} · {label(entry.accountCode)}</strong><small>{entry.description ?? entry.transactionId}</small></td>
                 <td><span className={`finance-direction finance-direction-${entry.direction}`}>{label(entry.direction)}</span></td>
                 <td>{money(entry.amountMinor)}</td>
                 <td>{dateTime(entry.createdAt)}</td>
