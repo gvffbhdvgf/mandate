@@ -1,6 +1,6 @@
 import {
   adminClient, assertOrganizationFinanceManager, authenticate, corsHeaders, env, json,
-  paystackRequest, paymentsModeEnabled,
+  paystackRequest, paymentsModeEnabled, PaystackRequestError,
 } from "../_shared/paystack.ts";
 
 type PaystackTransferResponse = {
@@ -313,9 +313,20 @@ Deno.serve(async (request: Request) => {
               currency: "KES",
             }),
           });
-        } catch {
-          // Keep the same reference and processing reservation. The caller may
-          // retry safely with this reference; never create a second payout ref.
+        } catch (error) {
+          if (error instanceof PaystackRequestError && error.httpStatus < 500) {
+            const providerCode = error.providerCode ?? "PAYSTACK_TRANSFER_REJECTED";
+            const { error: rejectionPersistError } = await admin.from("payout_requests").update({
+              status: "failed",
+              provider_status: "rejected",
+              failure_code: providerCode,
+              failure_message: "Paystack rejected the transfer request. Review the provider reason before submitting a new payout request.",
+            }).eq("id", payoutRequestId);
+            if (rejectionPersistError) return json(500, { error: "TRANSFER_REJECTION_PERSIST_FAILED" }, cors);
+            return json(422, { error: "PAYSTACK_TRANSFER_REJECTED", providerCode, reference }, cors);
+          }
+          // Network and provider-server failures have uncertain outcomes. Keep
+          // the same reference and processing reservation; never mint a new one.
           return json(503, { error: "TRANSFER_OUTCOME_UNKNOWN", reference, retryWithSameRequest: true }, cors);
         }
         const transferCode = safeString(started.data?.transfer_code, 120);
