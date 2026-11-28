@@ -2,7 +2,14 @@
 -- Run against a disposable database; all test rows are rolled back.
 begin;
 
-do $$
+-- The release readiness assertion below exercises the approval checklist with
+-- the independent global feature flag enabled. The enclosing transaction rolls
+-- this fixture setting back.
+update public.platform_payment_feature_flags
+set public_vote_credits_enabled=true
+where singleton;
+
+do $
 declare
   v_user uuid := '00000000-0000-4000-8000-000000000050';
   v_other uuid := '00000000-0000-4000-8000-000000000051';
