@@ -14,6 +14,9 @@ const SELECT_COLUMNS = [
   "environment",
   "settlement_status",
   "settlement_currency",
+  "provider_total_amount_minor",
+  "provider_total_processed_minor",
+  "provider_total_fees_minor",
   "provider_effective_amount_minor",
   "settled_at",
 ].join(",");
@@ -85,7 +88,7 @@ export function parseBankDate(value) {
 
 export function parseAmountToMinorUnits(value, columnName, rowNumber) {
   let text = String(value ?? "").trim();
-  if (!text) return 0;
+  if (!text || text === "-" || text === "—") return 0;
   text = text.replace(/^(?:KES|KSH)\s*/i, "").replace(/[ ,]/g, "");
   if (!/^\d+(?:\.\d{1,2})?$/.test(text)) {
     throw new Error("Invalid non-negative amount in " + columnName + " at CSV row " + rowNumber + ".");
@@ -164,6 +167,9 @@ export function buildBankReconciliationReport(settlementRows, bankRows, dateWind
         providerSettlementId: String(row.provider_settlement_id ?? "unknown"),
         status: String(row.settlement_status ?? "unknown"),
         currency: String(row.settlement_currency ?? "unknown"),
+        providerTotalAmountMinor: row.provider_total_amount_minor == null ? null : Number(row.provider_total_amount_minor),
+        providerTotalProcessedMinor: row.provider_total_processed_minor == null ? null : Number(row.provider_total_processed_minor),
+        providerTotalFeesMinor: row.provider_total_fees_minor == null ? null : Number(row.provider_total_fees_minor),
         expectedNetMinor: Number(row.provider_effective_amount_minor),
         settledAt: row.settled_at ?? null,
       });
@@ -225,6 +231,9 @@ export function buildBankReconciliationReport(settlementRows, bankRows, dateWind
       settlementStatus: item.settlement.status,
       settlementDate: item.settlement.settledAt ? item.settlement.settledAt.slice(0, 10) : "",
       currency: item.settlement.currency,
+      providerTotalAmountMinor: Number.isSafeInteger(item.settlement.providerTotalAmountMinor) ? item.settlement.providerTotalAmountMinor : "",
+      providerTotalProcessedMinor: Number.isSafeInteger(item.settlement.providerTotalProcessedMinor) ? item.settlement.providerTotalProcessedMinor : "",
+      providerTotalFeesMinor: Number.isSafeInteger(item.settlement.providerTotalFeesMinor) ? item.settlement.providerTotalFeesMinor : "",
       expectedNetMinor: Number.isSafeInteger(item.settlement.expectedNetMinor) ? item.settlement.expectedNetMinor : "",
       candidateCount: item.candidates.length,
       bankRowNumber: chosen ? chosen.rowNumber : "",
@@ -248,6 +257,9 @@ export function reportToCsv(rows) {
     "settlement_status",
     "settlement_date",
     "currency",
+    "provider_total_amount_minor",
+    "provider_total_processed_minor",
+    "provider_total_fees_minor",
     "expected_net_minor",
     "candidate_count",
     "bank_row_number",
