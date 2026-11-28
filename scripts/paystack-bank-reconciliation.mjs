@@ -78,7 +78,13 @@ export function parseBankDate(value) {
   let date;
   const dayFirst = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(text);
   if (dayFirst) {
-    date = new Date(Date.UTC(Number(dayFirst[3]), Number(dayFirst[2]) - 1, Number(dayFirst[1])));
+    const day = Number(dayFirst[1]);
+    const month = Number(dayFirst[2]);
+    const year = Number(dayFirst[3]);
+    date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+      throw new Error("Bank statement date is invalid: " + text);
+    }
   } else {
     date = new Date(text);
   }
@@ -93,6 +99,7 @@ export function parseAmountToMinorUnits(value, columnName, rowNumber) {
   if (!/^\d+(?:\.\d{1,2})?$/.test(text)) {
     throw new Error("Invalid non-negative amount in " + columnName + " at CSV row " + rowNumber + ".");
   }
+  text = text.replace(/,/g, "");
   const [whole, fraction = ""] = text.split(".");
   const minor = BigInt(whole) * 100n + BigInt((fraction + "00").slice(0, 2));
   if (minor > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Amount exceeds safe integer range at CSV row " + rowNumber + ".");
@@ -186,6 +193,10 @@ export function buildBankReconciliationReport(settlementRows, bankRows, dateWind
       candidatesBySettlement.push({ settlement, candidates: [], chosen: null, reviewStatus: "missing_expected_net_amount", evidence: "" });
       continue;
     }
+    if (settlement.expectedNetMinor === 0) {
+      candidatesBySettlement.push({ settlement, candidates: [], chosen: null, reviewStatus: "zero_net_no_bank_credit_expected", evidence: "" });
+      continue;
+    }
     if (!settlement.settledAt || !Number.isFinite(Date.parse(settlement.settledAt))) {
       candidatesBySettlement.push({ settlement, candidates: [], chosen: null, reviewStatus: "missing_settlement_date", evidence: "" });
       continue;
@@ -220,7 +231,9 @@ export function buildBankReconciliationReport(settlementRows, bankRows, dateWind
 
   const candidateUsage = new Map();
   for (const item of candidatesBySettlement) {
-    if (item.chosen) candidateUsage.set(item.chosen.rowNumber, (candidateUsage.get(item.chosen.rowNumber) ?? 0) + 1);
+    for (const candidate of item.candidates) {
+      candidateUsage.set(candidate.rowNumber, (candidateUsage.get(candidate.rowNumber) ?? 0) + 1);
+    }
   }
 
   return candidatesBySettlement.map((item) => {
