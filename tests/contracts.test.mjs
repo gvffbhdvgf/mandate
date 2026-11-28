@@ -195,6 +195,31 @@ test("authentication redirects allow only invitation and payment callback return
 });
 
 
+test("password recovery is non-enumerating, session-bound and uses a safe callback destination", async () => {
+  const auth = await read("../app/actions/auth.ts");
+  const navigation = await read("../lib/navigation.ts");
+  const callback = await read("../app/auth/callback/route.ts");
+  const login = await read("../app/login/login-form.tsx");
+  const requestPage = await read("../app/forgot-password/page.tsx");
+  const requestForm = await read("../app/forgot-password/forgot-password-form.tsx");
+  const updatePage = await read("../app/reset-password/page.tsx");
+  const updateForm = await read("../app/reset-password/reset-password-form.tsx");
+  assert.match(login, /Forgot your password\?/);
+  assert.match(auth, /resetPasswordForEmail/);
+  assert.match(auth, /If an account exists for that address/);
+  assert.match(auth, /updateUser\(\{ password \}\)/);
+  assert.match(auth, /auth\.getUser\(\)/);
+  assert.match(auth, /password\.length < 10/);
+  assert.match(navigation, /resolved\.pathname === "\/reset-password"/);
+  assert.match(callback, /exchangeCodeForSession/);
+  assert.match(callback, /notice=expired/);
+  assert.match(requestPage, /ACCOUNT RECOVERY/);
+  assert.match(requestForm, /role="status"/);
+  assert.match(updatePage, /auth\.getUser\(\)/);
+  assert.match(updatePage, /notice=expired/);
+  assert.match(updateForm, /confirmPassword/);
+});
+
 test("M2 election setup drafts are resumable and authority confirmation is enforced in the database", async () => {
   const drafts = await read("../supabase/migrations/20261126204535_m2_election_draft_editor.sql");
   const listing = await read("../supabase/migrations/20261126204653_m2_election_draft_listing.sql");
