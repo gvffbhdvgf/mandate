@@ -48,9 +48,17 @@ jobs:
         run: |
           set -euo pipefail
           APP_URL="https://mandate.markmachukhu97.workers.dev"
+          sleep 5
           for route in / /login /signup; do
+            name="$(echo "${route}" | tr '/' '_' | sed 's/^_$/home/')"
+            body="/tmp/mandate-${name}"
             echo "Checking ${APP_URL}${route}"
-            curl --fail --silent --show-error "${APP_URL}${route}" -o "/tmp/mandate-$(echo "${route}" | tr '/' '_' | sed 's/^_$/home/')"
+            status="$(curl --location --silent --show-error --retry 5 --retry-all-errors --retry-delay 3 --retry-max-time 45 --max-time 20 --output "${body}" --write-out '%{http_code}' "${APP_URL}${route}" || true)"
+            if [[ "${status}" != "200" ]]; then
+              echo "Production route ${route} returned HTTP ${status}"
+              sed -n '1,100p' "${body}" || true
+              exit 1
+            fi
           done
           grep -q "Organizational elections" /tmp/mandate-home
           grep -q "Sign in to Mandate" /tmp/mandate-_login
