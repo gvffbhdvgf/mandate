@@ -135,7 +135,7 @@ export function parseBankCsv(csvText, options) {
     const currency = options.currencyColumn
       ? String(record[options.currencyColumn] ?? "").trim().toUpperCase()
       : "KES";
-    if (!/^[A-Z]{3}$/.test(currency)) throw new Error("Invalid currency at CSV row " + rowNumber + ".");
+    if (currency !== "KES") throw new Error("Only KES bank statement amounts are supported; found " + currency + " at CSV row " + rowNumber + ".");
     rows.push({
       rowNumber,
       postedAt: parseBankDate(record[options.dateColumn]),
