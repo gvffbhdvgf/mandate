@@ -30,6 +30,31 @@ test("paid voting is explicitly feature-gated", async () => {
   assert.match(migration, /public_paid/);
 });
 
+
+test("public paid election opening uses owner confirmation and does not require platform operator approvals", async () => {
+  const migration = await read("../supabase/migrations/20261128140000_0053_remove_platform_paid_voting_operator_gate.sql");
+  const electionPage = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
+  const actions = await read("../app/actions/elections.ts");
+  assert.match(migration, /select true;/);
+  assert.match(migration, /public_vote_credits_enabled/);
+  assert.match(migration, /organization_owner_confirmation/);
+  assert.match(migration, /JURISDICTION_NOT_RELEASED/);
+  assert.match(migration, /Kenya private organizational election/);
+  assert.match(migration, /ORGANIZATION_ELECTION_AUTHORITY_REQUIRED/);
+  assert.match(migration, /ELECTION_SETUP_CHANGED_RECONFIRM/);
+  assert.doesNotMatch(migration, /PLATFORM_OPERATOR_REQUIRED|PAID_VOTING_RELEASE_REQUIREMENTS_PENDING/);
+  assert.doesNotMatch(electionPage, /PLATFORM AUTHORIZATION PENDING|platform-paid-voting release review/i);
+  assert.match(electionPage, /Owner confirmation/);
+  const platformPage = await read("../app/platform/paid-voting/page.tsx");
+  assert.match(platformPage, /No platform approval required/);
+  assert.doesNotMatch(platformPage, /authorizePublicPaidElectionAction|release checklist|Authorize this election/);
+  assert.doesNotMatch(actions, /Mandate platform authorization is required|Open Platform operations/);
+  const lifecycle = await read("../app/actions/lifecycle.ts");
+  assert.doesNotMatch(lifecycle, /PAID_VOTING_RELEASE_REQUIREMENTS_PENDING|platform authorization|Platform operations/);
+  assert.match(lifecycle, /JURISDICTION_NOT_RELEASED/);
+  assert.match(lifecycle, /PUBLIC_PAID_ELECTION_OWNER_CONFIRMATION_REQUIRED/);
+});
+
 test("privileged ballot RPC is not granted to browser roles", async () => {
   const migration = await read("../supabase/migrations/20261126090424_0009_transaction_functions_and_guards.sql");
   assert.match(migration, /revoke all on function public\.cast_registered_ballot[\s\S]*?from public,anon,authenticated/);
@@ -524,15 +549,18 @@ test("public vote credits reserve quantities, fulfill only verified payments and
 });
 
 
-test("public paid elections require platform release and freeze pricing before opening", async () => {
+test("public paid elections use owner confirmation, keep payment controls and freeze pricing before opening", async () => {
   const release = await read("../supabase/migrations/20261127210000_0043_paid_voting_release_gate.sql");
   const releaseSmoke = await read("../supabase/tests/paid_voting_release_gate_smoke.sql");
+  const ownerRelease = await read("../supabase/migrations/20261128140000_0053_remove_platform_paid_voting_operator_gate.sql");
   const lifecycle = await read("../supabase/tests/public_vote_credit_lifecycle_smoke.sql");
   const setupForm = await read("../app/organizations/[organizationId]/create-election-form.tsx");
   const electionPage = await read("../app/organizations/[organizationId]/elections/[electionId]/page.tsx");
   const lifecycleControls = await read("../app/organizations/[organizationId]/elections/[electionId]/lifecycle-controls.tsx");
   assert.match(release, /public_vote_credits_enabled boolean not null default false/);
-  assert.match(release, /PAID_VOTING_AUTHORIZATION_REQUIRED/);
+  assert.match(ownerRelease, /organization_owner_confirmation/);
+  assert.match(ownerRelease, /public_vote_credits_enabled/);
+  assert.doesNotMatch(ownerRelease, /PLATFORM_OPERATOR_REQUIRED|PAID_VOTING_RELEASE_REQUIREMENTS_PENDING/);
   assert.match(release, /pricePerCreditMinor/);
   assert.match(release, /maxCreditsPerParticipant/);
   assert.match(release, /new\.price_per_credit_minor is distinct from old\.price_per_credit_minor/);
@@ -548,7 +576,8 @@ test("public paid elections require platform release and freeze pricing before o
   assert.match(setupForm, /max_credits_per_participant/);
   assert.match(setupForm, /Number\.isSafeInteger\(amountMinor\)/);
   assert.match(setupForm, /Number\(election\.price_per_credit_minor\) \/ 100/);
-  assert.match(electionPage, /PLATFORM AUTHORIZATION PENDING/);
+  assert.doesNotMatch(electionPage, /PLATFORM AUTHORIZATION PENDING|platform-paid-voting release review/i);
+  assert.match(electionPage, /Owner confirmation/);
   assert.match(lifecycleControls, /public price, participant cap/);
 });
 

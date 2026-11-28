@@ -16,12 +16,12 @@ export function SetupConfirmation({
       <h2>{confirmed ? "Reconfirm election setup if it has changed" : "Review and confirm election setup"}</h2>
       <p className="muted">{confirmed
         ? "A confirmation is recorded. If you have changed the draft configuration since that review, confirm again; the database checks the exact configuration hash when opening."
-        : "Opening this election is blocked until an authorized organization officer confirms the rules and contest configuration."}</p>
+        : "Confirm the election rules, contest options and configured voting terms. Once confirmed, an authorized organization manager can open the election without waiting for platform approval."}</p>
       {error && <p className="form-error" role="alert">{error}</p>}
       <label className="checkbox-row">
         <input type="checkbox" checked={authorityConfirmed}
           onChange={(event) => setAuthorityConfirmed(event.target.checked)} />
-        I confirm that I am authorized to approve this election configuration on behalf of the organization.
+        I confirm that I am authorized to run this election for the organization, that it is a private organizational election in the supported jurisdiction, and that its use, pricing and payment terms comply with applicable law and provider terms.
       </label>
       <button type="button" className="primary-button" disabled={!authorityConfirmed || pending}
         onClick={() => startTransition(async () => {
