@@ -150,7 +150,6 @@ Deno.serve(async (request: Request) => {
   const resourceId = data.id ?? data.refund_reference ?? data.dispute?.id ?? null;
   const eventIdentity = resourceId == null ? await sha256Hex(rawBody) : String(resourceId);
   const eventKey = `paystack:${eventType}:${eventIdentity}`;
-  const admin = adminClient();
 
   const { data: inserted, error: insertError } = await admin
     .from("payment_events")
