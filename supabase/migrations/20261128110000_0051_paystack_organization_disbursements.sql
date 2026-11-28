@@ -307,7 +307,7 @@ begin
     raise exception 'SERVICE_ROLE_REQUIRED' using errcode='42501';
   end if;
   if p_transfer_reference is null or p_provider_transfer_code is null
-    or p_provider_status not in ('success','failed','reversed')
+    or p_provider_status not in ('success','failed','reversed','abandoned','blocked','rejected')
     or p_amount_minor is null or p_amount_minor <= 0 or p_currency <> 'KES'
     or (p_provider_fee_minor is not null and p_provider_fee_minor < 0) then
     raise exception 'TRANSFER_VERIFICATION_FACTS_INVALID' using errcode='22023';
@@ -434,8 +434,8 @@ begin
       raise exception 'PAID_PAYOUT_REQUIRES_TRANSFER_REVERSAL' using errcode='55000';
     end if;
     update public.payout_requests set status='failed',provider_transfer_code=p_provider_transfer_code,
-      provider_status=p_provider_status,failure_code='TRANSFER_FAILED',
-      failure_message='Paystack did not complete this transfer.'
+      provider_status=p_provider_status,failure_code='TRANSFER_'||upper(p_provider_status),
+      failure_message='Paystack did not complete this transfer; review the provider status before requesting another payout.'
     where id=v_request.id;
     insert into public.audit_events(
       organization_id,actor_type,action,entity_type,entity_id,redacted_metadata
