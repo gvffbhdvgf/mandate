@@ -141,7 +141,6 @@ test("live settlement import requires explicit live confirmation before any requ
   const options = parseArgs([
     ...validArguments.filter((value) => value !== "test"),
     "--environment", "live",
-    "--allow-live",
   ]);
   let calls = 0;
   await assert.rejects(
@@ -157,7 +156,7 @@ test("live settlement import requires explicit live confirmation before any requ
       },
       output: () => {},
     }),
-    /Live import requires the additional --allow-live confirmation/,
+    /--allow-live/,
   );
   assert.equal(calls, 0);
 });
