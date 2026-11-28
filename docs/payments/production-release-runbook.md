@@ -72,9 +72,23 @@ A purpose is enabled only when its mode-specific environment flag and the corres
 - Migration 0044 stores settlement batches and provider transaction facts. The paystack-settlement-import Edge Function imports a bounded settlement and one transaction page per call, using idempotent upserts.
 - The paystack_settlement_reconciliation view compares provider settlement rows with verified payment intents and interim receipt postings. matched_to_receipt means the provider row matches the verified receipt; it does not prove the bank credit arrived or reconcile gross, fees and net bank credit.
 - Migration 0045 provides a service-role-only exception evidence view. It does not resolve exceptions or authorize refunds, credits, allocations or payouts.
-- The settlement importer has no operator UI or scheduled dispatch workflow. Aggregate gross/fees/net-to-bank reconciliation against actual bank evidence, reviewed exception resolution, operator approval/audit, and final revenue/processor-fee/tax accounting are not complete.
+- A manual operator CLI is available at scripts/paystack-settlement-import.mjs. It performs a read-only mode preflight, requires an explicit expected environment and import confirmation, then drives every transaction page with idempotent upserts. Live mode additionally requires --allow-live and the live settlement-readiness gate. It is manual only; there is no operator UI or scheduled dispatch workflow. Aggregate gross/fees/net-to-bank reconciliation against actual bank evidence, reviewed exception resolution, operator approval/audit, and final revenue/processor-fee/tax accounting are not complete.
 - Refund and dispute webhooks are verified and freeze affected payments for reconciliation. They do not automatically reverse ledger postings or revoke already-consumed vote credits; partial refunds and dispute outcomes require a reviewed decision.
 - **Therefore PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED must remain false and live mode must remain fail-closed.** A successful Paystack settlement status is not proof of bank credit, and a ledger balance is not withdrawable cash.
+
+### Manual provider settlement import
+
+The CLI imports provider settlement and transaction facts only. It does not prove bank credit, post final revenue, resolve exceptions or authorize payouts.
+
+1. Set SUPABASE_URL to https://yhdosrhtzcsfqfuuqhsk.supabase.co and SUPABASE_SERVICE_ROLE_KEY in the local process environment. Never commit the service-role key or print it.
+2. Obtain the numeric settlement ID from the Paystack dashboard.
+3. Run a test import first:
+
+    node scripts/paystack-settlement-import.mjs --settlement-id 123456 --from 2026-11-01T00:00:00Z --to 2026-11-02T00:00:00Z --environment test --confirm-import
+
+4. The script first calls a read-only preflight. It refuses an environment mismatch and imports nothing if the deployed Edge Function is not configured for the expected mode. It then imports every transaction page.
+5. Re-running the same command is safe: provider settlement and transaction records upsert by environment and provider identity.
+6. Live import requires --environment live --allow-live --confirm-import and a configured live settlement-readiness switch. That switch remains false until the operator/bank reconciliation and accounting path is complete.
 
 ## Release prerequisites
 
