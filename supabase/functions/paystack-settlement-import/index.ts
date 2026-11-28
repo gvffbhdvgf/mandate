@@ -71,7 +71,7 @@ Deno.serve(async (request: Request) => {
   const mode = env("PAYSTACK_MODE");
   if (!settlementModeEnabled()) return json(503, { error: "PAYSTACK_SETTLEMENT_PIPELINE_DISABLED" });
 
-  let input: { from?: unknown; to?: unknown; settlementId?: unknown; transactionPage?: unknown };
+  let input: { from?: unknown; to?: unknown; settlementId?: unknown; transactionPage?: unknown; preflight?: unknown };
   try {
     input = await request.json();
   } catch {
@@ -85,6 +85,17 @@ Deno.serve(async (request: Request) => {
     || !/^[0-9]{1,32}$/.test(settlementId)
     || !Number.isSafeInteger(transactionPage) || transactionPage < 1 || transactionPage > 1000) {
     return json(400, { error: "INVALID_SETTLEMENT_IMPORT_RANGE_OR_CURSOR" });
+  }
+
+  if (input.preflight === true) {
+    return json(200, {
+      ready: true,
+      environment: mode,
+      settlementId,
+      from,
+      to,
+      pageSize: PAGE_SIZE,
+    });
   }
 
   try {
