@@ -18,6 +18,11 @@ export function LoginForm({ next, notice }: { next: string; notice?: string }) {
           Your account has been created and is waiting for email confirmation. Open the confirmation email, then return here to sign in.
         </p>
       )}
+      {notice === "callback" && (
+        <p className="form-error" role="alert">
+          That sign-in link is missing, expired or already used. Sign in again or request a new confirmation email.
+        </p>
+      )}
       {state.error && <p className="form-error" role="alert">{state.error}</p>}
       <form action={action} className="form-stack">
         <input type="hidden" name="next" value={next} />
