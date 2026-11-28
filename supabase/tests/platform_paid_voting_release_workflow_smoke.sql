@@ -59,9 +59,9 @@ begin
   v_ballot_guard := pg_get_functiondef(
     'mandate_private.guard_public_paid_ballot_release()'::regprocedure
   );
-  if position('has_current_public_paid_voting_release' in v_ballot_guard)=0
+  if position('has_current_public_paid_voting_release' in v_ballot_guard)>0
     or position('paid_voting_authorized_by' in v_ballot_guard)=0 then
-    raise exception 'PUBLIC_PAID_BALLOT_GUARD_MISSING';
+    raise exception 'PUBLIC_PAID_BALLOT_MUST_NOT_DEPEND_ON_NEW_PURCHASE_SWITCH';
   end if;
 
   select count(*) into v_trigger_count
