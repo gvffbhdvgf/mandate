@@ -88,6 +88,7 @@ export default async function PlatformPaidVotingPage({ searchParams }: {
     <WorkspaceShell section="Platform operations" context="Public paid-voting release" items={[
       {label:"Dashboard",href:"/dashboard"},
       {label:"Paid-voting release",href:"/platform/paid-voting"},
+      {label:"Finance",href:"/platform/finance"},
     ]} activeHref="/platform/paid-voting" actions={<form action={signOutAction}><button className="quiet-button">Sign out</button></form>}>
       <main className="dashboard-shell">
         <section className="dashboard-intro">
