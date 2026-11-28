@@ -789,7 +789,7 @@ test("global skip navigation targets a unique main-content region on every non-w
     "../app/results/[electionId]/page.tsx",
     "../app/vote/page.tsx",
   ]) {
-    assert.match(await read(path), /<main id="main-content"/);
+    assert.match(await read(path), /<main id="main-content" tabIndex=\{-1\}/);
   }
   const shell = await read("../app/components/workspace-shell.tsx");
   assert.match(shell, /id="main-content"/);
