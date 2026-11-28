@@ -15,13 +15,11 @@ const SETTLEMENT_COLUMNS = [
   "provider_effective_amount_minor",
   "provider_total_processed_minor",
   "provider_total_fees_minor",
-  "provider_transaction_count",
   "settled_transaction_amount_minor",
   "fee_minor",
   "reconciliation_status",
 ].join(",");
 const EXCEPTION_COLUMNS = [
-  "environment",
   "payment_intent_status",
   "provider_status",
   "receipt_posted",
@@ -65,7 +63,9 @@ export function validateOptions(options) {
 function buildViewUrl(baseUrl, view, columns, options) {
   const url = new URL(baseUrl + "/rest/v1/" + view);
   url.searchParams.set("select", columns);
-  url.searchParams.set("environment", "eq." + options.environment);
+  if (view === "paystack_settlement_reconciliation") {
+    url.searchParams.set("environment", "eq." + options.environment);
+  }
   if (options.settlementId && view === "paystack_settlement_reconciliation") {
     url.searchParams.set("provider_settlement_id", "eq." + options.settlementId);
   }
@@ -125,7 +125,6 @@ export function formatReport(settlementRows, exceptionRows, environment) {
         providerEffectiveMinor: safeInteger(row.provider_effective_amount_minor),
         providerProcessedMinor: safeInteger(row.provider_total_processed_minor),
         providerFeesMinor: safeInteger(row.provider_total_fees_minor),
-        providerTransactionCount: safeInteger(row.provider_transaction_count),
         importedRows: 0,
         matchedRows: 0,
         unresolvedRows: 0,
@@ -162,6 +161,7 @@ export function formatReport(settlementRows, exceptionRows, environment) {
     transactionRows: settlementRows.length,
     settlements: [...settlements.values()].sort((a, b) => a.providerSettlementId.localeCompare(b.providerSettlementId)),
     reconciliationStatuses: [...statusCounts.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    exceptionScope: "all environments",
     exceptionRecords: exceptionRows.length,
     exceptionEvents,
     receiptsPosted,
@@ -192,9 +192,10 @@ function renderReport(report, output) {
   output("Reconciliation status counts:");
   if (report.reconciliationStatuses.length === 0) output("  none");
   for (const [status, count] of report.reconciliationStatuses) output("  " + status + ": " + count);
-  output("Payment exception records: " + report.exceptionRecords + "; provider events: " + report.exceptionEvents
+  output("Payment exception records (all environments; current view does not expose environment): " + report.exceptionRecords + "; provider events: " + report.exceptionEvents
     + "; receipt posted: " + report.receiptsPosted + "; receipt missing: " + report.receiptsMissing + ".");
   for (const [type, count] of report.exceptionTypes) output("  exception " + type + ": " + count);
+  output("Exception counts are not scoped to the selected settlement or environment; the current exception view exposes neither field.");
   output("Bank reconciliation: NOT VERIFIED. These views compare provider settlement facts to verified Mandate receipts; they do not prove bank credit or final revenue allocation.");
   output("No payment, refund, transfer, payout or database mutation was performed.");
 }
