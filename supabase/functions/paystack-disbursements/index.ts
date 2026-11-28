@@ -36,7 +36,7 @@ async function recordVerifiedTransfer(
   const amount = amountMinor(transfer.amount);
   const currency = safeString(transfer.currency, 3).toUpperCase();
   const fee = transfer.fee_charged == null ? null : Number(transfer.fee_charged);
-  if (!reference || !transferCode || !["success", "failed", "reversed"].includes(status)
+  if (!reference || !transferCode || !["success", "failed", "reversed", "abandoned", "blocked", "rejected"].includes(status)
     || amount == null || currency !== "KES"
     || (fee !== null && (!Number.isSafeInteger(fee) || fee < 0))) {
     return { processed: false, reason: "TRANSFER_VERIFICATION_FIELDS_INVALID" };
@@ -47,7 +47,7 @@ async function recordVerifiedTransfer(
     .upsert({
       provider_event_key: eventKey,
       transfer_reference: reference,
-      event_type: `transfer.${status}`,
+      event_type: status === "success" ? "transfer.success" : status === "reversed" ? "transfer.reversed" : "transfer.failed",
       provider_transfer_code: transferCode,
       provider_status: status,
       amount_minor: amount,
