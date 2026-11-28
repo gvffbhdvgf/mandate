@@ -98,6 +98,19 @@ After importing a provider settlement, run the read-only report:
 
 For live evidence, add --allow-live. The report reads the service-role-only reconciliation and exception views, prints provider-to-receipt match counts and exception summaries, and never prints payment references or credentials. The optional settlement ID filters settlement rows only. The current exception view does not expose environment or settlement ID, so exception counts are explicitly reported across all environments. The report performs GET requests only; it does not resolve exceptions, confirm bank credit, post final revenue or authorize payouts.
 
+### Local bank-statement candidate report
+
+The bank reconciliation CLI reads the bank statement locally and does not upload it. It requires explicit column mapping because bank exports differ:
+
+    node scripts/paystack-bank-reconciliation.mjs --environment test --bank-csv ./bank-statement.csv --date-column "Posting Date" --credit-column "Credit" --debit-column "Debit" --currency-column "Currency" --reference-column "Reference" --description-column "Narrative" --date-window-days 5 --output ./paystack-bank-reconciliation-report.csv
+
+- SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in the local process environment. The service-role key is never printed or committed.
+- The parser supports ISO dates and DD/MM/YYYY, and decimal KES amounts with two decimal places. It requires separate credit and debit columns; optional currency, reference and description columns improve candidate matching.
+- The report compares Paystack's provider effective amount (expected net settlement) to bank credits within the date window. It uses settlement ID or Paystack descriptors as stronger evidence, but never marks a row reconciled automatically. Every candidate requires manual confirmation against the original bank statement.
+- For live settlement data, add --allow-live. An optional --settlement-id filters the provider settlement rows.
+- Output is written to a new local file and will not overwrite an existing file. No bank statement is uploaded and no database record is changed.
+- This is a candidate-matching aid, not a formal bank reconciliation or durable audit record. Persistent bank evidence and exception-resolution records are not implemented; creating their database structures requires a separate schema decision.
+
 ## Release prerequisites
 
 Do not enable a live purpose until all applicable items are evidenced:
