@@ -53,10 +53,10 @@ export async function finalizeAndConfirmElectionSetupAction(input: {
   });
   if (confirmationError) {
     const message = confirmationError.message ?? "";
-    if (message.includes("PAID_VOTING_FEATURE_GATED") || message.includes("PAID_VOTING_AUTHORIZATION_REQUIRED")) {
+    if (message.includes("PAID_VOTING_FEATURE_GATED")) {
       return {
         electionId: electionId as string,
-        error: "Your public paid election draft is saved. Mandate platform release authorization and legal/provider checks are still required before it can be confirmed or opened.",
+        error: "Your public election draft is saved, but the public vote-credit feature is currently disabled. Contact the organization administrator.",
       };
     }
     return { electionId: electionId as string, error: "The draft was finalized, but authority confirmation did not complete. Review the election setup and retry confirmation." };
@@ -78,11 +78,14 @@ export async function confirmElectionSetupAction(input: {
   const { error } = await supabase.rpc("confirm_election_setup", {
     p_election_id: parsed.data.electionId,
   });
-  if (error?.message.includes("PAID_VOTING_RELEASE_REQUIREMENTS_PENDING")) {
-    return { error: "Mandate's paid-voting release checklist is incomplete or an approval has expired. Open Platform operations and complete the evidence review first." };
+  if (error?.message.includes("PAID_VOTING_FEATURE_GATED")) {
+    return { error: "Public vote credits are currently disabled for the platform. The election has not been opened." };
   }
-  if (error?.message.includes("PAID_VOTING_AUTHORIZATION_REQUIRED")) {
-    return { error: "Mandate platform authorization is required before this public-paid setup can be confirmed." };
+  if (error?.message.includes("PUBLIC_PAID_ELECTION_CONFIGURATION_INVALID")) {
+    return { error: "Complete the public election currency, price, participant limit, contact verification and voting dates before confirming." };
+  }
+  if (error?.message.includes("JURISDICTION_NOT_RELEASED")) {
+    return { error: "Public paid elections are currently supported for Kenya-based private organizational elections only." };
   }
   if (error) return { error: "The election setup could not be confirmed. Check the current rules, options and your organization role." };
   return {};
