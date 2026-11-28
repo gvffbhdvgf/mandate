@@ -2,7 +2,7 @@
 import { pathToFileURL } from "node:url";
 
 const EXPECTED_SUPABASE_HOST = "yhdosrhtzcsfqfuuqhsk.supabase.co";
-const ISO_UTC = /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/;
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 const SETTLEMENT_ID = /^[0-9]{1,32}$/;
 
 export function parseArgs(argv) {
