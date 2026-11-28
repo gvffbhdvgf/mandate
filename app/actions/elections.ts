@@ -78,6 +78,12 @@ export async function confirmElectionSetupAction(input: {
   const { error } = await supabase.rpc("confirm_election_setup", {
     p_election_id: parsed.data.electionId,
   });
-  if (error) return { error: "The election setup could not be confirmed. Check the rules and your organization role." };
+  if (error?.message.includes("PAID_VOTING_RELEASE_REQUIREMENTS_PENDING")) {
+    return { error: "Mandate's paid-voting release checklist is incomplete or an approval has expired. Open Platform operations and complete the evidence review first." };
+  }
+  if (error?.message.includes("PAID_VOTING_AUTHORIZATION_REQUIRED")) {
+    return { error: "Mandate platform authorization is required before this public-paid setup can be confirmed." };
+  }
+  if (error) return { error: "The election setup could not be confirmed. Check the current rules, options and your organization role." };
   return {};
 }

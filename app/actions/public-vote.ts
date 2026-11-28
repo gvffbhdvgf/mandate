@@ -104,6 +104,7 @@ export async function initializePublicVoteCreditCheckout(slug: string, quantity:
     if (intentError || !intent?.paymentIntentId) {
       const code = intent?.error;
       if (code === "PARTICIPANT_CREDIT_CAP_EXCEEDED") return { error: "This purchase would exceed the election's participant credit limit." };
+      if (code === "PAID_VOTING_RELEASE_REQUIREMENTS_PENDING") return { error: "Mandate's public paid-voting release is not currently active. No new purchases can be started; contact the election organizer for an update." };
       if (code === "PAYMENT_PURPOSE_DISABLED" || code === "PUBLIC_PAID_ELECTION_NOT_READY") return { error: "Paid checkout is not enabled for this election yet." };
       return { error: "We could not prepare checkout. Please try again." };
     }
@@ -180,6 +181,7 @@ export async function castPublicPaidBallot(
       const message = error?.message ?? "";
       if (message.includes("INSUFFICIENT_VOTE_CREDITS")) return { error: "You do not have enough available voting credits for this selection." };
       if (message.includes("ELECTION_NOT_OPEN")) return { error: "This election is no longer accepting ballots." };
+      if (message.includes("PAID_VOTING_RELEASE_REQUIREMENTS_PENDING")) return { error: "Mandate's public paid-voting release is not currently active. New ballots are paused until the platform review is restored." };
       return { error: "Your ballot could not be recorded. Please check your balance and try again." };
     }
 

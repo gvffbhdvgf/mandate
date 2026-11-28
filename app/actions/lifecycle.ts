@@ -39,8 +39,13 @@ export async function openElectionAction(_previous: LifecycleActionState, formDa
   if (error) {
     if (error.message.includes("VOTER_ACCESS_NOT_ISSUED")) return { error: "Every eligible voter must receive a secure invitation before this election can open." };
     if (error.message.includes("ELIGIBLE_VOTERS_REQUIRED")) return { error: "Import and commit the eligible voter register before opening." };
-    if (error.message.includes("ELECTION_NOT_STARTED")) return { error: "The scheduled start time has not arrived." };
-    return { error: "The election could not be opened. Check the rules, options and voter access checklist." };
+    if (error.message.includes("ELECTION_NOT_STARTED")) return { error: "The scheduled start time has not arrived. Opening becomes available at the configured start time." };
+    if (error.message.includes("ELECTION_WINDOW_EXPIRED")) return { error: "The scheduled end time has passed. Update the election dates and reconfirm the setup before opening." };
+    if (error.message.includes("PAID_VOTING_RELEASE_REQUIREMENTS_PENDING")) return { error: "Mandate's public paid-voting release checklist is incomplete or an approval has expired. Open Platform operations to review the outstanding evidence." };
+    if (error.message.includes("PAID_VOTING_AUTHORIZATION_REQUIRED")) return { error: "This public-paid election has not received platform authorization. Complete the platform release review first." };
+    if (error.message.includes("ELECTION_SETUP_NOT_CONFIRMED") || error.message.includes("ELECTION_SETUP_CHANGED_RECONFIRM")) return { error: "Review the current rules, candidates and public credit limits, then confirm the election setup again." };
+    if (error.message.includes("EACH_CONTEST_REQUIRES_TWO_ACTIVE_OPTIONS")) return { error: "Every contest must have at least two active options before the election can open." };
+    return { error: "The election could not be opened. Review the election readiness requirements and try again." };
   }
   return { success: true, message: "Election opened. The frozen ballot is active and eligible voters can now vote until the scheduled close." };
 }

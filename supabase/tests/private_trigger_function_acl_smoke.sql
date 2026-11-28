@@ -10,7 +10,11 @@ declare
     'mandate_private.set_updated_at()'::regprocedure,
     'mandate_private.prevent_append_only_mutation()'::regprocedure,
     'mandate_private.guard_election_snapshot()'::regprocedure,
-    'mandate_private.guard_ledger_posting()'::regprocedure
+    'mandate_private.guard_ledger_posting()'::regprocedure,
+    'mandate_private.prevent_platform_release_audit_mutation()'::regprocedure,
+    'mandate_private.guard_public_paid_release()'::regprocedure,
+    'mandate_private.guard_public_paid_payment_intent_release()'::regprocedure,
+    'mandate_private.guard_public_paid_ballot_release()'::regprocedure
   ];
 begin
   foreach v_function in array v_functions loop
