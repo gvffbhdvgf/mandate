@@ -113,7 +113,7 @@ Deno.serve(async (request: Request) => {
       const accountNumber = safeString(body.accountNumber, 40).replace(/[\\s-]/g, "");
       const bankCode = safeString(body.bankCode, 32);
       if (!["mobile_money", "mobile_money_business", "kepss"].includes(type)
-        || !name || !/^[+0-9]{6,32}$/.test(accountNumber) || !bankCode
+        || !name || !/^\\+?[0-9]{6,31}$/.test(accountNumber) || !bankCode
         || (type === "mobile_money_business" && bankCode !== "MPTILL")) {
         return json(400, { error: "RECIPIENT_DETAILS_INVALID_OR_UNSUPPORTED" }, cors);
       }
