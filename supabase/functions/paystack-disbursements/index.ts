@@ -238,6 +238,49 @@ Deno.serve(async (request: Request) => {
       return json(200, { payout: data }, cors);
     }
 
+    if (action === "finalize_otp" || action === "resend_otp") {
+      if (!transferCapabilityEnabled()) return json(503, { error: "PAYSTACK_TRANSFERS_DISABLED" }, cors);
+      const payoutRequestId = safeString(body.payoutRequestId, 64);
+      if (!payoutRequestId) return json(400, { error: "PAYOUT_REQUEST_ID_REQUIRED" }, cors);
+      const { data: payout, error: payoutError } = await admin.from("payout_requests")
+        .select("id,organization_id,status,provider_reference,provider_transfer_code,provider_status")
+        .eq("id", payoutRequestId).maybeSingle();
+      if (payoutError || !payout) return json(404, { error: "PAYOUT_REQUEST_NOT_FOUND" }, cors);
+      await assertOrganizationFinanceManager(caller, payout.organization_id, user.id);
+      if (payout.status !== "processing" || payout.provider_status !== "otp" || !payout.provider_transfer_code) {
+        return json(409, { error: "PAYOUT_DOES_NOT_REQUIRE_OTP" }, cors);
+      }
+      if (action === "resend_otp") {
+        await paystackRequest("/transfer/resend_otp", {
+          method: "POST",
+          body: JSON.stringify({ transfer_code: payout.provider_transfer_code, reason: "transfer" }),
+        });
+        return json(200, { payoutRequestId, status: "otp", otpResent: true }, cors);
+      }
+      const otp = safeString(body.otp, 12);
+      if (!/^\\d{4,8}$/.test(otp)) return json(400, { error: "TRANSFER_OTP_INVALID" }, cors);
+      const finalized = await paystackRequest<PaystackTransferResponse>("/transfer/finalize_transfer", {
+        method: "POST",
+        body: JSON.stringify({ transfer_code: payout.provider_transfer_code, otp }),
+      });
+      const providerStatus = safeString(finalized.data?.status, 32).toLowerCase();
+      await admin.from("payout_requests").update({ provider_status: providerStatus || "pending" })
+        .eq("id", payoutRequestId);
+      let verified: PaystackTransferResponse;
+      try {
+        verified = await paystackRequest<PaystackTransferResponse>(
+          `/transfer/verify/${encodeURIComponent(payout.provider_reference)}`,
+        );
+      } catch {
+        return json(202, { payoutRequestId, status: providerStatus || "processing", final: false }, cors);
+      }
+      if (verified.data?.reference !== payout.provider_reference) {
+        return json(409, { error: "TRANSFER_REFERENCE_MISMATCH" }, cors);
+      }
+      const result = await recordVerifiedTransfer(admin, verified.data, "api_verify");
+      return json(200, { payoutRequestId, transfer: result, providerStatus: verified.data.status }, cors);
+    }
+
     if (action === "initiate_payout" || action === "verify_payout") {
       if (!transferCapabilityEnabled()) return json(503, { error: "PAYSTACK_TRANSFERS_DISABLED" }, cors);
       const payoutRequestId = safeString(body.payoutRequestId, 64);
