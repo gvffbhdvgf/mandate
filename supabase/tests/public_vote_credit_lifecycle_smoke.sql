@@ -23,6 +23,14 @@ values (
   '11111111-1111-4111-8111-111111111141'
 );
 
+insert into public.organization_members(
+  organization_id,user_id,role,status,accepted_at
+) values (
+  '22222222-2222-4222-8222-222222222241',
+  '11111111-1111-4111-8111-111111111141',
+  'owner','active',now()
+);
+
 insert into public.elections(
   id,organization_id,title,public_slug,voting_mode,status,starts_at,ends_at,
   currency,price_per_credit_minor,max_credits_per_participant,
@@ -50,13 +58,8 @@ values
   ('55555555-5555-4555-8555-555555555541','22222222-2222-4222-8222-222222222241','33333333-3333-4333-8333-333333333341','44444444-4444-4444-8444-444444444441','Option One',1),
   ('55555555-5555-4555-8555-555555555542','22222222-2222-4222-8222-222222222241','33333333-3333-4333-8333-333333333341','44444444-4444-4444-8444-444444444441','Option Two',2);
 
--- The test fixture grants its test user operator status and records evidence-backed
--- approvals through the same audited functions used by the platform console.
-insert into mandate_private.platform_operators(user_id,granted_by)
-values (
-  '11111111-1111-4111-8111-111111111141',
-  '11111111-1111-4111-8111-111111111141'
-);
+-- The organization owner confirms the setup and opens the election directly.
+set local role authenticated;
 select set_config('request.jwt.claim.sub','11111111-1111-4111-8111-111111111141',true);
 select set_config('request.jwt.claims',jsonb_build_object(
   'sub','11111111-1111-4111-8111-111111111141',
@@ -64,40 +67,9 @@ select set_config('request.jwt.claims',jsonb_build_object(
   'email','mandate-public-credit-smoke@example.invalid'
 )::text,true);
 
-do $$
-declare
-  v_requirement text;
-begin
-  for v_requirement in
-    select requirement_key from mandate_private.platform_paid_voting_release_requirements
-  loop
-    perform mandate_private.record_platform_paid_voting_requirement(
-      v_requirement,'approved',
-      'Acceptance fixture verifies this release requirement with documented evidence and a supporting reference.',
-      'https://example.invalid/release-evidence/'||v_requirement,
-      null
-    );
-  end loop;
-end;
-$$;
-
-select mandate_private.authorize_public_paid_election(
-  '33333333-3333-4333-8333-333333333341',true
-);
-
-update public.elections
-set status='open',
-    opened_at=now(),
-    candidate_snapshot=jsonb_build_array(jsonb_build_object(
-      'contestId','44444444-4444-4444-8444-444444444441',
-      'title','Acceptance Contest',
-      'required',true,
-      'options',jsonb_build_array(
-        jsonb_build_object('id','55555555-5555-4555-8555-555555555541','displayName','Option One'),
-        jsonb_build_object('id','55555555-5555-4555-8555-555555555542','displayName','Option Two')
-      )
-    ))
-where id='33333333-3333-4333-8333-333333333341';
+select public.confirm_election_setup('33333333-3333-4333-8333-333333333341');
+select public.open_election('33333333-3333-4333-8333-333333333341',true);
+reset role;
 
 insert into public.public_participants(
   id,election_id,auth_user_id,contact_hash,verification_status
