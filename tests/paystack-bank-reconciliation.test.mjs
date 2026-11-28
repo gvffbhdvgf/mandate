@@ -49,7 +49,7 @@ test("bank dates and decimal amounts are parsed into UTC and minor units", () =>
   assert.equal(parseAmountToMinorUnits("1,234.56", "Credit", 2), 123456);
   assert.equal(parseAmountToMinorUnits("KES 500.00", "Credit", 2), 50000);
   assert.equal(parseAmountToMinorUnits("-", "Debit", 2), 0);
-  assert.throws(() => parseAmountToMinorUnits("-50.00", "Credit", 2), /Invalid non-negative amount/);
+  assert.throws(() => parseAmountToMinorUnits("-50.00", "Credit", 2), /Invalid non-negative amount/);\n  assert.throws(() => parseAmountToMinorUnits("12,34.56", "Credit", 2), /Invalid non-negative amount/);\n  assert.throws(() => parseBankDate("31/11/2026"), /date is invalid/);
 });
 
 test("bank CSV parser maps bank-specific columns without uploading source data", () => {
@@ -68,7 +68,10 @@ test("bank CSV parser maps bank-specific columns without uploading source data",
   assert.throws(() => parseBankCsv(
     "Date,Credit,Debit\n28/11/2026,100.00,20.00",
     { ...baseOptions, descriptionColumn: undefined, referenceColumn: undefined, currencyColumn: undefined },
-  ), /both a credit and a debit/);
+  ), /both a credit and a debit/);\n  assert.throws(() => parseBankCsv(
+    "Date,Currency,Credit,Debit\\n28/11/2026,USD,100.00,",
+    { ...baseOptions, descriptionColumn: undefined, referenceColumn: undefined },
+  ), /Only KES/);
 });
 
 test("bank candidate report requires manual confirmation and identifies exact reference evidence", () => {
@@ -122,7 +125,19 @@ test("bank candidate report detects ambiguous matches, missing credits and non-s
   assert.ok(report.every(row => row.requiresManualConfirmation));
 });
 
-test("bank candidate report rejects amount, currency and date mismatches", () => {
+
+test("zero-net provider settlements do not generate false missing-bank-credit exceptions", () => {
+  const report = buildBankReconciliationReport([{
+    settlement_id: "s-zero",
+    provider_settlement_id: "987",
+    settlement_status: "success",
+    settlement_currency: "KES",
+    provider_effective_amount_minor: 0,
+    settled_at: "2026-11-28T00:00:00Z",
+  }], [], 5);
+  assert.equal(report[0].reviewStatus, "zero_net_no_bank_credit_expected");
+});
+\ntest("bank candidate report rejects amount, currency and date mismatches", () => {
   const settlement = [{
     settlement_id: "s1",
     provider_settlement_id: "123456",
