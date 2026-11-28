@@ -156,16 +156,7 @@ export default async function ElectionPage({ params, searchParams }: {
         </div>
       </section>
       {canOpen && election.status === "draft" && (
-        election.voting_mode === "public_paid" && !election.paid_voting_authorized_at ? (
-          <section className="panel">
-            <p className="kicker">PLATFORM AUTHORIZATION PENDING</p>
-            <h2>Public paid voting is configured but not released</h2>
-            <p className="muted">The organization can prepare the public election configuration. Mandate platform release requirements must be reviewed with evidence before setup confirmation and opening are available.</p>
-            <p className="template-link"><Link href="/platform/paid-voting">Open platform paid-voting release review</Link></p>
-          </section>
-        ) : (
-          <SetupConfirmation electionId={electionId} confirmed={Boolean(election.setup_confirmed_at)} />
-        )
+        <SetupConfirmation electionId={electionId} confirmed={Boolean(election.setup_confirmed_at)} />
       )}
       {election.voting_mode === "public_paid" && (
         <section className="panel">
@@ -176,7 +167,7 @@ export default async function ElectionPage({ params, searchParams }: {
             <div><span>Public link</span><strong>{election.public_slug ? `/public-vote/${election.public_slug}` : "Not configured"}</strong></div>
             <div><span>Credit price</span><strong>{election.currency === "KES" && election.price_per_credit_minor ? `KSh ${(Number(election.price_per_credit_minor)/100).toFixed(2)}` : "Not configured"}</strong></div>
             <div><span>Participant cap</span><strong>{election.max_credits_per_participant ?? "Not configured"}</strong></div>
-            <div><span>Platform approval</span><strong>{election.paid_voting_authorized_at ? "Authorized" : "Pending"}</strong></div>
+            <div><span>Owner confirmation</span><strong>{election.paid_voting_authorized_at ? "Confirmed" : "Pending"}</strong></div>
           </div>
         </section>
       )}
