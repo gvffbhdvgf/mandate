@@ -51,14 +51,16 @@ begin
         'currency',x.currency,'balanceMinor',x.balance_minor
       ) order by x.owner_type,x.account_code)
       from (
-        select la.owner_type::text as owner_type,la.account_code,la.currency,
-          coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+        select la.owner_type::text as owner_type,la.account_code,la.currency,b.balance_minor
         from public.ledger_accounts la
-        left join public.ledger_entries le on le.account_id=la.id
-        left join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
+        left join lateral (
+          select coalesce(sum(case when le.direction='credit' then le.amount_minor else -le.amount_minor end),0) as balance_minor
+          from public.ledger_entries le
+          join public.ledger_transactions lt on lt.id=le.transaction_id and lt.status='posted'
+          where le.account_id=la.id
+        ) b on true
         where la.organization_id=p_organization_id
           and la.owner_type in ('organization','organization_payable')
-        group by la.id,la.owner_type,la.account_code,la.currency
       ) x
     ),'[]'::jsonb),
     'recipients',coalesce((
