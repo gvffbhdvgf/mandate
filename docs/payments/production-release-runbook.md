@@ -90,6 +90,14 @@ The CLI imports provider settlement and transaction facts only. It does not prov
 5. Re-running the same command is safe: provider settlement and transaction records upsert by environment and provider identity.
 6. Live import requires --environment live --allow-live --confirm-import and a configured live settlement-readiness switch. That switch remains false until the operator/bank reconciliation and accounting path is complete.
 
+### Read-only reconciliation report
+
+After importing a provider settlement, run the read-only report:
+
+    node scripts/paystack-reconciliation-report.mjs --environment test --settlement-id 123456
+
+For live evidence, add --allow-live. The report reads the service-role-only reconciliation and exception views, prints provider-to-receipt match counts and exception summaries, and never prints payment references or credentials. The optional settlement ID filters settlement rows only. The current exception view does not expose environment or settlement ID, so exception counts are explicitly reported across all environments. The report performs GET requests only; it does not resolve exceptions, confirm bank credit, post final revenue or authorize payouts.
+
 ## Release prerequisites
 
 Do not enable a live purpose until all applicable items are evidenced:
