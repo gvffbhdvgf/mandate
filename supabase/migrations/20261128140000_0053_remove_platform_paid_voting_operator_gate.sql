@@ -453,8 +453,9 @@ declare
 begin
   select * into v_e from public.elections where id = new.election_id;
   if found and v_e.voting_mode = 'public_paid' then
-    if not mandate_private.has_current_public_paid_voting_release()
-      or v_e.status <> 'open'
+    -- The feature switch blocks new credit purchases, not ballot submissions
+    -- by participants who already hold verified credits.
+    if v_e.status <> 'open'
       or v_e.paid_voting_authorized_at is null
       or v_e.paid_voting_authorized_by is distinct from v_e.setup_confirmed_by
       or pg_catalog.now() < v_e.starts_at
