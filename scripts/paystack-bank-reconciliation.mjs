@@ -170,7 +170,7 @@ export function buildBankReconciliationReport(settlementRows, bankRows, dateWind
         providerTotalAmountMinor: row.provider_total_amount_minor == null ? null : Number(row.provider_total_amount_minor),
         providerTotalProcessedMinor: row.provider_total_processed_minor == null ? null : Number(row.provider_total_processed_minor),
         providerTotalFeesMinor: row.provider_total_fees_minor == null ? null : Number(row.provider_total_fees_minor),
-        expectedNetMinor: Number(row.provider_effective_amount_minor),
+        expectedNetMinor: row.provider_effective_amount_minor == null ? Number.NaN : Number(row.provider_effective_amount_minor),
         settledAt: row.settled_at ?? null,
       });
     }
