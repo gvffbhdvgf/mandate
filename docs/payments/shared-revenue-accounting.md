@@ -1,6 +1,9 @@
 # Shared-revenue accounting and settlement design
 
-**Status:** Design baseline from the accepted commercial decision dated 27 November 2026. This document does not authorize production schema changes, live checkout, fund custody, transfers or payouts.
+> **Historical only.** This document describes a superseded organizer-proceeds model. Current architecture and release controls are in [paystack-integration.md](./paystack-integration.md) and [production-release-runbook.md](./production-release-runbook.md).
+
+
+**Status: SUPERSEDED — historical design only (28 November 2026).** The 27 November shared-revenue/split-settlement design was superseded by migration 0049 and the accepted single-merchant model in which Mandate is merchant and revenue owner for public vote-credit sales. No organizer proceeds, organizer liabilities, subaccounts, split settlement, transfers or organizer payouts are part of the current product. Do not use this document as an implementation or release instruction. It is retained only as historical decision context; any return to organizer proceeds requires a new product, provider, legal and accounting decision.
 
 ## Accepted commercial model
 

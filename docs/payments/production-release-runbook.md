@@ -1,75 +1,121 @@
 # Mandate payment release runbook
 
-**Status:** Prepared for a separately approved production release. This document is operational guidance, not authorization to merge, deploy, change production, or process real money.
+**Status:** Production payment code and database foundation are deployed. Real-money checkout remains fail-closed. This runbook records the current single-merchant model; it is not authorization to process a real charge.
+
+## Current production baseline — 28 November 2026
+
+- **Repository:** gvffbhdvgf/mandate, main commit 2b84791f5e92b61887def3324252670e68fbd934.
+- **Cloudflare Worker:** https://mandate.markmachukhu97.workers.dev, deployed version 012b96e8-5d3f-4349-93ea-a07694bcff2e.
+- **Supabase:** project yhdosrhtzcsfqfuuqhsk, region eu-central-1; migrations applied through 0049_single_merchant_public_vote_payments.
+- **Paystack Edge Functions:** paystack-initialize v13 (JWT required), paystack-verify v13 (JWT required), paystack-webhook v13 (JWT disabled; signature verification in function), public-vote-credit-intent v2, public-participant-session v2, public-election-details v2 and paystack-settlement-import v2.
+- **Production purpose flags:** public_vote_credits_enabled=false, platform_fee_enabled=false, organization_topup_enabled=false.
+- **Election state:** tracked election 6e9f142d-4522-47f8-8282-ee210793c06a remains draft, registered_single, with no paid-voting authorization and no opening timestamp.
+- **Merged payment/product work:** PR #19 payment foundation; PR #23 single-merchant public vote credits; PR #24 manual voter registration; PR #26 email-confirmation UX; PR #27 human-centred workflows and shared Paystack checkout. All are merged.
+- **Deployment evidence:** PR #23 worker deployment [46082507806](https://github.com/gvffbhdvgf/mandate/actions/runs/46082507806); manual-voter deployment [46084078836](https://github.com/gvffbhdvgf/mandate/actions/runs/46084078836); auth deployment [46084417647](https://github.com/gvffbhdvgf/mandate/actions/runs/46084417647); current UX/payment-hardening deployment [46085988206](https://github.com/gvffbhdvgf/mandate/actions/runs/46085988206).
+- **Post-deploy verification:** read-only Supabase queries after PR #27 reconfirmed all three purpose flags remain false and the tracked election remains draft. No payment, refund, transfer, payout, invitation or election lifecycle action was initiated by these releases.
+
+## Accepted payment architecture
+
+### One shared Paystack checkout
+
+- Registered-election platform fees and public vote-credit purchases both call the same paystack-initialize Edge Function.
+- Both receive the same Paystack-hosted authorizationUrl, then return through /payments/paystack/callback, which calls paystack-verify.
+- Both server actions use validatePaystackAuthorizationUrl, which accepts only HTTPS Paystack-hosted URLs.
+- The browser callback is an untrusted navigation signal. Payment status, amount, currency, reference and fulfilment are verified server-side; the signed webhook is the independent provider notification path.
+- Payment purposes remain distinct internally:
+  - platform_fee: organization pays Mandate for the registered-election service.
+  - public_vote_credits: participant pays Mandate for election-scoped vote credits.
+  - organization_topup: not enabled; no custody or withdrawal feature is released.
+- **Single merchant:** Mandate is the merchant and revenue owner for public vote-credit sales. The current model does not split proceeds, hold organizer liabilities, or pay organizers. No organizer subaccount or Paystack Transfer is part of this accepted design. Migration 0049 supersedes the earlier split/subaccount design in migrations 0047–0048.
+- The payout_requests table is a dormant legacy artifact from earlier settlement planning. Hosted inspection found no payout RPC or payout Edge Function, no RLS policy and no anon/authenticated table grants. It is service-role-only and is not a payout mechanism. Do not delete it without a separate decision.
+
+### Pricing boundaries
+
+- Registered-election platform fee policy v1: KES 20 per eligible voter, KES 500 minimum. This is a direct organization-to-Mandate service fee.
+- Public vote-credit price and participant cap are configured on the public-paid election. They are a separate product and must not reuse the registered-election platform fee.
+- Under the current single-merchant model, public vote-credit payments are Mandate revenue. There is no organizer share or split percentage in the current implementation.
+
+## Paystack merchant account and provider boundaries
+
+- The project decision register records Poptra (Paystack merchant ID 1730854) as Mandate's designated merchant account. Previously recorded dashboard evidence shows Live / Pre-Approved, Owner Verified, Service Agreement Accepted, Starter Business. This status was not independently rechecked on 28 November because the connected dashboard browser was signed out.
+- Paystack's published guidance says Pre-Approved merchants may accept real customer payments after initial checks, while further review may continue and payouts may be paused. This is not blanket approval for every activity or election category.
+- Paystack's official Kenya guidance says Starter Business accounts have a KES 600,000 lifetime collection limit and cannot use Transfers. The lack of Transfers does not block the current single-merchant model because Mandate retains the revenue and does not pay organizers. The lifetime collection limit still applies.
+- **Remaining provider question:** confirm that paid vote-credit sales are permitted under Mandate's actual merchant category and supported election types, particularly where political parties or non-profits are customers/beneficiaries. General Pre-Approved status is not proof of approval for every business activity. Do not misdescribe the transaction or merchant activity.
+- The previously exposed live secret is compromised and must be rotated before any real-money operation. The connected Paystack dashboard was not authenticated during this verification; live keys, webhook signing secrets, callback/webhook URLs and event subscriptions were not independently inspected.
+- Official sources: [Paystack Pre-Approved status](https://support.paystack.com/en/articles/6543554), [Paystack business types and limits](https://support.paystack.com/en/articles/2128898), [Paystack Kenya Merchant Services Agreement](https://paystack.com/ke/terms), [Paystack webhook signing](https://paystack.com/docs/payments/webhooks/).
+
+## Required mode-specific Supabase secrets and switches
+
+The Edge Functions reject the legacy shared PAYSTACK_SECRET_KEY and PAYSTACK_WEBHOOK_SECRET names. Do not print secret values in logs, chat, GitHub or Notion.
+
+| Secret / variable | Required form / purpose |
+|---|---|
+| PAYSTACK_MODE | Exactly test or live; any other value fails closed |
+| PAYSTACK_TEST_SECRET_KEY | Test API secret beginning sk_test_ |
+| PAYSTACK_TEST_WEBHOOK_SECRET | Test webhook signing secret beginning whsec_ |
+| PAYSTACK_LIVE_SECRET_KEY | Live API secret beginning sk_live_; must be newly rotated because the former live secret was exposed |
+| PAYSTACK_LIVE_WEBHOOK_SECRET | Live webhook signing secret beginning whsec_ |
+| PAYSTACK_LIVE_TRANSACTIONS_ENABLED | Live transaction master switch; exactly true only after approval |
+| PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED | Additional live settlement-readiness switch; must remain false until the complete payment-to-bank reconciliation path is implemented and verified |
+| PAYSTACK_TEST_PLATFORM_FEE_ENABLED / PAYSTACK_LIVE_PLATFORM_FEE_ENABLED | Purpose-specific platform-fee gates |
+| PAYSTACK_TEST_PUBLIC_VOTE_CREDITS_ENABLED / PAYSTACK_LIVE_PUBLIC_VOTE_CREDITS_ENABLED | Purpose-specific public vote-credit gates |
+| PAYSTACK_TEST_ORGANIZATION_TOPUP_ENABLED / PAYSTACK_LIVE_ORGANIZATION_TOPUP_ENABLED | Organization top-up gates; keep false |
+| MANDATE_SITE_URL | Public Mandate origin |
+| MANDATE_ALLOWED_ORIGINS | Comma-separated allowed browser/callback origins |
+| MANDATE_PAYMENT_CALLBACK_URL | Optional HTTPS callback; exact path /payments/paystack/callback and origin must be allowlisted |
+
+A purpose is enabled only when its mode-specific environment flag and the corresponding database purpose flag are enabled. Live mode also requires a valid live key, webhook signing secret, live master switch and settlement-readiness switch. Missing or malformed values fail closed. Do not enable any live switch merely because the Worker or Edge Function has deployed.
+
+## Settlement, ledger and exception readiness
+
+- Verified Paystack receipts post to provider clearing and unallocated suspense. This is a balanced interim receipt, not final revenue recognition or bank reconciliation.
+- Migration 0044 stores settlement batches and provider transaction facts. The paystack-settlement-import Edge Function imports a bounded settlement and one transaction page per call, using idempotent upserts.
+- The paystack_settlement_reconciliation view compares provider settlement rows with verified payment intents and interim receipt postings. matched_to_receipt means the provider row matches the verified receipt; it does not prove the bank credit arrived or reconcile gross, fees and net bank credit.
+- Migration 0045 provides a service-role-only exception evidence view. It does not resolve exceptions or authorize refunds, credits, allocations or payouts.
+- The settlement importer has no operator UI or scheduled dispatch workflow. Aggregate gross/fees/net-to-bank reconciliation against actual bank evidence, reviewed exception resolution, operator approval/audit, and final revenue/processor-fee/tax accounting are not complete.
+- Refund and dispute webhooks are verified and freeze affected payments for reconciliation. They do not automatically reverse ledger postings or revoke already-consumed vote credits; partial refunds and dispute outcomes require a reviewed decision.
+- **Therefore PAYSTACK_LIVE_SETTLEMENT_PIPELINE_ENABLED must remain false and live mode must remain fail-closed.** A successful Paystack settlement status is not proof of bank credit, and a ledger balance is not withdrawable cash.
 
 ## Release prerequisites
 
-Do not start the production sequence until all are evidenced:
+Do not enable a live purpose until all applicable items are evidenced:
 
-- [ ] PR #19 is approved, current with `main`, and all required CI, Paystack Edge and database acceptance workflows pass on the exact head.
-- [ ] Written Paystack approval covers the precise Mandate public paid-voting product, merchant-of-record model, organizer proceeds arrangement, permitted election types, KYC and settlement mechanism. The published Kenya terms restrict merchants from acting as payment service providers or providing payment aggregation; generic API availability is not approval.
-- [ ] Kenyan legal/privacy review approves supported election categories, organizer/controller/processor roles, lawful bases, notices, retention, DPIA/ODPC registration applicability, consumer disclosures, tax, refunds and chargeback allocation.
-- [ ] Public paid-voting platform fee policy is explicitly approved and versioned. The registered-election service fee (KES 20 per eligible voter, KES 500 minimum) is separate and must not be reused as the public-voting split.
-- [ ] Prepaid-credit revenue recognition, processor-fee allocation, merchant of record, tax and chargeback responsibility are documented.
-- [ ] Settlement-to-bank reconciliation, reviewed exception resolution, partial/full refunds and reversal handling, operator authorization, dual control and audit trail are implemented and tested. No payout is enabled merely because a settlement row says success.
-- [ ] Supabase Auth OTP template renders the six-digit token; SMTP delivery, expiry and rate limits are verified with synthetic users.
-- [ ] Paystack test and live callback URLs, webhook URL, event subscriptions and dedicated `whsec_` signing secrets are verified in the dashboard without disclosing secrets.
-- [ ] Production secret names and mode configuration are verified without printing secret values. Live mode and all purpose switches remain off until the separate go/no-go.
-- [ ] Backup/PITR availability, restore procedure, incident owner, support contact and rollback owner are confirmed.
+- [ ] Confirm the actual merchant category and obtain Paystack confirmation that public paid vote-credit sales are permitted for the supported election types. Distinguish private organizational elections from statutory/public elections and political-party/non-profit use.
+- [ ] Rotate/revoke the previously exposed live secret; install the new live key in Supabase Edge Function secrets. Verify mode-specific secret names without printing values.
+- [ ] Generate/verify separate test and live whsec_ webhook signing secrets in Paystack Dashboard > Developers > API configuration.
+- [ ] Verify the expected callback URL https://mandate.markmachukhu97.workers.dev/payments/paystack/callback and webhook endpoint https://yhdosrhtzcsfqfuuqhsk.supabase.co/functions/v1/paystack-webhook in the correct Paystack environment. These are target endpoints, not dashboard-verified settings.
+- [ ] Verify webhook event subscriptions include charge.success, refund events and dispute events used by the handler; confirm signed delivery and HTTP 200 behavior for processed and ignored events.
+- [ ] Confirm Supabase Auth OTP email template uses {{ .Token }}, SMTP delivery, expiry and rate limits with synthetic users.
+- [ ] Complete test-mode checkout, callback verification, signed webhook, duplicate delivery, refund/dispute exception and settlement import tests using test credentials only.
+- [ ] Complete the operator settlement workflow, bank evidence reconciliation, reviewed exception resolution and final accounting policy before setting settlement readiness true.
+- [ ] Confirm backup/PITR, restore procedure, incident owner, support contact and rollback owner.
+- [ ] For statutory/public elections or political-party/non-profit use, obtain the relevant jurisdictional legal/privacy review, disclosures, controller/processor allocation and any required registration/DPIA.
+- [ ] Keep all live and database purpose switches false until the separate live go/no-go. User authorization to proceed if verified does not waive these gates.
 
 ## Required release order
 
-The repository's current `.github/workflows/production-deploy.yml` deploys the Cloudflare Worker automatically on every push to `main`. There is no automatic Supabase migration workflow. Therefore, never merge payment code before the database and required Edge Functions are ready.
-
-1. **Freeze and verify.** Record the exact approved PR head, current `main` SHA, workflow URLs and production baseline. Keep all payment purpose flags and live mode disabled.
-2. **Back up production.** Confirm a recent recoverable backup/PITR point and document the restore owner and recovery procedure. Do not rely on a database dump as the only backup.
-3. **Review migration plan.** Confirm production migration history ends at `0033_election_setup_confirmation_index`. Review the exact pending migration list `0034–0048` (including the existing `0045` exception-queue migration and its `0044` dependency), dependency order, lock behavior, data impact, grants/RLS and rollback implications. Reconcile any migration-history mismatch before applying anything.
-4. **Apply database migrations first.** In an approved maintenance window, apply the exact PR migrations to the production Supabase project in order. Verify every migration is recorded and run read-only schema/security assertions. Do not use ad hoc SQL to mark migrations applied.
-5. **Deploy Edge Functions.** Deploy the exact tested function sources from the approved commit. Verify function versions, JWT settings and non-secret configuration. Do not enable settlement import or any payment purpose merely because the function is deployed.
-6. **Verify Auth and provider configuration.** Complete the OTP delivery test and Paystack dashboard callback/webhook checks. Send a signed test event and run controlled test-mode checkout/verification/reconciliation. Do not use a real charge.
-7. **Merge PR #19.** Only after steps 1–6 are verified and the production release is explicitly approved. The merge triggers the current automatic Cloudflare Worker deployment.
-8. **Verify Worker deployment.** Confirm the deployed commit matches the approved merge commit; run home, login, signup, organization/election and payment callback smoke checks. Confirm no private response is cached and no secrets are exposed.
-9. **Post-deploy verification.** Check migration history, Edge Function versions, webhook delivery/idempotency, payment exception queue, ledger balance and application error logs. Keep all live payment and purpose flags disabled pending the separately authorized live go/no-go.
-10. **Live activation is a separate release.** Only after Paystack/legal/accounting/operations sign-off, enable the agreed purpose(s) in the correct order, run the controlled real-money transaction with explicit approval, reconcile provider and bank evidence, and then decide whether any organizer payout is allowed.
+1. Record the exact main SHA, current production Worker version, migration history, Edge Function versions and current flag values.
+2. Confirm a recoverable production backup/PITR point and restore owner.
+3. Verify the mode-specific test credentials and test webhook signing secret without exposing values.
+4. Verify Paystack test callback/webhook configuration; run controlled test checkout, verification, signed webhook, duplicate delivery, refund/dispute exception and settlement import.
+5. Complete and test the settlement operator/bank-reconciliation workflow and accounting controls before declaring settlement ready.
+6. Obtain Paystack confirmation for paid vote-credit sales under the actual merchant category/election types; obtain risk-based legal/privacy review where applicable.
+7. Rotate the compromised live secret, install mode-specific live credentials and webhook signing secret, and verify dashboard callback/webhook settings.
+8. Only after all applicable gates pass, consider enabling the direct Mandate platform-fee purpose separately from public vote credits. Do not enable public vote credits until provider use-case confirmation is recorded.
+9. Any real-money test requires explicit approval of the exact KES amount, payer, purpose and expected outcome. Reconcile provider and bank evidence immediately.
+10. After each release, read back feature flags, election state, payment intent, provider event, ledger and settlement evidence. Keep rollback fail-closed.
 
 ## Rollback and incident rules
 
 - Prefer rolling back the Cloudflare Worker to the last known-good deployment while leaving additive database migrations in place. Do not blindly reverse payment/ledger migrations after real events exist.
 - Keep live mode and all purpose flags disabled during rollback.
 - Never delete provider events, payment intents, ledger postings or ballot/credit evidence to make reconciliation appear clean.
-- For any amount/reference/currency mismatch, refund/dispute, duplicate fulfillment or ledger imbalance: stop new checkout/credit issuance for the affected purpose, preserve evidence, keep funds/credits held, and route to an authorized reviewer.
+- For amount/reference/currency mismatch, refund/dispute, duplicate fulfilment or ledger imbalance: stop new checkout/credit issuance for the affected purpose, preserve evidence, keep credits held, and route to an authorized reviewer.
 - Do not initiate transfers or payouts as a rollback action.
-- Record incident timeline, owner, provider references (redacted), affected elections and corrective action in the implementation register.
+- Record incident timeline, owner, redacted provider references, affected elections and corrective action in the implementation register.
 
-## Current verified baseline (27 November 2026)
+## Historical implementation notes
 
-- Production Supabase project: `yhdosrhtzcsfqfuuqhsk`, status `ACTIVE_HEALTHY`, PostgreSQL 17.12, region `eu-central-1`.
-- Read-only migration listing confirms production ends at version `20261127100000` (`0033_election_setup_confirmation_index`). PR #19 migrations `0034–0048` are not applied.
-- Production Paystack Edge Functions: `paystack-initialize` v7 (JWT required), `paystack-verify` v7 (JWT required), and `paystack-webhook` v8 (public provider delivery with signature verification in the function). Settlement importer and public participant/credit functions are not deployed.
-- PR #19 exact head `15641c5a1167ce3d654ecc58befb1c9566b650fc` includes migration 0048 and atomic split verification. All exact-head checks passed: [Mandate CI 46059819343](https://github.com/gvffbhdvgf/mandate/actions/runs/46059819343), [Paystack Edge integration 46059819329](https://github.com/gvffbhdvgf/mandate/actions/runs/46059819329), and [database acceptance 46059819351](https://github.com/gvffbhdvgf/mandate/actions/runs/46059819351). Database acceptance applied every repository migration to a disposable Supabase stack, passed every rollback-only SQL acceptance test, and passed independent-session concurrency tests.
-- The prior database failure on `c7b509a` was a test-fixture expectation error: three credits were issued across two verified split purchases, two were consumed, and one correctly remained unspent. The assertion was corrected in `15641c5`; no payment or migration implementation code changed for that fix.
-- Production Security Advisor currently reports one WARN for disabled leaked-password protection and 16 INFO default-deny RLS/no-policy notices. Performance Advisor reports 45 unused-index INFO notices. These were read-only checks; do not purchase a plan upgrade solely to clear the warning without confirming availability and cost.
-- Read-only Paystack dashboard inspection reached the merchant login page; no authenticated session was available. Callback/webhook URLs and event subscriptions therefore remain unverified. No credentials were entered.
-- PR #19 remains draft and unmerged. It is 0 commits behind main, 340 commits ahead by history, with 62 files in the net diff. A squash merge is preferred if it is later approved, to avoid importing noisy branch history.
-- No production migration, function, secret, Auth template, Paystack setting, release flag, charge, refund, transfer or payout was changed during this verification.
-
-## Evidence links
-
-- [PR #19](https://github.com/gvffbhdvgf/mandate/pull/19)
-- [Mandate CI](https://github.com/gvffbhdvgf/mandate/actions/runs/46056370314)
-- [Paystack Edge integration](https://github.com/gvffbhdvgf/mandate/actions/runs/46056370332)
-- [Database acceptance](https://github.com/gvffbhdvgf/mandate/actions/runs/46056370365)
-- [Shared-revenue accounting design](./shared-revenue-accounting.md)
-- [Paystack Kenya Merchant Services Agreement](https://paystack.com/ke/terms)
-- [ODPC Guidance Notes for Electoral Purposes](https://www.odpc.go.ke/wp-content/uploads/2024/02/ODPC-Guidance-Notes-for-Electoral-Purposes.pdf)
-
-
-## Split-settlement-specific release gates
-
-- Public paid-voting organizer proceeds must use the accepted Paystack split-settlement target: an approved active KES organizer subaccount receives its share directly from Paystack; Mandate receives only its approved platform fee.
-- Do not launch the prior model where Mandate collects all proceeds and later pays organizers unless Paystack expressly approves that model in writing.
-- Do not create real organizer subaccounts until Paystack confirms the paid-voting use case and the organizer's identity/KYC and beneficiary details have been verified and authorized.
-- A server-only organizer subaccount profile and versioned public-voting fee policy are implemented in migration `0047`; atomic provider split verification and the success guard are implemented in migration `0048`. Neither migration has been applied to production. No active policy or verified organizer subaccount is seeded.
-- The platform fee amount/formula and Paystack fee bearer are still unresolved. The existing registered-election KES 20-per-voter / KES 500-minimum fee is not the public-voting fee.
-- Fixed-fee single-subaccount split verification is implemented fail-closed: webhook and manual verification reconcile Paystack `fees_split` and subaccount identity to the immutable intent snapshot before credit fulfillment. Percentage split checkout remains disabled until exact KES rounding behavior is evidenced and tested. Before a test/live split is considered ready, also test partial/full refunds, reversals and disputes for split transactions.
-- If Paystack does not approve this model, evaluate direct organizer merchant-of-record with a separately charged Mandate service fee; do not silently fall back to collecting all proceeds into Mandate.
+- PR #19 introduced the payment intent, provider verification, webhook, ledger receipt and settlement reconciliation foundation. PR #23 then replaced the earlier split/subaccount public-voting approach with the current single-merchant Mandate-revenue model and migration 0049.
+- Earlier migration 0047/0048 split-settlement design notes and the former shared-revenue-accounting.md are historical and superseded for the current product model. They are not release instructions.
+- No organizer subaccounts, organizer proceeds, organizer payout or Paystack Transfer are part of the current accepted design. Any future change to that model requires a new decision and provider approval.
