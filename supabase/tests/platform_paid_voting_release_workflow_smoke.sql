@@ -9,7 +9,7 @@ update public.platform_payment_feature_flags
 set public_vote_credits_enabled=true
 where singleton;
 
-do $
+do $$
 declare
   v_user uuid := '00000000-0000-4000-8000-000000000050';
   v_other uuid := '00000000-0000-4000-8000-000000000051';
