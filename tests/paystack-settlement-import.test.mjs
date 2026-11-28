@@ -82,7 +82,7 @@ test("environment mismatch stops after read-only preflight without importing dat
       },
       fetchImpl: async () => {
         calls += 1;
-        return response({ ready: true, environment: "live", settlementId: "123456" });
+        return response({ ready: true, environment: "live", settlementId: "123456", from: options.from, to: options.to });
       },
       output: () => {},
     }),
@@ -97,7 +97,7 @@ test("settlement CLI imports every provider page idempotently and never prints c
   const calls = [];
   const output = [];
   const responses = [
-    { ready: true, environment: "test", settlementId: "123456" },
+    { ready: true, environment: "test", settlementId: "123456", from: options.from, to: options.to },
     {
       imported: true, environment: "test", settlementId: "123456", settlementStatus: "success",
       importedTransactions: 100, transactionPage: 1, transactionPageCount: 2,
