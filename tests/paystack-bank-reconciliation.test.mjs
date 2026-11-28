@@ -126,6 +126,18 @@ test("bank candidate report detects ambiguous matches, missing credits and non-s
 });
 
 
+test("unsupported settlement currencies fail closed", () => {
+  const report = buildBankReconciliationReport([{
+    settlement_id: "s-usd",
+    provider_settlement_id: "888",
+    settlement_status: "success",
+    settlement_currency: "USD",
+    provider_effective_amount_minor: 10000,
+    settled_at: "2026-11-28T00:00:00Z",
+  }], [], 5);
+  assert.equal(report[0].reviewStatus, "unsupported_currency");
+});
+
 test("zero-net provider settlements do not generate false missing-bank-credit exceptions", () => {
   const report = buildBankReconciliationReport([{
     settlement_id: "s-zero",
