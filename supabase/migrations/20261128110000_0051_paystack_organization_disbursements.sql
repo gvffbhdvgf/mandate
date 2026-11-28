@@ -35,6 +35,9 @@ alter table public.payout_requests
   add constraint payout_requests_recipient_required
     check (recipient_id is not null or encrypted_destination_reference is not null);
 
+create index payout_requests_organization_status_created_idx
+  on public.payout_requests(organization_id, status, created_at desc);
+
 create unique index payout_requests_provider_transfer_code_uq
   on public.payout_requests(provider_transfer_code)
   where provider_transfer_code is not null;
@@ -351,10 +354,10 @@ begin
     on conflict (owner_type,organization_id,currency,account_code) do nothing;
     insert into public.ledger_accounts(owner_type,organization_id,currency,account_code)
     values ('provider_clearing',null,'KES','paystack-transfer-balance')
-    on conflict (owner_type,organization_id,currency,account_code) do nothing;
+    on conflict (owner_type,currency,account_code) where organization_id is null do nothing;
     insert into public.ledger_accounts(owner_type,organization_id,currency,account_code)
     values ('processor_fee',null,'KES','paystack-transfer-fees')
-    on conflict (owner_type,organization_id,currency,account_code) do nothing;
+    on conflict (owner_type,currency,account_code) where organization_id is null do nothing;
 
     select id into strict v_payable from public.ledger_accounts
     where owner_type='organization_payable' and organization_id=v_request.organization_id
